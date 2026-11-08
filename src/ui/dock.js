@@ -53,8 +53,8 @@ export function renderMission(ui, s, X, Y, W, actions) {
     const w = sim.marsWindow(s.day);
     const win = w.open ? `Window open ${w.closesIn} more days` : `Window opens in ${w.opensIn} days`;
     req = s.marsRoute === 'moon'
-      ? `${win} · Moon route: ${MARS_ROUTES.moon.hullFuel} t + ${MARS_ROUTES.moon.fuelPerTon} t/t base methalox, ${MARS_ROUTES.moon.landRisk * 100}% landing risk`
-      : `${win} · Direct: ${ed.prop} t/t depot propellant, +${MARS_ROUTES.direct.ascentRisk * 100}% ascent and ${MARS_ROUTES.direct.landRisk * 100}% landing risk`;
+      ? `${win} · Moon route: ${MARS_ROUTES.moon.hullFuel} t + ${MARS_ROUTES.moon.fuelPerTon} t/t base methalox, ${Math.round(sim.marsRisks(s).moonLand * 100)}% landing risk`
+      : `${win} · Direct: ${ed.prop} t/t depot propellant, +${Math.round(sim.marsRisks(s).ascent * 100)}% ascent and ${Math.round(sim.marsRisks(s).land * 100)}% landing risk`;
     reqColor = hex(w.open ? COL.good : COL.warn);
   } else if (ed.body !== 'earth') {
     req = `Needs a Skyship and ${ed.prop} t of depot propellant per tonne of payload.`;

@@ -365,6 +365,8 @@ Mars-based ships and return flights:
 - Return contracts: once a Mars base has modules, customers on Earth offer Mars return contracts (samples, equipment and crew rotation) at about $3 to $4 per tonne plus a large flat fee, lasting 300 days. They can only be loaded on a flight that leaves from the Mars base.
 - Flight origin: with a Mars-based hull ready and LEO selected, a From Earth | From Mars base switch appears in the Mission tab.
 
+Mars experience: every successful arrival at Mars lowers the risks for the next one. The direct route's extra ascent risk falls by 1.5 points per landing (from 12% to a floor of 3%), its landing risk by 2 points (from 15% to 5%), and the Moon route's landing risk by 1 point (from 6% to 3%). The Mission tab shows the current figures.
+
 Milestones: first module on Mars, Mars base founded, first Mars methalox, first return flight home.
 
 3. Technology Tree

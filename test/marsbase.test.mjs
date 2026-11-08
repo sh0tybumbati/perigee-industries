@@ -216,3 +216,24 @@ test('Mars bases get return contracts, and a Mars Fabricator builds Mars-based S
   sim.tick(s);
   assert.equal(s.fleet.filter((v) => v.site === 'mars' && v.type === 'skyship').length, 1);
 });
+
+test('every successful Mars landing lowers the direct and Moon-route risks, down to a floor', () => {
+  const s = sim.createState();
+  assert.deepEqual(sim.marsRisks(s), { ascent: 0.12, land: 0.15, moonLand: 0.06 });
+  s.marsLandings = 3;
+  const r = sim.marsRisks(s);
+  assert.ok(Math.abs(r.ascent - 0.075) < 1e-9 && Math.abs(r.land - 0.09) < 1e-9 && Math.abs(r.moonLand - 0.03) < 1e-9);
+  s.marsLandings = 99;
+  assert.deepEqual(sim.marsRisks(s), { ascent: 0.03, land: 0.05, moonLand: 0.03 });
+});
+
+test('a Mars arrival counts as a landing, a return does not', () => {
+  const s = world();
+  give(s, 'modHab');
+  sim.setRocket(s, 'modHab');
+  sim.setDest(s, 'utopia');
+  win(() => sim.launch(s));
+  assert.equal(s.trips.at(-1).landRisk, 0.15);
+  run(s, 181);
+  assert.equal(s.marsLandings, 1);
+});

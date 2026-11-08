@@ -9,7 +9,7 @@ import {
   DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
   RUSH_PREMIUM, START_CAPS, START_STOCK, TANK_STEP, PLANT_RATE, PLANT_COST, PLANT_MAX, PLANT_COST_FRAC,
   MARS_WINDOWS, MARS_ROUTES, MARS_DESTS, MARS_CONTRACT, START_DATE, PROTOS, ODDS_LEARNING, ODDS_MAX,
-  MARS_SITES, MARS_RETURN, MARS_RETURN_WINDOWS, MARS_RETURN_CONTRACT, BASE_PARAMS,
+  MARS_SITES, MARS_LEARNING, MARS_RETURN, MARS_RETURN_WINDOWS, MARS_RETURN_CONTRACT, BASE_PARAMS,
 } from './data.js';
 import { createBase, tickBase } from './base.js';
 
@@ -77,6 +77,7 @@ export function createState() {
     depot: { built: false, prop: 0 },
     base: null, // the lunar base, founded by the first module ship to land
     marsBase: null, // the Mars base, founded the same way (GDD 2.17)
+    marsLandings: 0, // successful arrivals at Mars, which lower the risks
     origin: 'earth', // earth | mars: where a flight to Earth orbit leaves from
     tech: new Set(),
     log: [],
@@ -274,6 +275,16 @@ export const flightOrigin = (s) => (originIsMoon(s) ? 'moon' : originIsMars(s) ?
 export const hullOrigin = (v) => (v.site === 'moon' ? 'moon' : v.site === 'mars' ? 'mars' : 'earth');
 export const baseOn = (s, body) => (body === 'mars' ? s.marsBase : body === 'moon' ? s.base : null);
 export const marsReturnNeed = (s) => Math.ceil(MARS_RETURN.hullFuel + MARS_RETURN.fuelPerTon * manifestTotals(s).mass);
+// Direct and Moon-route Mars risks, after what the company has learned from earlier landings.
+export function marsRisks(s) {
+  const n = s.marsLandings ?? 0;
+  const L = MARS_LEARNING;
+  return {
+    ascent: Math.max(L.minAscent, MARS_ROUTES.direct.ascentRisk - L.ascent * n),
+    land: Math.max(L.minLand, MARS_ROUTES.direct.landRisk - L.land * n),
+    moonLand: Math.max(L.minMoonLand, MARS_ROUTES.moon.landRisk - L.moonLand * n),
+  };
+}
 export const setOrigin = (s, o) => { if (['earth', 'mars'].includes(o)) s.origin = o; };
 export function marsReturnWindow(day) {
   const w = MARS_RETURN_WINDOWS.find(([, close]) => day <= close) ?? MARS_RETURN_WINDOWS[MARS_RETURN_WINDOWS.length - 1];
@@ -455,7 +466,7 @@ export function failChance(s, v = nextVehicle(s, s.rocket)) {
   const r = rocketDef(s);
   let base = r.baseRisk;
   if (s.rocket === 'behemoth') base = Math.max(BEHEMOTH_MIN_RISK, base - BEHEMOTH_LEARNING * (s.flightCounts.behemoth ?? 0));
-  if (isMars(effDest(s)) && !originIsMoon(s)) base += MARS_ROUTES.direct.ascentRisk;
+  if (isMars(effDest(s)) && !originIsMoon(s)) base += marsRisks(s).ascent;
   if (originIsMars(s)) base += MARS_RETURN.ascentRisk;
   return base + r.wearRisk * (v?.flights ?? 0);
 }
@@ -916,7 +927,7 @@ export function launch(s) {
     id: s.nextId++, serial: v.serial, type: s.rocket, role: r.role, dest: destId, site: moon ? null : s.site,
     origin, fromSite: moon ? baseOn(s, origin).site : undefined,
     launchDay: s.day, arriveDay: s.day + (route ? route.days : d.days), status: 'enroute', payout: 0, sats: 0, region: s.region,
-    landRisk: route ? route.landRisk : 0,
+    landRisk: !route ? 0 : origin === 'mars' ? route.landRisk : origin === 'moon' ? marsRisks(s).moonLand : marsRisks(s).land,
   };
   if (r.role === 'module') {
     trip.module = r.module;
@@ -984,6 +995,7 @@ function arrive(s, trip) {
     return;
   }
   trip.status = 'done';
+  if (d.body === 'mars' && trip.origin !== 'mars') s.marsLandings = (s.marsLandings ?? 0) + 1;
   if (trip.role === 'payload') {
     s.cash += trip.payout;
     const region = REGIONS.find((x) => x.id === trip.region);

@@ -278,6 +278,8 @@ export const MARS_ROUTES = {
 };
 export const MARS_DESTS = ['marsOrbit', 'jezero', 'utopia'];
 export const MARS_SITES = ['jezero', 'utopia'];
+// Every successful Mars landing teaches the company something: the direct and Moon-route risks fall (GDD 2.17).
+export const MARS_LEARNING = { ascent: 0.015, land: 0.02, moonLand: 0.01, minAscent: 0.03, minLand: 0.05, minMoonLand: 0.03 };
 
 // Return flights (GDD 2.17): a Mars-based Skyship flies home on the base's methalox.
 export const MARS_RETURN = { name: 'Home from Mars', ascentRisk: 0.08, landRisk: 0.04, days: 200, fuelPerTon: 5, hullFuel: 500, refit: 15 };
