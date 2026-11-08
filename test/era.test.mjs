@@ -160,3 +160,30 @@ test('the Mars window warns 30 days ahead and when it opens', () => {
   assert.ok(msgs.some((m) => /opens in 30 days/.test(m)), msgs.join('|'));
   assert.ok(msgs.some((m) => /OPEN/.test(m)), msgs.join('|'));
 });
+
+test('the tutorial follows what the player does, and old saves skip it', () => {
+  const s = sim.createState();
+  assert.equal(sim.tutorialStep(s).id, 'load');
+  s.contracts.push({ id: 901, customer: 'X', dest: 'leo', mass: 5, volume: 10, payout: 3, expires: 99 });
+  sim.toggleContract(s, 901);
+  assert.equal(sim.tutorialStep(s).id, 'launch');
+  s.totalLaunches = 1;
+  s.fleet = [];
+  assert.equal(sim.tutorialStep(s).id, 'hull');
+  sim.queueBuild(s, 'peregrine9');
+  assert.equal(sim.tutorialStep(s).id, 'gen1');
+  s.cash = 500;
+  sim.buyTech(s, 'gen1');
+  sim.buyTech(s, 'landing');
+  assert.equal(sim.tutorialStep(s).id, 'article');
+  sim.queueTest(s, 'landing');
+  assert.equal(sim.tutorialStep(s).id, 'fly');
+  s.tech.add('landing');
+  assert.equal(sim.tutorialStep(s), null);
+  const old = JSON.parse(sim.serialize(sim.createState()));
+  delete old.tutorial;
+  assert.equal(sim.tutorialStep(sim.deserialize(JSON.stringify(old))), null);
+  const skip = sim.createState();
+  sim.skipTutorial(skip);
+  assert.equal(sim.tutorialStep(skip), null);
+});

@@ -8,6 +8,7 @@ import { COL, FONT, UI, hex } from '../ui/ui.js';
 import { renderMission, renderFleet, renderFactory, renderSites, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
 import { Lane, renderFlights, renderDepotAndLog } from '../ui/bottom.js';
 import { FX } from '../fx.js';
+import { renderSiteScene } from '../ui/art.js';
 import * as audio from '../audio.js';
 
 const SAVE_KEY = 'perigee-industries-save';
@@ -28,6 +29,9 @@ export class OpsScene extends Phaser.Scene {
     this.siteView = null;
     this.baseMode = { kind: 'idle', rot: 0 };
     this.lastSpeed = 1; // restored by Space after a pause
+    this.helpMode = false; // Tips: taps show hints instead of acting
+    this.gestureUntil = 0;
+    this.pinch = null;
   }
 
   create() {
@@ -48,6 +52,7 @@ export class OpsScene extends Phaser.Scene {
       setHint: (t) => this.hint.setText(t),
     });
     this.input.mouse?.disableContextMenu();
+    this.input.keyboard?.on('keydown-Z', () => this.act(() => this.undoBase()));
     this.input.keyboard?.on('keydown-R', () => this.act(() => { if (this.baseMode.kind === 'place') this.baseMode.rot ^= 1; }));
     this.input.keyboard?.on('keydown-ESC', () => this.act(() => { this.baseMode = { kind: 'idle', rot: 0 }; }));
     this.lane = new Lane(this);
@@ -55,6 +60,7 @@ export class OpsScene extends Phaser.Scene {
     sim.setEventSink((e) => this.onEvent(e));
     this.input.on('pointerdown', () => audio.unlock());
     this.setupKeys();
+    this.cameras.main.setBounds(0, 0, 1280, 720);
     this.ui = this.add.container(0, 0);
     this.hint = this.add.text(MAP.x + 10, MAP.y + MAP.h - 20, '', { fontFamily: FONT, fontSize: 12, color: hex(COL.accent), stroke: '#05070d', strokeThickness: 3 });
     this.uiHelper = new UI(this, this.ui, (fn) => this.act(fn), (t) => this.hint.setText(t));
@@ -186,7 +192,39 @@ export class OpsScene extends Phaser.Scene {
     }
   }
 
+  // ---- touch: pinch to zoom, two fingers to pan ---------------------------------------
+  gestureActive() { return this.time.now < this.gestureUntil; }
+
+  resetZoom() {
+    const cam = this.cameras.main;
+    cam.setZoom(1);
+    cam.setScroll(0, 0);
+    this.pinch = null;
+  }
+
+  updateGesture() {
+    const { pointer1: p1, pointer2: p2 } = this.input;
+    if (!p1?.isDown || !p2?.isDown) { this.pinch = null; return; }
+    this.gestureUntil = this.time.now + 300;
+    const cam = this.cameras.main;
+    const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    if (this.pinch && this.pinch.d > 8) {
+      const anchor = cam.getWorldPoint(this.pinch.mid.x, this.pinch.mid.y);
+      cam.setZoom(Phaser.Math.Clamp(cam.zoom * (d / this.pinch.d), 1, 3));
+      const now = cam.getWorldPoint(mid.x, mid.y);
+      cam.scrollX += anchor.x - now.x;
+      cam.scrollY += anchor.y - now.y;
+    }
+    this.pinch = { d, mid };
+  }
+
+  undoBase() {
+    if (this.s.base && B.undoBlocker(this.s.base) === null) B.undoLast(this.s);
+  }
+
   update(time, delta) {
+    this.updateGesture();
     this.map.update(delta, this.dayFrac());
     this.base.update(time);
     this.lane.update(this.s, this.dayFrac());
@@ -305,6 +343,8 @@ export class OpsScene extends Phaser.Scene {
       openBase: () => this.openBase(),
       closeBase: () => this.closeBase(),
       baseSub: (id) => { this.baseSub = id; },
+      undo: () => this.undoBase(),
+      skipTutorial: () => sim.skipTutorial(s),
       setPolicy: (id) => { s.base.policy = id; },
       startPlace: (pendingId) => {
         if (this.baseView !== 'open') this.openBase();
@@ -342,6 +382,7 @@ export class OpsScene extends Phaser.Scene {
       if (Math.abs(d) >= 0.5) { this.fx.floatCash(d, 505, 38); if (d >= 1) audio.coin(); }
     }
     this.lastCash = s.cash;
+    const step = sim.tutorialStep(s);
     this.renderTopBar(s, ui);
     this.renderMapTabs(s, ui);
     this.renderDockTabs(ui);
@@ -352,6 +393,23 @@ export class OpsScene extends Phaser.Scene {
     else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink })[this.tab](ui, s, x, y, w, actions, ctx);
     renderFlights(ui, s);
     renderDepotAndLog(ui, s);
+    if (this.tab === 'sites' || this.tab === 'factory') renderSiteScene(ui, s, this.tab === 'sites' ? (this.siteView && s.sites[this.siteView] ? this.siteView : s.site) : this.factorySite);
+    if (step) this.renderCoach(ui, step);
+  }
+
+  // The tutorial card, over the map's top-left corner.
+  renderCoach(ui, step) {
+    const x = MAP.x + 8;
+    const y = MAP.y + 8;
+    const w = 300;
+    const g = this.add.graphics();
+    g.fillStyle(0x0b1220, 0.94).fillRect(x, y, w, 96);
+    g.lineStyle(2, 0xffd166).strokeRect(x + 1, y + 1, w - 2, 94);
+    this.ui.add(g);
+    ui.label(x + 10, y + 7, `TUTORIAL  ·  ${sim.TUTORIAL.indexOf(step) + 1} of ${sim.TUTORIAL.length}`, { size: 10, bold: true, color: '#ffd166' });
+    ui.label(x + 10, y + 21, step.title, { size: 15, bold: true });
+    ui.label(x + 10, y + 42, step.text, { size: 11, color: COL.dimText, wrap: w - 20 });
+    ui.button(x + w - 62, y + 72, 56, 18, 'Skip', () => this.actions.skipTutorial(), { size: 10 });
   }
 
   renderTopBar(s, ui) {
@@ -366,25 +424,26 @@ export class OpsScene extends Phaser.Scene {
       size: 11, bold: true, color: runway === Infinity ? hex(COL.good) : runway < 20 ? hex(COL.bad) : runway < 60 ? hex(COL.warn) : COL.dimText,
     });
     [[0, 'Pause'], [1, '1x'], [3, '3x'], [8, '8x']].forEach(([v, name], i) => {
-      ui.button(846 + i * 54, 10, 50, 30, name, () => this.setSpeed(v), {
+      ui.button(846 + i * 50, 10, 46, 30, name, () => this.setSpeed(v), {
         fill: this.speed === v ? COL.btnOn : COL.btn, stroke: this.speed === v ? COL.good : COL.accent, size: 12,
         hint: 'Space pauses, 1 2 3 pick the speed.',
       });
     });
     const st = audio.getSettings();
-    ui.button(1064, 10, 34, 30, st.mute ? 'Mute' : 'Snd', () => { audio.setSetting('mute', !st.mute); }, {
-      size: 10, fill: st.mute ? 0x3a2030 : COL.btn, stroke: st.mute ? COL.bad : COL.accent, hint: 'Sound on or off (M).',
+    const small = (x, w, label, cb, on, hint, off = false) => ui.button(x, 10, w, 30, label, cb, {
+      size: 10, fill: on ? COL.btnOn : off ? 0x3a2030 : COL.btn, stroke: on ? COL.good : off ? COL.bad : COL.accent, hint,
     });
-    ui.button(1102, 10, 42, 30, 'AP', () => audio.setSetting('autoPause', !st.autoPause), {
-      size: 12, fill: st.autoPause ? COL.btnOn : COL.btn, stroke: st.autoPause ? COL.good : COL.accent,
-      hint: `Auto-pause on important events: ${st.autoPause ? 'on' : 'off'} (P).`,
-    });
+    small(1048, 32, st.mute ? 'Mute' : 'Snd', () => audio.setSetting('mute', !st.mute), false, 'Sound on or off (M).', st.mute);
+    small(1084, 30, 'AP', () => audio.setSetting('autoPause', !st.autoPause), st.autoPause, `Auto-pause on important events: ${st.autoPause ? 'on' : 'off'} (P).`);
+    small(1118, 34, 'Tips', () => { this.helpMode = !this.helpMode; this.hint.setText(this.helpMode ? 'Tips mode: tap anything to read about it' : ''); }, this.helpMode, 'Tips mode: tapping a button shows what it does instead of pressing it.');
+    small(1156, 30, 'Fit', () => this.resetZoom(), false, 'Back to the full view. Pinch with two fingers to zoom.');
+    small(1190, 34, 'Full', () => (this.scale.isFullscreen ? this.scale.stopFullscreen() : this.scale.startFullscreen()), false, 'Fullscreen.');
     const sure = this.confirmNew;
-    ui.button(1150, 10, 120, 30, sure ? 'Erase save?' : 'New game', () => {
+    ui.button(1228, 10, 46, 30, sure ? 'Erase?' : 'New', () => {
       if (sure) return this.newGame();
       this.confirmNew = true;
       this.time.delayedCall(3000, () => { this.confirmNew = false; this.render(); });
-    }, { size: 13, fill: sure ? 0x7a2a1d : COL.btn, stroke: sure ? COL.bad : COL.accent });
+    }, { size: 10, fill: sure ? 0x7a2a1d : COL.btn, stroke: sure ? COL.bad : COL.accent, hint: 'Start a new company (asks first).' });
   }
 
   // A tiny line chart of the last 90 days of cash.
@@ -427,10 +486,12 @@ export class OpsScene extends Phaser.Scene {
   }
 
   renderDockTabs(ui) {
+    const step = sim.tutorialStep(this.s);
     TABS.forEach(([id, name], i) => {
       const on = this.tab === id;
+      const nudge = step?.tab === id && !on; // the tutorial wants this tab
       ui.button(720 + i * 78, 63, 74, 24, name, () => { this.tab = id; }, {
-        size: 11, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent,
+        size: 11, fill: on ? COL.btnOn : nudge ? 0x5a4a12 : COL.btn, stroke: on ? COL.good : nudge ? 0xffd166 : COL.accent,
       });
     });
   }

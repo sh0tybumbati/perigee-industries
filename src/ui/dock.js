@@ -8,6 +8,13 @@ import {
 import * as sim from '../sim.js';
 import * as B from '../base.js';
 import { COL, hex } from './ui.js';
+import { drawRocket } from './art.js';
+
+function icon(ui, x, y, w, h, type) {
+  const g = ui.scene.add.graphics();
+  drawRocket(g, x, y, w, h, type);
+  ui.container.add(g);
+}
 
 const stateColor = { ready: COL.good, refit: COL.warn, flying: COL.accent };
 const tenureColor = { owned: COL.good, leased: COL.warn, locked: COL.dim };
@@ -64,6 +71,7 @@ export function renderMission(ui, s, X, Y, W, actions) {
       size: types.length > 6 ? 10 : 12, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent,
       hint: `${ROCKETS[id].name}: ${ready} of ${total} ready.`,
     });
+    if (bw > 150) icon(ui, X + i * (bw + 5) + 6, Y + 86, 18, 26, id);
   });
   const v = sim.nextVehicle(s, s.rocket);
   const risk = Math.round(sim.failChance(s) * 100);
@@ -252,8 +260,9 @@ export function renderFleet(ui, s, X, Y, W, actions) {
     const st = sim.vehicleState(s, v);
     const r = ROCKETS[v.type];
     ui.row(X, y, W, 24, { on: v.type === s.rocket && st === 'ready' && v === sim.nextVehicle(s, v.type) });
-    ui.label(X + 8, y + 5, v.serial, { size: 12, bold: true });
-    ui.label(X + 78, y + 5, r.name, { size: 12, color: COL.dimText });
+    icon(ui, X + 6, y + 1, 14, 22, v.type);
+    ui.label(X + 28, y + 5, v.serial, { size: 12, bold: true });
+    ui.label(X + 92, y + 5, r.name, { size: 12, color: COL.dimText });
     const days = st === 'ready' ? '' : ` ${Math.max(1, (st === 'flying' ? v.returnDay : v.readyDay) - s.day)}d`;
     ui.label(X + 240, y + 5, `${st}${days}`, { size: 12, color: hex(stateColor[st]) });
     ui.label(X + 300, y + 5, v.site === 'moon' ? 'Moon base' : SITES[v.site ?? 'cape'].short, { size: 11, color: hex(v.site === 'moon' ? COL.accent : COL.dim) });
@@ -337,6 +346,7 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
       enabled: !blocker, size: 12,
       hint: blocker && blocker !== 'Locked' ? `${r.name}: ${blocker}` : `${r.name}: ${r.payload ? `${r.payload} t, ` : ''}rated ${r.coreLife} flight${r.coreLife > 1 ? 's' : ''}. ${r.steel} t of ${r.metal === 'aluminum' ? 'aluminum' : 'steel'}.`,
     });
+    if (blocker !== 'Locked') icon(ui, x + 6, y + 2, 13, 21, id);
   });
 }
 
@@ -563,6 +573,9 @@ function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
     hint: 'Ducts join the ports at the ends of two modules. Only connected modules share power and crew.',
   });
   ui.button(X + 240, Y + 208, 110, 28, 'Rotate (R)', () => actions.rotate(), { size: 12, enabled: ctx.mode.kind === 'place' });
+  ui.button(X + 356, Y + 208, 90, 28, 'Undo (Z)', () => actions.undo(), {
+    size: 12, enabled: B.undoBlocker(base) === null, hint: B.undoBlocker(base) ?? 'Take back the last duct (refunded) or module placement.',
+  });
   ui.label(X + W, Y + 215, `${base.ducts.length} duct${base.ducts.length === 1 ? '' : 's'}`, { size: 12, right: true, color: COL.dimText });
 
   ui.heading(X, Y + 248, 'STOCKPILE');

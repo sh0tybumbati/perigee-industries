@@ -2,15 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#05070d" />
   <title>Perigee Industries</title>
   <style>
     html, body { margin: 0; height: 100%; background: #05070d; }
+    html, body { overscroll-behavior: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
     #game { width: 100%; height: 100%; }
+    #game canvas { touch-action: none; }
+    #rotate { display: none; position: fixed; inset: 0; z-index: 10; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+      background: #05070d; color: #7d8cab; font: 16px system-ui, sans-serif; text-align: center; padding: 24px; }
+    #rotate b { color: #4fd1ff; font-size: 20px; }
+    @media (orientation: portrait) and (max-width: 900px) { #rotate { display: flex; } }
   </style>
 </head>
 <body>
   <div id="game"></div>
+  <div id="rotate"><b>PERIGEE INDUSTRIES</b>Rotate your phone to landscape to play.</div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

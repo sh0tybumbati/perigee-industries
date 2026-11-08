@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 0.8 (Pre-Alpha Spec: customers, shipping and automatic launch sites)
+Version: 0.9 (Pre-Alpha Spec: phones, tutorial, art and undo)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -334,6 +334,20 @@ Automatic launch site: loading a contract chooses the best launch site for the w
 
 Contract board: each row has a site badge, for example [V] now or [C] 3d, showing the best site for that contract alone and how many days away its launch could be. Hovering shows the customer region and the shipping time to each open site. The map pins show their letters too.
 
+2.15 Phones and Touch (Phase 9)
+The game has to be playable from a phone browser. The canvas is a fixed 1280 by 720 landscape layout that scales to fit, so on a phone it is shrunk and needs help.
+- Pinch and pan: two fingers pinch to zoom the whole screen (1x to 3x) and drag to pan, and a single finger still taps, drags the globe and presses buttons. Buttons act when the finger is lifted, and not while a two-finger gesture is running, so zooming never presses anything by accident. A Zoom button in the top bar returns to the full view.
+- Tips mode: touch screens have no hover, so a Tips button in the top bar turns on a mode where tapping any button or row shows its hint instead of doing its action.
+- Fullscreen: a Full button enters fullscreen.
+- Portrait: in portrait the page asks the player to rotate the phone.
+- Hosting: the game is published as a static site on GitHub Pages (built from the main branch by a workflow), so it can be played away from the home network. Saves live in each browser's own storage.
+
+2.16 Tutorial, Fleet Art, Site Scenes and Undo (Phase 9)
+Tutorial: a new company gets a short guided tutorial, shown as a coach card on the map with the next thing to do and a pulsing outline on the dock tab to open. Steps: load a contract, launch, build a replacement Peregrine 9 (the booster was expended), research Skylink Gen-1, fund Booster Landing and build its test article, and fly the test. Each step completes by itself when the player does it. The card can be skipped, and saves from before the tutorial skip it.
+Fleet art: every vehicle type has a small drawn silhouette: the Peregrine 9 as a slim white two-stage rocket with grid fins, the Heavy with three cores, the Behemoth and Skyship in stainless steel, the tanker with a stripe, the depot with a ring and module ships as capsules lying on their side. The silhouettes appear on the vehicle buttons, the fleet list and the factory build buttons.
+Site scenes: while the Sites or Factory tab is open, a small illustrated card on the map shows the viewed site: its pads with towers (and a catch arm if there is one), a rocket standing on a pad for each ready hull, a glow on a pad that is busy and a red mark on a pad closed for repairs, the hangars with a hull inside while it is being refit, and the tank farm with fill levels.
+Undo for the Moon base: placing a module or building a duct can be undone with an Undo button in the Base tab or Z. A duct refunds its cost. A module goes back to the pending list, but only while drones have not started burying it. The last 10 actions are remembered.
+
 3. Technology Tree
                       [ PEREGRINE ERA ]
                               │
@@ -389,4 +403,5 @@ This phase (4b): ice miners and refineries, lunar methalox, Moon-built Skyships,
 Phase 6a: the 2010 start with seed funding, expendable boosters and landing research, the calendar and real Mars windows, prototype test flights with dice-roll research, and aluminum for Peregrine hulls.
 Phase 7: launch sequence, floating cash, sparkline and runway, launch receipt, milestones, toasts, auto-pause, synthesized sound and keyboard shortcuts.
 Phase 8: customer regions, payload shipping time, site letters and automatic launch-site choice.
-Next: Mars bases and Mars fuel, return flights, fleet art, tutorial.
+Phase 9: touch and phone support, GitHub Pages hosting, tutorial, fleet art, site scenes and base undo.
+Next: Mars bases and Mars fuel, return flights.

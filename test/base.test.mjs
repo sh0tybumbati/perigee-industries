@@ -241,3 +241,27 @@ test('base survives a save round trip, and v3 saves load without a base', () => 
   delete v3.base;
   assert.equal(sim.deserialize(JSON.stringify(v3)).base, null);
 });
+
+test('undo takes back the last duct (refunded) and the last placement, until drones start burying', () => {
+  const s = { cash: 100, base: B.createBase('shackleton') };
+  const b = s.base;
+  b.pending.push({ id: b.nextId++, type: 'reactor' }, { id: b.nextId++, type: 'habitat' });
+  assert.ok(B.placeModule(b, b.pending[0].id, 2, 2, 0));
+  assert.ok(B.placeModule(b, b.pending[0].id, 2, 4, 0));
+  const [r, h] = b.modules;
+  assert.ok(B.connect(b, B.portId(r, 1), B.portId(h, 0)));
+  s.cash -= 1.5;
+  assert.equal(B.undoBlocker(b), null);
+  assert.ok(B.undoLast(s));
+  assert.equal(b.ducts.length, 0);
+  assert.equal(s.cash, 100, 'the duct is refunded');
+  h.cover = 0.2;
+  assert.match(B.undoBlocker(b), /burying/);
+  assert.equal(B.undoLast(s), false);
+  h.cover = 0;
+  assert.ok(B.undoLast(s));
+  assert.equal(b.modules.length, 1);
+  assert.equal(b.pending.at(-1).type, 'habitat', 'the module returns to the pending list');
+  assert.ok(B.undoLast(s));
+  assert.equal(B.undoBlocker(b), 'Nothing to undo');
+});

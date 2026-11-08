@@ -18,6 +18,7 @@ export function createBase(site) {
     dug: 0, // total regolith dug, drives the pits drawn on the surface
     nextId: 1,
     lastSpe: null,
+    history: [], // the last few placements and ducts, for undo
   };
 }
 
@@ -59,7 +60,9 @@ export function placeModule(base, pendingId, x, y, rot) {
   const { type } = base.pending[i];
   if (!canPlace(base, type, x, y, rot ? 1 : 0)) return false;
   base.pending.splice(i, 1);
-  base.modules.push({ id: base.nextId++, type, x, y, rot: rot ? 1 : 0, cover: 0, crew: MODULES[type].crew ?? 0 });
+  const m = { id: base.nextId++, type, x, y, rot: rot ? 1 : 0, cover: 0, crew: MODULES[type].crew ?? 0 };
+  base.modules.push(m);
+  remember(base, { kind: 'place', id: m.id });
   return true;
 }
 
@@ -76,7 +79,44 @@ export function ductBlocker(base, a, b) {
 
 export function connect(base, a, b) {
   if (ductBlocker(base, a, b)) return false;
-  base.ducts.push({ id: base.nextId++, a, b });
+  const d = { id: base.nextId++, a, b };
+  base.ducts.push(d);
+  remember(base, { kind: 'duct', id: d.id });
+  return true;
+}
+
+// ---- undo (GDD 2.16) -----------------------------------------------------------------------
+
+function remember(base, entry) {
+  base.history = [...(base.history ?? []), entry].slice(-10);
+}
+
+export function undoBlocker(base) {
+  const h = base?.history?.at(-1);
+  if (!h) return 'Nothing to undo';
+  if (h.kind === 'place') {
+    const m = base.modules.find((x) => x.id === h.id);
+    if (m && m.cover > 0) return 'Drones have started burying it';
+  }
+  return null;
+}
+
+// Takes back the last placement (the module returns to the pending list) or duct (refunded).
+export function undoLast(s) {
+  const base = s.base;
+  if (undoBlocker(base)) return false;
+  const h = base.history.pop();
+  if (h.kind === 'duct') {
+    if (base.ducts.some((d) => d.id === h.id)) s.cash += DUCT_COST;
+    base.ducts = base.ducts.filter((d) => d.id !== h.id);
+  } else {
+    const m = base.modules.find((x) => x.id === h.id);
+    if (m) {
+      base.modules = base.modules.filter((x) => x.id !== h.id);
+      base.ducts = base.ducts.filter((d) => !d.a.startsWith(`${h.id}:`) && !d.b.startsWith(`${h.id}:`));
+      base.pending.push({ id: base.nextId++, type: m.type });
+    }
+  }
   return true;
 }
 

@@ -66,6 +66,7 @@ export function createState() {
     rocket: 'peregrine9', // selected vehicle type
     dest: 'leo', // selected destination
     recovery: 'expend', // rtls | drone | expend (booster-class vehicles only; rtls and drone need research)
+    tutorial: 0, // index of the current tutorial step (TUTORIAL.length when finished)
     milestones: {}, // id -> { day, title }
     cashHistory: [60], // one sample per day, for the sparkline
     trials: {}, // techs funded and waiting on a test flight: { articles ready, attempts }
@@ -157,6 +158,7 @@ export function deserialize(json) {
       ? { ...makeSite(id, 'locked'), ...o.sites[id], stock: { ...base.sites[id].stock, ...o.sites[id].stock }, cap: { ...base.sites[id].cap, ...o.sites[id].cap } }
       : base.sites[id]]));
     s.trials = o.trials && typeof o.trials === 'object' ? { ...o.trials } : {};
+    s.tutorial = Number.isInteger(o.tutorial) ? o.tutorial : TUTORIAL.length; // saves from before the tutorial skip it
     s.milestones = o.milestones && typeof o.milestones === 'object' ? { ...o.milestones } : {};
     s.cashHistory = Array.isArray(o.cashHistory) && o.cashHistory.length ? o.cashHistory.slice(-90) : [s.cash];
     s.fleet = s.fleet.filter((v) => ROCKETS[v.type]).map((v) => ({ site: 'cape', ...v }));
@@ -200,6 +202,7 @@ function migrateV4(o) {
     if (o[k] !== undefined) s[k] = o[k];
   }
   if (['rtls', 'drone', 'expend'].includes(o.recovery)) s.recovery = o.recovery;
+  s.tutorial = TUTORIAL.length;
   s.tech = new Set([...(Array.isArray(o.tech) ? o.tech : []), 'landing', 'droneship']);
   s.fleet = (s.fleet ?? []).filter((v) => ROCKETS[v.type]).map((v) => ({ site: 'cape', ...v }));
   const pads = Array.isArray(o.pads) && o.pads.length ? o.pads : [{ busyUntil: 0 }];
@@ -1058,6 +1061,26 @@ export function flyTest(s, id) {
   note(s, `${name} test flight FAILED (${Math.round(odds * 100)}% odds). Pad closed ${PAD_FAIL_CLOSED} days. Next attempt: ${Math.round(testOdds(s, id) * 100)}%.`);
   return { ok: true, success: false };
 }
+
+// ---- tutorial (GDD 2.16) -------------------------------------------------------------------
+
+const queued = (s, f) => Object.values(s.sites).some((x) => x.queue.some(f));
+export const TUTORIAL = [
+  { id: 'load', tab: 'mission', title: 'Load a contract', text: 'Tap a contract in the Mission tab to put it on your rocket.', done: (s) => s.manifest.length > 0 || s.totalLaunches > 0 },
+  { id: 'launch', tab: 'mission', title: 'Launch', text: 'Check the receipt on the map, then press LAUNCH. The payout arrives when the flight does.', done: (s) => s.totalLaunches > 0 },
+  { id: 'hull', tab: 'factory', title: 'Build a new booster', text: 'The booster was thrown away. Queue a Peregrine 9 in the Factory tab to fly again.', done: (s) => s.fleet.length > 0 || queued(s, (q) => q.type === 'peregrine9') },
+  { id: 'gen1', tab: 'tech', title: 'Research Skylink Gen-1', text: 'In R&D, buy Skylink Gen-1 ($5M). It unlocks satellite batches that earn money every day.', done: (s) => s.tech.has('gen1') },
+  { id: 'landing', tab: 'tech', title: 'Fund Booster Landing', text: 'Reusable boosters are the big win. Fund Booster Landing in R&D. It needs a test flight.', done: (s) => s.tech.has('landing') || !!s.trials.landing },
+  { id: 'article', tab: 'tech', title: 'Build a test article', text: 'Press Build on the Booster Landing row. The article takes a few days in the factory.', done: (s) => s.tech.has('landing') || (s.trials.landing?.articles ?? 0) > 0 || (s.trials.landing?.attempts ?? 0) > 0 || queued(s, (q) => q.kind === 'test') },
+  { id: 'fly', tab: 'tech', title: 'Fly the test', text: 'Press Fly test when the article is ready. It is a dice roll: failure costs the article and a pad repair, but the odds improve each try.', done: (s) => s.tech.has('landing') || (s.trials.landing?.attempts ?? 0) > 0 },
+];
+
+// The current tutorial step, skipping the ones the player has already done. Null when finished.
+export function tutorialStep(s) {
+  while (s.tutorial < TUTORIAL.length && TUTORIAL[s.tutorial].done(s)) s.tutorial++;
+  return TUTORIAL[s.tutorial] ?? null;
+}
+export const skipTutorial = (s) => { s.tutorial = TUTORIAL.length; };
 
 // ---- time ---------------------------------------------------------------------
 

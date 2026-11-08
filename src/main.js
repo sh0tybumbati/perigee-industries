@@ -7,6 +7,7 @@ const game = new Phaser.Game({
   width: 1280,
   height: 720,
   backgroundColor: '#05070d',
+  input: { activePointers: 3 }, // two fingers for pinch-zoom, plus one spare
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   scene: [OpsScene],
 });

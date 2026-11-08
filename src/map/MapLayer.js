@@ -76,8 +76,10 @@ export class MapLayer {
     let last = null;
     this.zone.on('pointerdown', (p) => { last = { x: p.x, y: p.y }; });
     this.zone.on('pointermove', (p) => {
+      if (scene.gestureActive?.()) { last = null; return; } // two fingers pinch the screen, they do not spin the globe
       if (!p.isDown || !last) return;
-      this.globe.rotate(p.x - last.x, p.y - last.y);
+      const z = scene.cameras.main.zoom;
+      this.globe.rotate((p.x - last.x) / z, (p.y - last.y) / z);
       last = { x: p.x, y: p.y };
     });
     this.zone.on('pointerup', () => { last = null; });

@@ -40,6 +40,15 @@ export class UI {
     obj.on('pointerout', () => this.setHint(''));
   }
 
+  // A press: ignored during a two-finger gesture, and in Tips mode it shows the hint instead of acting.
+  tap(cb, hint) {
+    if (this.scene.gestureActive?.()) return;
+    if (this.scene.helpMode && hint) { this.setHint(hint); return; }
+    audio.unlock();
+    audio.click();
+    this.act(cb);
+  }
+
   button(x, y, w, h, label, cb, o = {}) {
     const enabled = o.enabled !== false;
     const base = o.fill ?? COL.btn;
@@ -50,11 +59,12 @@ export class UI {
     }).setOrigin(0.5);
     if (enabled) {
       r.setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => { audio.unlock(); audio.click(); this.act(cb); })
+        .on('pointerup', () => this.tap(cb, o.hint))
         .on('pointerover', () => r.setFillStyle(COL.btnHover))
         .on('pointerout', () => r.setFillStyle(base));
     }
     if (o.hint) this.hover(r, o.hint);
+    if (!enabled && o.hint) r.on('pointerup', () => { if (this.scene.helpMode) this.setHint(o.hint); });
     this.container.add([r, t]);
     return r;
   }
@@ -63,7 +73,8 @@ export class UI {
   row(x, y, w, h, o = {}) {
     const r = this.scene.add.rectangle(x, y, w, h, o.on ? COL.rowOn : (o.fill ?? COL.row)).setOrigin(0)
       .setStrokeStyle(1, o.stroke ?? (o.on ? COL.accent : COL.line));
-    if (o.onClick) r.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.act(o.onClick));
+    if (o.onClick) r.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(o.onClick, o.hint));
+    else if (o.hint) r.on('pointerup', () => { if (this.scene.helpMode) this.setHint(o.hint); });
     if (o.hint) this.hover(r, o.hint);
     this.container.add(r);
     return r;
