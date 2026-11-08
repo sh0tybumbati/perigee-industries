@@ -277,4 +277,20 @@ export const MARS_ROUTES = {
   moon: { name: 'From the Moon', ascentRisk: 0, landRisk: 0.06, days: 175, fuelPerTon: 4, hullFuel: 450 },
 };
 export const MARS_DESTS = ['marsOrbit', 'jezero', 'utopia'];
+export const MARS_SITES = ['jezero', 'utopia'];
+
+// Return flights (GDD 2.17): a Mars-based Skyship flies home on the base's methalox.
+export const MARS_RETURN = { name: 'Home from Mars', ascentRisk: 0.08, landRisk: 0.04, days: 200, fuelPerTon: 5, hullFuel: 500, refit: 15 };
+// Mars to Earth windows open about 60 days before each Earth to Mars window and last 30 days.
+export const MARS_RETURN_WINDOWS = MARS_WINDOWS.map(([open]) => [open - 60, open - 31]);
+export const MARS_RETURN_CONTRACT = { chance: 0.12, mass: [10, 60], rate: [3, 4], base: [20, 40], expires: 300 };
+
+// What differs between the Moon base and the Mars base (GDD 2.8, 2.17).
+export const BASE_PARAMS = {
+  moon: { iceSites: ['shackleton'], refineryOut: 2, caps: { ice: 300, methalox: 600 }, storms: false },
+  mars: { iceSites: ['utopia'], refineryOut: 4, caps: { ice: 400, methalox: 1500 }, storms: true },
+};
+export const STORM_CHANCE = 1 / 90;
+export const STORM_DAYS = [12, 30];
+export const STORM_WORK = 0.5;
 export const MARS_CONTRACT = { chance: 0.15, mass: [30, 100], rate: [2.6, 3.4], base: [15, 30], expires: 200 };

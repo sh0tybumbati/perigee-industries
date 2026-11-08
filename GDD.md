@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 0.9 (Pre-Alpha Spec: phones, tutorial, art and undo)
+Version: 1.0 (Pre-Alpha Spec: Mars bases, Mars fuel and return flights)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -224,7 +224,6 @@ Two routes to Mars:
 - From the Moon: a Moon-built Skyship leaves the base. It burns the base's lunar methalox (450 t plus 4 t per tonne of payload) and needs no Earth pad, tanker or depot. The arrival risk is 6%. 175 days. It needs the whole chain: a base at Shackleton, ice miners, refineries and a Fabricator.
 Arrival can fail: a Mars-bound flight that survives launch can still be lost entering the Martian atmosphere.
 
-Later (phase 6): Mars bases, Mars ice and fuel, and return flights.
 
 2.10 Launch Sites, Infrastructure & Supply (Phase 5)
 The company no longer owns a generic pad. It uses launch sites, and a site is either leased or owned.
@@ -348,6 +347,26 @@ Fleet art: every vehicle type has a small drawn silhouette: the Peregrine 9 as a
 Site scenes: while the Sites or Factory tab is open, a small illustrated card on the map shows the viewed site: its pads with towers (and a catch arm if there is one), a rocket standing on a pad for each ready hull, a glow on a pad that is busy and a red mark on a pad closed for repairs, the hangars with a hull inside while it is being refit, and the tank farm with fill levels.
 Undo for the Moon base: placing a module or building a duct can be undone with an Undo button in the Base tab or Z. A duct refunds its cost. A module goes back to the pending list, but only while drones have not started burying it. The last 10 actions are remembered.
 
+2.17 Mars Bases, Mars Fuel and Return Flights (Phase 10)
+Mars gets the same kind of base as the Moon, and with fuel made on Mars a ship no longer has to be thrown away there.
+
+Mars base: module ships (the same Habitat, Reactor, Drone Bay, Smelter, Fabricator, Ice Miner and Refinery ships) can now be flown to a Mars landing site, Jezero Crater or Utopia Planitia. The first one founds the base at that site, and every later one has to land at the same site. They fly direct from Earth in a Mars launch window, burn depot propellant (5 t per tonne of ship mass) and take the full direct-route risk: +12% on ascent and 15% on landing. The Moon and Mars each have their own base, with their own grid, modules, power, crew and stockpile. The Moon tab and the Mars tab each get a Base button that zooms into that base. Mars looks different from the Moon: a red dusty surface, and thin air.
+- Jezero Crater: delta clays and minerals. No ice, so no fuel production, but a good place for a first base.
+- Utopia Planitia: ice under the surface. Ice Miners only work here (and at Shackleton on the Moon).
+- Dust storms: about once every 90 days a storm lasts 12 to 30 days. Everything that moves or digs (drones, smelters, ice miners, refineries, the Fabricator) runs at half speed. Reactors are nuclear and keep running. A banner and a toast announce the storm.
+- Solar particle events strike as on the Moon, and there is no magnetic field, so the burial rules are the same.
+
+Mars fuel: Mars has carbon dioxide in its air, which the Moon lacks. A Refinery on Mars turns 3 t of ice into 4 t of methalox (the Moon makes 2 t). The Mars stockpile holds 400 t of ice and 1500 t of methalox (the Moon holds 300 and 600).
+
+Mars-based ships and return flights:
+- A Skyship that lands at a Mars base (a payload flight to the base's own landing site) is no longer lost. It stays at the base as a Mars-based hull, ready after a 15-day refit. Skyships that land anywhere else on Mars are still one-way.
+- The Fabricator on Mars can build a Skyship hull from stockpiled iron, silica and oxygen (the same recipe as the Moon, $35M of imported engines). It appears as a Mars-based hull.
+- A Mars-based Skyship can fly home to LEO. This is a return flight: it burns the Mars base's methalox (500 t plus 5 t per tonne of cargo), needs no Earth pad or depot, and takes 200 days. It risks 8% on ascent from Mars and 4% on Earth arrival. It also needs a return window. The Mars-to-Earth windows come about 60 days before each Earth-to-Mars window (the same 26-month cycle, with the stay on Mars of about 15 months in between), and each lasts 30 days. The hull comes back at Cape Canaveral and can fly again.
+- Return contracts: once a Mars base has modules, customers on Earth offer Mars return contracts (samples, equipment and crew rotation) at about $3 to $4 per tonne plus a large flat fee, lasting 300 days. They can only be loaded on a flight that leaves from the Mars base.
+- Flight origin: with a Mars-based hull ready and LEO selected, a From Earth | From Mars base switch appears in the Mission tab.
+
+Milestones: first module on Mars, Mars base founded, first Mars methalox, first return flight home.
+
 3. Technology Tree
                       [ PEREGRINE ERA ]
                               │
@@ -404,4 +423,5 @@ Phase 6a: the 2010 start with seed funding, expendable boosters and landing rese
 Phase 7: launch sequence, floating cash, sparkline and runway, launch receipt, milestones, toasts, auto-pause, synthesized sound and keyboard shortcuts.
 Phase 8: customer regions, payload shipping time, site letters and automatic launch-site choice.
 Phase 9: touch and phone support, GitHub Pages hosting, tutorial, fleet art, site scenes and base undo.
-Next: Mars bases and Mars fuel, return flights.
+Phase 10: Mars bases, dust storms, Mars methalox, Mars-based Skyships and return flights.
+Next: Mars economy tuning with a Mars-flying bot, crew rotation and larger bases.

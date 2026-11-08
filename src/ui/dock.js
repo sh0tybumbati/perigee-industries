@@ -3,7 +3,7 @@ import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
   PLANT_COST, PLANT_MAX, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
-  PROTOS, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
+  PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
 import * as B from '../base.js';
@@ -45,6 +45,10 @@ export function renderMission(ui, s, X, Y, W, actions) {
   if (!sim.destUnlocked(s, eff)) {
     req = `Locked: research ${TECH.find((t) => t.id === ed.locked).name}.`;
     reqColor = hex(COL.bad);
+  } else if (sim.originIsMars(s)) {
+    const w = sim.marsReturnWindow(s.day);
+    req = `${w.open ? `Return window open ${w.closesIn} more days` : `Return window opens in ${w.opensIn} days`} · ${MARS_RETURN.hullFuel} t + ${MARS_RETURN.fuelPerTon} t/t of Mars base methalox, ${MARS_RETURN.ascentRisk * 100}% ascent and ${MARS_RETURN.landRisk * 100}% landing risk`;
+    reqColor = hex(w.open ? COL.good : COL.warn);
   } else if (ed.body === 'mars') {
     const w = sim.marsWindow(s.day);
     const win = w.open ? `Window open ${w.closesIn} more days` : `Window opens in ${w.opensIn} days`;
@@ -56,7 +60,7 @@ export function renderMission(ui, s, X, Y, W, actions) {
     req = `Needs a Skyship and ${ed.prop} t of depot propellant per tonne of payload.`;
     reqColor = hex(COL.warn);
   }
-  if (r.role === 'module') { req = 'Module ships land at a Moon landing site and stay there as a base module.'; reqColor = hex(COL.warn); }
+  if (r.role === 'module') { req = 'Module ships land at a Moon or Mars landing site and stay there as a base module.'; reqColor = hex(COL.warn); }
   else if (!payload) { req = 'Tankers and depot ships always work in LEO.'; reqColor = COL.dimText; }
   ui.label(X, Y + 44, req, { size: req.length > 80 ? 11 : 12, color: reqColor });
 
@@ -85,16 +89,28 @@ export function renderMission(ui, s, X, Y, W, actions) {
 
   // Launch site and recovery
   const site = s.sites[s.site];
-  const moon = sim.originIsMoon(s);
+  const moon = sim.originIsMoon(s) || sim.originIsMars(s);
   const marsPick = payload && DESTINATIONS[eff].body === 'mars' && s.rocket === 'skyship';
-  if (moon) {
+  const hullsAt = (where) => sim.fleetOf(s, 'skyship').filter((x) => x.site === where).length;
+  const originPick = payload && s.dest === 'leo' && hullsAt('mars') > 0;
+  if (sim.originIsMars(s)) {
+    ui.label(X, Y + 146, 'From the Mars base', { size: 12, bold: true, color: hex(COL.accent) });
+    ui.label(X + 150, Y + 147, `${Math.round(s.marsBase?.stock.methalox ?? 0)} t methalox · ${hullsAt('mars')} hull(s)`, { size: 11, color: COL.dimText });
+  } else if (sim.originIsMoon(s)) {
     ui.label(X, Y + 146, 'From the Moon base', { size: 12, bold: true, color: hex(COL.accent) });
-    ui.label(X + 142, Y + 147, `${Math.round(s.base?.stock.methalox ?? 0)} t methalox · ${sim.fleetOf(s, 'skyship').filter((x) => x.site === 'moon').length} hull(s)`, { size: 11, color: COL.dimText });
+    ui.label(X + 142, Y + 147, `${Math.round(s.base?.stock.methalox ?? 0)} t methalox · ${hullsAt('moon')} hull(s)`, { size: 11, color: COL.dimText });
   } else {
     ui.label(X, Y + 146, `From ${SITES[s.site].letter} · ${SITES[s.site].short}`, { size: 12, bold: true, color: hex(tenureColor[site.status]) });
     ui.label(X + 150, Y + 147, `${Math.round(site.stock[sim.fuelNeed(s).type])} t ${sim.fuelNeed(s).type}`, { size: 11, color: COL.dimText });
   }
-  if (marsPick) {
+  if (originPick) {
+    [['earth', 'From Earth'], ['mars', 'From Mars']].forEach(([id, name], i) => {
+      const on = s.origin === id;
+      ui.button(X + W - 214 + i * 108, Y + 142, 104, 22, name, () => actions.setOrigin(id), {
+        size: 11, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent, hint: id === 'mars' ? 'Fly a Mars-based Skyship home to LEO.' : 'Launch from an Earth pad.',
+      });
+    });
+  } else if (marsPick) {
     [['direct', 'Direct'], ['moon', 'From Moon']].forEach(([id, name], i) => {
       const on = s.marsRoute === id;
       ui.button(X + W - 214 + i * 108, Y + 142, 104, 22, name, () => actions.setMarsRoute(id), {
@@ -119,8 +135,13 @@ export function renderMission(ui, s, X, Y, W, actions) {
     ui.heading(X, Y + 176, r.role === 'tanker' ? 'TANKER RUN' : r.role === 'module' ? 'MODULE DELIVERY' : 'DEPOT DEPLOYMENT');
     const need = sim.modulePropNeed(s);
     const lines = r.role === 'module'
-      ? [`This hull becomes a ${MODULES[r.module].name} on your Moon base. ${MODULES[r.module].blurb}`,
-        s.base ? `Your base is at ${DESTINATIONS[s.base.site].name}: pick that site on the Moon map.` : 'The first module ship founds the base at the Moon site you pick on the map.',
+      ? [`This hull becomes a ${MODULES[r.module].name} on your ${DESTINATIONS[s.dest].body === 'mars' ? 'Mars' : 'Moon'} base. ${MODULES[r.module].blurb}`,
+        (() => {
+          const body = DESTINATIONS[s.dest].body === 'mars' ? 'mars' : 'moon';
+          const there = sim.baseOn(s, body);
+          const name = body === 'mars' ? 'Mars' : 'Moon';
+          return there ? `Your ${name} base is at ${DESTINATIONS[there.site].name}: pick that site on the ${name} map.` : `The first module ship founds the ${name} base at the site you pick on the map.`;
+        })(),
         `Burns ${need} t of depot propellant at launch (depot: ${Math.floor(s.depot.prop)} t).`]
       : r.role === 'tanker'
         ? [`Delivers ${TANKER_LOAD} t of CH4/LOX to the LEO depot, drawn from the launch site's methalox tanks.`,
@@ -193,7 +214,7 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
     const on = s.manifest.includes(c.id);
     const match = c.dest === s.dest;
     const d = DESTINATIONS[c.dest];
-    const best = sim.bestSiteFor(s, c);
+    const best = c.origin === 'mars' ? null : sim.bestSiteFor(s, c);
     const region = REGIONS.find((r) => r.id === c.region);
     const ship = SITE_IDS.filter((id) => s.sites[id].status !== 'locked').map((id) => `${SITES[id].letter} ${sim.shipDays(c, id)}d`).join(', ');
     ui.row(X, y, W, 23, {
@@ -213,6 +234,8 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
       ui.container.add(gb);
       ui.label(X + 413.5, y + 5, SITES[best.id].letter, { size: 12, bold: true, color: hex(col), center: true });
       ui.label(X + 428, y + 5, wait === 0 ? 'now' : `${wait}d`, { size: 11, color: hex(col) });
+    } else if (c.origin === 'mars') {
+      ui.label(X + 405, y + 5, 'Mars', { size: 11, color: hex(COL.accent) });
     } else {
       ui.label(X + 405, y + 5, 'no site', { size: 11, color: hex(COL.bad) });
     }
@@ -232,7 +255,7 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   ui.bar(X + half + 12, my + 16, half, 8, t.volume / cap.volume, fit(t.volume, cap.volume));
 
   const need = sim.tliNeed(s);
-  const gen1 = s.tech.has('gen1');
+  const gen1 = s.tech.has('gen1') && sim.flightOrigin(s) === 'earth';
   const satsOk = SAT_DESTS.includes(s.dest);
   const ry = my + 30;
   if (need) {
@@ -266,7 +289,7 @@ export function renderFleet(ui, s, X, Y, W, actions) {
     ui.label(X + 92, y + 5, r.name, { size: 12, color: COL.dimText });
     const days = st === 'ready' ? '' : ` ${Math.max(1, (st === 'flying' ? v.returnDay : v.readyDay) - s.day)}d`;
     ui.label(X + 240, y + 5, `${st}${days}`, { size: 12, color: hex(stateColor[st]) });
-    ui.label(X + 300, y + 5, v.site === 'moon' ? 'Moon base' : SITES[v.site ?? 'cape'].short, { size: 11, color: hex(v.site === 'moon' ? COL.accent : COL.dim) });
+    ui.label(X + 300, y + 5, v.site === 'moon' ? 'Moon base' : v.site === 'mars' ? 'Mars base' : SITES[v.site ?? 'cape'].short, { size: 11, color: hex(v.site === 'moon' || v.site === 'mars' ? COL.accent : COL.dim) });
     const wear = v.flights / r.coreLife;
     ui.bar(X + 392, y + 8, 80, 8, wear, wear > 0.7 ? COL.bad : wear > 0.4 ? COL.warn : COL.good);
     ui.label(X + W - 8, y + 5, `${v.flights}/${r.coreLife}`, { size: 12, right: true, color: COL.dimText });
@@ -511,33 +534,40 @@ export function renderSkylink(ui, s, X, Y, W, actions) {
 // ---- Moon base --------------------------------------------------------------------------------------
 
 export function renderBase(ui, s, X, Y, W, actions, ctx) {
-  const base = s.base;
+  const base = ctx.base;
+  const mars = ctx.body === 'mars';
+  const name = mars ? 'Mars' : 'Moon';
   if (!base) {
-    ui.heading(X, Y, 'MOON BASE');
-    [
+    ui.heading(X, Y, `${name.toUpperCase()} BASE`);
+    (mars ? [
+      'No base yet.',
+      'Research Mars Transfer, build a Habitat Skyship in the Factory, and fly it to a Mars landing site in a launch window.',
+      'The first module ship founds the base at Jezero Crater or Utopia Planitia. Utopia has ice, so only it can make fuel.',
+      'Module ships burn depot propellant, and the trip takes 180 days.',
+    ] : [
       'No base yet.',
       'Research Moon Habitat Core, build a Habitat Skyship in the Factory, and fly it to a Moon landing site.',
       'The first module ship founds the base at the site you choose on the Moon map. Every later module goes to the same site.',
       'Module ships burn depot propellant, so fill the LEO depot first.',
-    ].forEach((l, i) => ui.label(X, Y + 22 + i * 26, l, { size: i ? 13 : 16, bold: !i, color: i ? COL.dimText : COL.text, wrap: W }));
+    ]).forEach((l, i) => ui.label(X, Y + 22 + i * 26, l, { size: i ? 13 : 16, bold: !i, color: i ? COL.dimText : COL.text, wrap: W }));
     return;
   }
   const site = DESTINATIONS[base.site].name;
-  ui.label(X, Y, `Base at ${site}`, { size: 17, bold: true });
+  ui.label(X, Y, `${name} base at ${site}`, { size: 17, bold: true });
   const open = ctx.view !== 'closed';
-  ui.button(X + W - 150, Y - 3, 150, 26, open ? 'Close base view' : 'Open base view', () => (open ? actions.closeBase() : actions.openBase()), { size: 12 });
+  ui.button(X + W - 150, Y - 3, 150, 26, open ? 'Close base view' : 'Open base view', () => (open ? actions.closeBase() : actions.openBase(ctx.body)), { size: 12 });
   ['control', 'modules'].forEach((id, i) => {
     ui.button(X + i * 108, Y + 28, 102, 22, id === 'control' ? 'Control' : 'Modules', () => actions.baseSub(id), {
       size: 12, fill: ctx.sub === id ? COL.btnOn : COL.btn, stroke: ctx.sub === id ? COL.good : COL.accent,
     });
   });
   const y0 = Y + 58;
-  if (ctx.sub === 'modules') renderBaseModules(ui, s, X, y0, W, actions);
+  if (ctx.sub === 'modules') renderBaseModules(ui, s, X, y0, W, actions, ctx);
   else renderBaseControl(ui, s, X, y0, W, actions, ctx);
 }
 
 function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
-  const base = s.base;
+  const base = ctx.base;
   const st = B.baseStatus(base);
   const powerOk = st.supply >= st.demand && st.unpowered === 0;
   ui.label(X, Y, `Power ${st.supply.toFixed(2)} / ${st.demand.toFixed(2)} MW`, { size: 13, bold: true, color: hex(powerOk ? COL.good : COL.bad) });
@@ -589,13 +619,14 @@ function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
   ui.button(X, Y + 308, 250, 26, `Sell surplus  ($${surplus.toFixed(1)}M)`, () => actions.sellSurplus(), {
     size: 12, enabled: surplus >= 0.1, hint: `Keeps ${STOCK_KEEP.oxygen} t oxygen, ${STOCK_KEEP.iron} t iron and ${STOCK_KEEP.silica} t silica for local building.`,
   });
+  if (base.storm) ui.label(X, Y + 338, `Dust storm: everything that digs or moves runs at half speed, ${base.storm.daysLeft} more days.`, { size: 12, color: hex(COL.warn) });
   if (base.lastSpe) {
     ui.label(X + W, Y + 314, `Last solar storm: day ${base.lastSpe.day}, ${base.lastSpe.dead} crew lost`, { size: 12, right: true, color: hex(base.lastSpe.dead ? COL.bad : COL.dim) });
   }
 }
 
-function renderBaseModules(ui, s, X, Y, W, actions) {
-  const base = s.base;
+function renderBaseModules(ui, s, X, Y, W, actions, ctx) {
+  const base = ctx.base;
   const { byModule } = B.analyze(base);
   ui.heading(X, Y, `MODULES  ·  ${base.modules.length}`);
   if (!base.modules.length) ui.label(X, Y + 20, 'Nothing placed yet. Place a pending module from the Control tab.', { size: 12, color: COL.dimText });
@@ -622,7 +653,7 @@ function renderBaseModules(ui, s, X, Y, W, actions) {
   }
   const cw = (W - 8) / 2;
   Object.entries(LOCAL_RECIPES).forEach(([type, r], i) => {
-    const blocker = B.recipeBlocker(s, type);
+    const blocker = B.recipeBlocker(s, type, base);
     ui.button(X + (i % 2) * (cw + 8), fy + 18 + Math.floor(i / 2) * 32, cw, 28, `${r.name ?? MODULES[type].name}  Fe${r.iron} Si${r.silica} O${r.oxygen} $${r.cash}M`, () => actions.queueLocal(type), {
       size: 11, enabled: !blocker, hint: blocker ? `${r.name ?? MODULES[type].name}: ${blocker}` : `${r.name ?? MODULES[type].name}: ${r.days} days.`,
     });

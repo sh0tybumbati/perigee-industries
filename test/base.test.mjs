@@ -37,7 +37,7 @@ test('the first module ship founds the base at its site; later ships must use th
   give(s, 'modHab');
   s.depot = { built: true, prop: 500 };
   sim.setRocket(s, 'modHab');
-  assert.match(sim.launchBlocker(s), /Moon site/, 'default LEO is not a site');
+  assert.match(sim.launchBlocker(s), /Moon or Mars site/, 'default LEO is not a site');
   sim.setDest(s, 'shackleton');
   assert.equal(sim.modulePropNeed(s), 240);
   assert.equal(sim.launchBlocker(s), null);
@@ -49,7 +49,7 @@ test('the first module ship founds the base at its site; later ships must use th
   give(s, 'modReactor');
   sim.setRocket(s, 'modReactor');
   sim.setDest(s, 'tranq');
-  assert.match(sim.launchBlocker(s), /Your base is at Shackleton/);
+  assert.match(sim.launchBlocker(s), /Your Moon base is at Shackleton/);
 });
 
 test('module ships need a depot with enough propellant and are consumed', () => {

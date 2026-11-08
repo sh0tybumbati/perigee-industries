@@ -14,12 +14,13 @@ function hash(n) {
 }
 
 export class BaseLayer {
-  constructor(scene, rect, { getState, getMode, onTile, onPort, setHint }) {
+  constructor(scene, rect, { getState, getBase, getMode, onTile, onPort, setHint }) {
     this.scene = scene;
     this.rect = rect;
     this.ox = rect.x + Math.floor((rect.w - BASE_W * T) / 2);
     this.oy = rect.y + Math.floor((rect.h - BASE_H * T) / 2);
     this.getState = getState;
+    this.getBase = getBase; // the base on screen: the Moon's or Mars's
     this.getMode = getMode;
     this.onTile = onTile;
     this.onPort = onPort;
@@ -61,7 +62,7 @@ export class BaseLayer {
   }
 
   portNear(px, py) {
-    const base = this.getState().base;
+    const base = this.getBase();
     let best = null;
     let bestD = 15;
     for (const m of base.modules) {
@@ -75,7 +76,7 @@ export class BaseLayer {
   }
 
   show() {
-    const base = this.getState().base;
+    const base = this.getBase();
     if (this.terrainKey !== base.site) {
       const key = `terrain-${base.site}`;
       if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
@@ -136,10 +137,10 @@ export class BaseLayer {
 
   update(time) {
     if (!this.shown) return;
-    const s = this.getState();
-    const base = s.base;
+    const base = this.getBase();
     const g = this.g;
     g.clear();
+    if (base.storm) g.fillStyle(0xc4783a, 0.2 + 0.06 * Math.sin(time / 400)).fillRect(this.rect.x, this.rect.y, this.rect.w, this.rect.h); // dust storm
     const mode = this.getMode();
     const { byModule } = B.analyze(base);
 
@@ -261,7 +262,7 @@ export class BaseLayer {
 
     // Labels
     const site = DESTINATIONS[base.site].name;
-    this.label(0, `${site}  ·  top-down base view`, this.rect.x + 12, this.rect.y + 8, '#e6f3ff');
+    this.label(0, `${site}  ·  top-down base view${base.storm ? `  ·  DUST STORM (${base.storm.daysLeft} days)` : ''}`, this.rect.x + 12, this.rect.y + 8, '#e6f3ff');
     this.labels.forEach((l, i) => l.setVisible(i < 1));
   }
 

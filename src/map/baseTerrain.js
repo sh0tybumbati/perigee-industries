@@ -3,6 +3,8 @@ const LOOK = {
   shackleton: { base: [0.36, 0.38, 0.43], shade: true },
   tranq: { base: [0.52, 0.49, 0.43], shade: false },
   procellarum: { base: [0.4, 0.38, 0.37], shade: false },
+  jezero: { base: [0.5, 0.3, 0.2], shade: false },
+  utopia: { base: [0.56, 0.34, 0.22], shade: false },
 };
 
 function mulberry32(seed) {

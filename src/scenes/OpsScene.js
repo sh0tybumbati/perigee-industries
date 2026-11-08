@@ -25,6 +25,7 @@ export class OpsScene extends Phaser.Scene {
     this.tab = 'mission';
     this.lastTickAt = 0;
     this.baseView = 'closed'; // closed | zooming | open
+    this.baseBody = 'moon'; // which base the base view and Base tab show
     this.baseSub = 'control';
     this.factorySite = 'cape';
     this.siteView = null;
@@ -47,6 +48,7 @@ export class OpsScene extends Phaser.Scene {
     });
     this.base = new BaseLayer(this, MAP, {
       getState: () => this.s,
+      getBase: () => this.activeBase(),
       getMode: () => this.baseMode,
       onTile: (t, cancel) => this.act(() => this.baseTile(t, cancel)),
       onPort: (id) => this.act(() => this.basePort(id)),
@@ -221,7 +223,8 @@ export class OpsScene extends Phaser.Scene {
   }
 
   undoBase() {
-    if (this.s.base && B.undoBlocker(this.s.base) === null) B.undoLast(this.s);
+    const base = this.activeBase();
+    if (base && B.undoBlocker(base) === null) B.undoLast(this.s, base);
   }
 
   update(time, delta) {
@@ -232,12 +235,16 @@ export class OpsScene extends Phaser.Scene {
   }
 
   // ---- base view ------------------------------------------------------------
-  openBase() {
-    if (!this.s.base || this.baseView !== 'closed') return;
+  activeBase() { return this.baseBody === 'mars' ? this.s.marsBase : this.s.base; }
+
+  openBase(body = this.baseBody) {
+    const base = body === 'mars' ? this.s.marsBase : this.s.base;
+    if (!base || this.baseView !== 'closed') return;
+    this.baseBody = body;
     this.baseView = 'zooming';
     this.tab = 'base';
-    this.map.setBody('moon');
-    this.map.zoomIn(this.s.base.site, () => {
+    this.map.setBody(body);
+    this.map.zoomIn(base.site, () => {
       this.base.show();
       this.baseView = 'open';
       this.time.delayedCall(380, () => { if (this.baseView === 'open') this.map.setActive(false); });
@@ -267,8 +274,8 @@ export class OpsScene extends Phaser.Scene {
   baseTile(tile, cancel) {
     const m = this.baseMode;
     if (cancel) { this.baseMode = { kind: 'idle', rot: 0 }; return; }
-    if (m.kind !== 'place' || !this.s.base) return;
-    if (B.placeModule(this.s.base, m.pendingId, tile.x, tile.y, m.rot)) {
+    if (m.kind !== 'place' || !this.activeBase()) return;
+    if (B.placeModule(this.activeBase(), m.pendingId, tile.x, tile.y, m.rot)) {
       this.baseMode = { kind: 'idle', rot: 0 };
     } else {
       this.hint.setText('Cannot place a module there: it overlaps another or leaves the grid.');
@@ -281,9 +288,10 @@ export class OpsScene extends Phaser.Scene {
     if (m.kind !== 'duct') return;
     if (!m.ductFrom) { this.baseMode = { ...m, ductFrom: id }; return; }
     if (m.ductFrom === id) { this.baseMode = { ...m, ductFrom: null }; return; }
-    const blocker = B.ductBlocker(s.base, m.ductFrom, id) ?? (sim.canSpend(s, DUCT_COST) ? null : 'Not enough cash for a duct');
+    const base = this.activeBase();
+    const blocker = B.ductBlocker(base, m.ductFrom, id) ?? (sim.canSpend(s, DUCT_COST) ? null : 'Not enough cash for a duct');
     if (blocker) { this.hint.setText(blocker); this.baseMode = { ...m, ductFrom: null }; return; }
-    B.connect(s.base, m.ductFrom, id);
+    B.connect(base, m.ductFrom, id);
     s.cash -= DUCT_COST;
     sim.note(s, `Duct connected (-$${DUCT_COST}M).`);
     this.baseMode = { ...m, ductFrom: null };
@@ -341,12 +349,13 @@ export class OpsScene extends Phaser.Scene {
       buildPlant: (id, fuel) => sim.buildPlant(s, id, fuel),
       buyDroneship: () => sim.buyDroneship(s),
       factorySite: (id) => { this.factorySite = id; },
-      openBase: () => this.openBase(),
+      openBase: (body) => this.openBase(body),
+      setOrigin: (o) => sim.setOrigin(s, o),
       closeBase: () => this.closeBase(),
       baseSub: (id) => { this.baseSub = id; },
       undo: () => this.undoBase(),
       skipTutorial: () => sim.skipTutorial(s),
-      setPolicy: (id) => { s.base.policy = id; },
+      setPolicy: (id) => { this.activeBase().policy = id; },
       startPlace: (pendingId) => {
         if (this.baseView !== 'open') this.openBase();
         this.baseMode = { kind: 'place', pendingId, rot: this.baseMode.rot ?? 0 };
@@ -356,8 +365,8 @@ export class OpsScene extends Phaser.Scene {
         this.baseMode = this.baseMode.kind === 'duct' ? { kind: 'idle', rot: 0 } : { kind: 'duct', rot: 0, ductFrom: null };
       },
       rotate: () => { if (this.baseMode.kind === 'place') this.baseMode.rot ^= 1; },
-      sellSurplus: () => { const got = B.sellSurplus(s); sim.note(s, `Sold lunar materials for $${got}M.`); },
-      queueLocal: (type) => B.queueLocalBuild(s, type, (m) => sim.note(s, m)),
+      sellSurplus: () => { const got = B.sellSurplus(s, this.activeBase()); sim.note(s, `Sold lunar materials for $${got}M.`); },
+      queueLocal: (type) => B.queueLocalBuild(s, type, (m) => sim.note(s, m), this.activeBase()),
       launch: () => {
         if (this.fx.busy || sim.launchBlocker(s)) return;
         const origin = this.map.sitePos(s.site) ?? { x: MAP.x + MAP.w / 2 + 40, y: MAP.y + MAP.h - 60 };
@@ -389,7 +398,7 @@ export class OpsScene extends Phaser.Scene {
     this.renderDockTabs(ui);
     const { x, y, w } = DOCK;
     const actions = this.actions;
-    const ctx = { mode: this.baseMode, sub: this.baseSub, view: this.baseView, factorySite: this.factorySite, siteView: this.siteView };
+    const ctx = { mode: this.baseMode, sub: this.baseSub, view: this.baseView, base: this.activeBase(), body: this.baseBody, factorySite: this.factorySite, siteView: this.siteView };
     if (this.tab === 'base') renderBase(ui, s, x, y, w, actions, ctx);
     else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink })[this.tab](ui, s, x, y, w, actions, ctx);
     renderFlights(ui, s);
@@ -475,13 +484,16 @@ export class OpsScene extends Phaser.Scene {
         size: 12, fill: on && this.baseView === 'closed' ? COL.btnOn : COL.btn, stroke: on && this.baseView === 'closed' ? COL.good : COL.accent,
       });
     });
-    if (s.base) {
-      const open = this.baseView !== 'closed';
-      const pending = s.base.pending.length;
-      ui.button(20 + 3 * 88, 63, 96, 24, pending ? `Base · ${pending} new` : 'Base', () => (open ? this.closeBase() : this.openBase()), {
+    let bx = 20 + 3 * 88;
+    for (const [body, base, name] of [['moon', s.base, 'Moon base'], ['mars', s.marsBase, 'Mars base']]) {
+      if (!base) continue;
+      const open = this.baseView !== 'closed' && this.baseBody === body;
+      const pending = base.pending.length;
+      ui.button(bx, 63, 104, 24, pending ? `${name} · ${pending} new` : name, () => (open ? this.closeBase() : this.openBase(body)), {
         size: 12, fill: open ? COL.btnOn : pending ? 0x5a3a12 : COL.btn, stroke: open ? COL.good : pending ? COL.warn : COL.accent,
-        hint: 'Zoom into the lunar base.',
+        hint: `Zoom into the ${body === 'mars' ? 'Mars' : 'lunar'} base.`,
       });
+      bx += 110;
     }
     ui.label(MAP.x + MAP.w - 12, 69, 'Drag to rotate  ·  click an orbit or pin', { size: 11, color: COL.dimText, right: true });
   }

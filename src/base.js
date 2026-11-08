@@ -2,12 +2,14 @@
 import {
   MODULES, BASE_W, BASE_H, DUCT_COST, DUCT_MAX, DRONE_RATE, SMELTER_REGOLITH, SMELTER_OUT, STOCK_PRICES,
   STOCK_KEEP, SPE_CHANCE, CREW_DEATH_COST, CREW_REPLACE_COST, DRONE_POLICIES, LOCAL_RECIPES, CASH_FLOOR,
-  ICE_RATE, REFINERY_ICE, REFINERY_OUT, BASE_CAPS,
+  ICE_RATE, REFINERY_ICE, BASE_PARAMS, STORM_CHANCE, STORM_DAYS, STORM_WORK,
 } from './data.js';
 
-export function createBase(site) {
+export function createBase(site, body = 'moon') {
   return {
     site,
+    body,
+    storm: null, // { daysLeft } while a dust storm blows (Mars)
     modules: [],
     ducts: [],
     pending: [], // delivered or locally built modules waiting to be placed
@@ -102,8 +104,7 @@ export function undoBlocker(base) {
 }
 
 // Takes back the last placement (the module returns to the pending list) or duct (refunded).
-export function undoLast(s) {
-  const base = s.base;
+export function undoLast(s, base = s.base) {
   if (undoBlocker(base)) return false;
   const h = base.history.pop();
   if (h.kind === 'duct') {
@@ -168,8 +169,7 @@ export function baseStatus(base) {
 
 // ---- stockpile and local construction ------------------------------------------------------------
 
-export function sellSurplus(s) {
-  const base = s.base;
+export function sellSurplus(s, base = s.base) {
   let total = 0;
   for (const [res, price] of Object.entries(STOCK_PRICES)) {
     const extra = Math.max(0, base.stock[res] - STOCK_KEEP[res]);
@@ -181,8 +181,7 @@ export function sellSurplus(s) {
   return total;
 }
 
-export function recipeBlocker(s, type) {
-  const base = s.base;
+export function recipeBlocker(s, type, base = s.base) {
   const r = LOCAL_RECIPES[type];
   if (!base || !r) return 'No recipe';
   if (!base.modules.some((m) => m.type === 'fab')) return 'Needs a Fabricator';
@@ -191,23 +190,36 @@ export function recipeBlocker(s, type) {
   return null;
 }
 
-export function queueLocalBuild(s, type, note) {
-  if (recipeBlocker(s, type)) return false;
+export function queueLocalBuild(s, type, note, base = s.base) {
+  if (recipeBlocker(s, type, base)) return false;
   const r = LOCAL_RECIPES[type];
-  for (const res of ['iron', 'silica', 'oxygen']) s.base.stock[res] -= r[res];
+  for (const res of ['iron', 'silica', 'oxygen']) base.stock[res] -= r[res];
   s.cash -= r.cash;
-  s.base.fabQueue.push({ id: s.base.nextId++, type, daysLeft: r.days, total: r.days });
+  base.fabQueue.push({ id: base.nextId++, type, daysLeft: r.days, total: r.days });
   note?.(`Fabricator started a ${r.name ?? MODULES[type].name} (-$${r.cash}M of components).`);
   return true;
 }
 
 // ---- daily tick ---------------------------------------------------------------------------------------
 
-export function tickBase(s, note) {
-  const base = s.base;
+export function tickBase(s, note, base = s.base) {
   if (!base) return;
+  const params = BASE_PARAMS[base.body ?? 'moon'];
   const { byModule } = analyze(base);
   const mods = base.modules;
+
+  // Dust storms (Mars): everything that digs or moves works at half speed. Reactors keep running.
+  if (params.storms) {
+    if (base.storm) {
+      base.storm.daysLeft--;
+      if (base.storm.daysLeft <= 0) { base.storm = null; note?.('The dust storm has passed: work is back to normal.'); }
+    } else if (Math.random() < STORM_CHANCE) {
+      base.storm = { daysLeft: Math.round(STORM_DAYS[0] + Math.random() * (STORM_DAYS[1] - STORM_DAYS[0])) };
+      if (mods.length) note?.(`A dust storm hits the Mars base: work at half speed for about ${base.storm.daysLeft} days.`, 'warn');
+    }
+  }
+  const calm = base.storm ? STORM_WORK : 1;
+  const wk = (m) => byModule.get(m.id).work * calm;
 
   // Life support: habitats without power lose crew.
   for (const m of mods) {
@@ -223,7 +235,7 @@ export function tickBase(s, note) {
   const policy = DRONE_POLICIES[base.policy] ?? DRONE_POLICIES.balanced;
   let effort = 0;
   for (const m of mods) {
-    if (m.type === 'drones') effort += MODULES.drones.drones * DRONE_RATE * byModule.get(m.id).work;
+    if (m.type === 'drones') effort += MODULES.drones.drones * DRONE_RATE * wk(m);
   }
   const dig = effort * policy.dig;
   base.stock.regolith += dig;
@@ -242,7 +254,7 @@ export function tickBase(s, note) {
   // Smelters turn regolith into oxygen, iron and silica.
   for (const m of mods) {
     if (m.type !== 'smelter') continue;
-    const w = byModule.get(m.id).work;
+    const w = wk(m);
     const want = SMELTER_REGOLITH * w;
     const used = Math.min(want, base.stock.regolith);
     const eff = want > 0 ? w * (used / want) : 0;
@@ -250,25 +262,25 @@ export function tickBase(s, note) {
     for (const [res, rate] of Object.entries(SMELTER_OUT)) base.stock[res] += rate * eff;
   }
 
-  // Ice miners drill at Shackleton, refineries turn the ice into lunar methalox.
-  if (base.site === 'shackleton') {
+  // Ice miners drill where there is ice, refineries turn the ice into methalox (more of it on Mars, which has CO2).
+  if (params.iceSites.includes(base.site)) {
     for (const m of mods) {
       if (m.type !== 'icer') continue;
-      base.stock.ice = Math.min(BASE_CAPS.ice, base.stock.ice + ICE_RATE * byModule.get(m.id).work);
+      base.stock.ice = Math.min(params.caps.ice, base.stock.ice + ICE_RATE * wk(m));
     }
   }
   for (const m of mods) {
     if (m.type !== 'refinery') continue;
-    const w = byModule.get(m.id).work;
-    const room = (BASE_CAPS.methalox - base.stock.methalox) * (REFINERY_ICE / REFINERY_OUT);
+    const w = wk(m);
+    const room = (params.caps.methalox - base.stock.methalox) * (REFINERY_ICE / params.refineryOut);
     const use = Math.min(REFINERY_ICE * w, base.stock.ice, Math.max(0, room));
     base.stock.ice -= use;
-    base.stock.methalox += use * (REFINERY_OUT / REFINERY_ICE);
+    base.stock.methalox += use * (params.refineryOut / REFINERY_ICE);
   }
 
   // Fabricators work through the local build queue.
   const fabs = mods.filter((m) => m.type === 'fab');
-  base.fabQueue.slice(0, fabs.length).forEach((q, i) => { q.daysLeft -= byModule.get(fabs[i].id).work; });
+  base.fabQueue.slice(0, fabs.length).forEach((q, i) => { q.daysLeft -= wk(fabs[i]); });
   for (const q of base.fabQueue.filter((x) => x.daysLeft <= 0)) {
     const recipe = LOCAL_RECIPES[q.type];
     if (recipe.ship) {
