@@ -2,6 +2,7 @@
 import {
   MODULES, BASE_W, BASE_H, DUCT_COST, DUCT_MAX, DRONE_RATE, SMELTER_REGOLITH, SMELTER_OUT, STOCK_PRICES,
   STOCK_KEEP, SPE_CHANCE, CREW_DEATH_COST, CREW_REPLACE_COST, DRONE_POLICIES, LOCAL_RECIPES, CASH_FLOOR,
+  ICE_RATE, REFINERY_ICE, REFINERY_OUT, BASE_CAPS,
 } from './data.js';
 
 export function createBase(site) {
@@ -11,7 +12,8 @@ export function createBase(site) {
     ducts: [],
     pending: [], // delivered or locally built modules waiting to be placed
     fabQueue: [],
-    stock: { regolith: 0, oxygen: 0, iron: 0, silica: 0 },
+    stock: { regolith: 0, oxygen: 0, iron: 0, silica: 0, ice: 0, methalox: 0 },
+    ships: [], // Skyship hulls the Fabricator has finished, handed to the fleet by the main sim
     policy: 'balanced',
     dug: 0, // total regolith dug, drives the pits drawn on the surface
     nextId: 1,
@@ -155,7 +157,7 @@ export function queueLocalBuild(s, type, note) {
   for (const res of ['iron', 'silica', 'oxygen']) s.base.stock[res] -= r[res];
   s.cash -= r.cash;
   s.base.fabQueue.push({ id: s.base.nextId++, type, daysLeft: r.days, total: r.days });
-  note?.(`Fabricator started a ${MODULES[type].name} (-$${r.cash}M of components).`);
+  note?.(`Fabricator started a ${r.name ?? MODULES[type].name} (-$${r.cash}M of components).`);
   return true;
 }
 
@@ -208,12 +210,33 @@ export function tickBase(s, note) {
     for (const [res, rate] of Object.entries(SMELTER_OUT)) base.stock[res] += rate * eff;
   }
 
+  // Ice miners drill at Shackleton, refineries turn the ice into lunar methalox.
+  if (base.site === 'shackleton') {
+    for (const m of mods) {
+      if (m.type !== 'icer') continue;
+      base.stock.ice = Math.min(BASE_CAPS.ice, base.stock.ice + ICE_RATE * byModule.get(m.id).work);
+    }
+  }
+  for (const m of mods) {
+    if (m.type !== 'refinery') continue;
+    const w = byModule.get(m.id).work;
+    const room = (BASE_CAPS.methalox - base.stock.methalox) * (REFINERY_ICE / REFINERY_OUT);
+    const use = Math.min(REFINERY_ICE * w, base.stock.ice, Math.max(0, room));
+    base.stock.ice -= use;
+    base.stock.methalox += use * (REFINERY_OUT / REFINERY_ICE);
+  }
+
   // Fabricators work through the local build queue.
   const fabs = mods.filter((m) => m.type === 'fab');
   base.fabQueue.slice(0, fabs.length).forEach((q, i) => { q.daysLeft -= byModule.get(fabs[i].id).work; });
   for (const q of base.fabQueue.filter((x) => x.daysLeft <= 0)) {
-    base.pending.push({ id: base.nextId++, type: q.type });
-    note?.(`Fabricator finished a ${MODULES[q.type].name}: ready to place.`);
+    const recipe = LOCAL_RECIPES[q.type];
+    if (recipe.ship) {
+      base.ships.push({ id: base.nextId++, type: recipe.ship });
+    } else {
+      base.pending.push({ id: base.nextId++, type: q.type });
+      note?.(`Fabricator finished a ${MODULES[q.type].name}: ready to place.`);
+    }
   }
   base.fabQueue = base.fabQueue.filter((q) => q.daysLeft > 0);
 

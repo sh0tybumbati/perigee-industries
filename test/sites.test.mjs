@@ -253,3 +253,15 @@ test('v4 saves become Cape Canaveral: a grown company owns it, a small one lease
   assert.equal(grown.sites.cape.pads[1].busyUntil, 3);
   assert.equal(grown.droneships.length, 1);
 });
+
+test('reputation grows the contract board and its pace', () => {
+  const s = sim.createState();
+  assert.deepEqual(sim.boardSize(s), { every: 3, cap: 8 });
+  s.flightCounts = { peregrine9: 40 };
+  assert.deepEqual(sim.boardSize(s), { every: 2, cap: 10 });
+  s.flightCounts = { peregrine9: 100, skyship: 20 };
+  assert.deepEqual(sim.boardSize(s), { every: 1, cap: 12 });
+  s.contracts = [];
+  for (let i = 0; i < 20; i++) sim.tick(s);
+  assert.ok(s.contracts.length >= 10, `board filled faster: ${s.contracts.length}`);
+});

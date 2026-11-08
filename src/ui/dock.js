@@ -3,7 +3,7 @@ import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
   PLANT_COST, PLANT_MAX, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
-  MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST,
+  MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
 import * as B from '../base.js';
@@ -37,13 +37,20 @@ export function renderMission(ui, s, X, Y, W, actions) {
   if (!sim.destUnlocked(s, eff)) {
     req = `Locked: research ${TECH.find((t) => t.id === ed.locked).name}.`;
     reqColor = hex(COL.bad);
+  } else if (ed.body === 'mars') {
+    const w = sim.marsWindow(s.day);
+    const win = w.open ? `Window open ${w.closesIn} more days` : `Window opens in ${w.opensIn} days`;
+    req = s.marsRoute === 'moon'
+      ? `${win} · Moon route: ${MARS_ROUTES.moon.hullFuel} t + ${MARS_ROUTES.moon.fuelPerTon} t/t base methalox, ${MARS_ROUTES.moon.landRisk * 100}% landing risk`
+      : `${win} · Direct: ${ed.prop} t/t depot propellant, +${MARS_ROUTES.direct.ascentRisk * 100}% ascent and ${MARS_ROUTES.direct.landRisk * 100}% landing risk`;
+    reqColor = hex(w.open ? COL.good : COL.warn);
   } else if (ed.body !== 'earth') {
     req = `Needs a Skyship and ${ed.prop} t of depot propellant per tonne of payload.`;
     reqColor = hex(COL.warn);
   }
   if (r.role === 'module') { req = 'Module ships land at a Moon landing site and stay there as a base module.'; reqColor = hex(COL.warn); }
   else if (!payload) { req = 'Tankers and depot ships always work in LEO.'; reqColor = COL.dimText; }
-  ui.label(X, Y + 44, req, { size: 12, color: reqColor });
+  ui.label(X, Y + 44, req, { size: req.length > 80 ? 11 : 12, color: reqColor });
 
   // Vehicle selector
   ui.heading(X, Y + 68, 'VEHICLE');
@@ -69,9 +76,23 @@ export function renderMission(ui, s, X, Y, W, actions) {
 
   // Launch site and recovery
   const site = s.sites[s.site];
-  ui.label(X, Y + 146, `From ${SITES[s.site].short}`, { size: 12, bold: true, color: hex(tenureColor[site.status]) });
-  ui.label(X + 118, Y + 147, `${site.status}  ·  ${Math.round(site.stock[sim.fuelNeed(s).type])} t ${sim.fuelNeed(s).type}`, { size: 11, color: COL.dimText });
-  if (!r.catch) {
+  const moon = sim.originIsMoon(s);
+  const marsPick = payload && DESTINATIONS[eff].body === 'mars' && s.rocket === 'skyship';
+  if (moon) {
+    ui.label(X, Y + 146, 'From the Moon base', { size: 12, bold: true, color: hex(COL.accent) });
+    ui.label(X + 142, Y + 147, `${Math.round(s.base?.stock.methalox ?? 0)} t methalox · ${sim.fleetOf(s, 'skyship').filter((x) => x.site === 'moon').length} hull(s)`, { size: 11, color: COL.dimText });
+  } else {
+    ui.label(X, Y + 146, `From ${SITES[s.site].short}`, { size: 12, bold: true, color: hex(tenureColor[site.status]) });
+    ui.label(X + 118, Y + 147, `${site.status}  ·  ${Math.round(site.stock[sim.fuelNeed(s).type])} t ${sim.fuelNeed(s).type}`, { size: 11, color: COL.dimText });
+  }
+  if (marsPick) {
+    [['direct', 'Direct'], ['moon', 'From Moon']].forEach(([id, name], i) => {
+      const on = s.marsRoute === id;
+      ui.button(X + W - 214 + i * 108, Y + 142, 104, 22, name, () => actions.setMarsRoute(id), {
+        size: 11, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent, hint: MARS_ROUTES[id].name,
+      });
+    });
+  } else if (!r.catch) {
     ui.label(X + W - 262, Y + 148, 'Booster', { size: 11, color: COL.dimText });
     Object.entries(RECOVERY_MODES).forEach(([id, m], i) => {
       const on = s.recovery === id;
@@ -175,7 +196,7 @@ export function renderFleet(ui, s, X, Y, W, actions) {
     ui.label(X + 78, y + 5, r.name, { size: 12, color: COL.dimText });
     const days = st === 'ready' ? '' : ` ${Math.max(1, (st === 'flying' ? v.returnDay : v.readyDay) - s.day)}d`;
     ui.label(X + 240, y + 5, `${st}${days}`, { size: 12, color: hex(stateColor[st]) });
-    ui.label(X + 300, y + 5, SITES[v.site ?? 'cape'].short, { size: 11, color: COL.dimText });
+    ui.label(X + 300, y + 5, v.site === 'moon' ? 'Moon base' : SITES[v.site ?? 'cape'].short, { size: 11, color: hex(v.site === 'moon' ? COL.accent : COL.dim) });
     const wear = v.flights / r.coreLife;
     ui.bar(X + 392, y + 8, 80, 8, wear, wear > 0.7 ? COL.bad : wear > 0.4 ? COL.warn : COL.good);
     ui.label(X + W - 8, y + 5, `${v.flights}/${r.coreLife}`, { size: 12, right: true, color: COL.dimText });
@@ -247,9 +268,9 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
     const blocker = sim.buildBlocker(s, id, fid);
     const { cost, days } = sim.buildCostAt(id, fid);
     const x = X + (i % 2) * (cw + 8);
-    const y = by + 18 + Math.floor(i / 2) * 31;
+    const y = by + 18 + Math.floor(i / 2) * 28;
     const nm = r.role === 'module' ? r.name : r.short;
-    ui.button(x, y, cw, 27, blocker === 'Locked' ? `${nm}: locked` : `${nm}  $${cost}M · ${days}d`, () => actions.queueBuild(id, fid), {
+    ui.button(x, y, cw, 25, blocker === 'Locked' ? `${nm}: locked` : `${nm}  $${cost}M · ${days}d`, () => actions.queueBuild(id, fid), {
       enabled: !blocker, size: 12,
       hint: blocker && blocker !== 'Locked' ? `${r.name}: ${blocker}` : `${r.name}: ${r.payload ? `${r.payload} t, ` : ''}rated ${r.coreLife} flight${r.coreLife > 1 ? 's' : ''}. ${r.steel} t of steel.`,
     });
@@ -456,9 +477,9 @@ function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
 
   ui.heading(X, Y + 248, 'STOCKPILE');
   const stock = base.stock;
-  [['Regolith', stock.regolith], ['Oxygen', stock.oxygen], ['Iron', stock.iron], ['Silica', stock.silica]].forEach(([name, v], i) => {
-    ui.label(X + i * 134, Y + 266, `${name}`, { size: 11, color: COL.dimText });
-    ui.label(X + i * 134, Y + 280, `${v.toFixed(1)} t`, { size: 15, bold: true });
+  [['Regolith', stock.regolith], ['Oxygen', stock.oxygen], ['Iron', stock.iron], ['Silica', stock.silica], ['Ice', stock.ice], ['Methalox', stock.methalox]].forEach(([name, v], i) => {
+    ui.label(X + i * 89, Y + 266, `${name}`, { size: 11, color: COL.dimText });
+    ui.label(X + i * 89, Y + 280, `${v.toFixed(1)} t`, { size: 14, bold: true });
   });
   const surplus = Object.entries(STOCK_PRICES).reduce((n, [r, price]) => n + Math.max(0, stock[r] - STOCK_KEEP[r]) * price, 0);
   ui.button(X, Y + 308, 250, 26, `Sell surplus  ($${surplus.toFixed(1)}M)`, () => actions.sellSurplus(), {
@@ -474,7 +495,7 @@ function renderBaseModules(ui, s, X, Y, W, actions) {
   const { byModule } = B.analyze(base);
   ui.heading(X, Y, `MODULES  ·  ${base.modules.length}`);
   if (!base.modules.length) ui.label(X, Y + 20, 'Nothing placed yet. Place a pending module from the Control tab.', { size: 12, color: COL.dimText });
-  base.modules.slice(0, 7).forEach((m, i) => {
+  base.modules.slice(0, 5).forEach((m, i) => {
     const y = Y + 18 + i * 25;
     const net = byModule.get(m.id);
     const def = MODULES[m.type];
@@ -486,9 +507,9 @@ function renderBaseModules(ui, s, X, Y, W, actions) {
       size: 11, right: true, color: hex(net.powerFactor > 0 ? COL.good : COL.bad),
     });
   });
-  if (base.modules.length > 7) ui.label(X, Y + 18 + 7 * 25, `+${base.modules.length - 7} more`, { size: 11, color: COL.dimText });
+  if (base.modules.length > 5) ui.label(X, Y + 18 + 5 * 25, `+${base.modules.length - 5} more`, { size: 11, color: COL.dimText });
 
-  const fy = Y + 208;
+  const fy = Y + 156;
   ui.heading(X, fy, 'FABRICATOR  ·  build modules from local materials');
   const hasFab = base.modules.some((m) => m.type === 'fab');
   if (!hasFab) {
@@ -498,14 +519,14 @@ function renderBaseModules(ui, s, X, Y, W, actions) {
   const cw = (W - 8) / 2;
   Object.entries(LOCAL_RECIPES).forEach(([type, r], i) => {
     const blocker = B.recipeBlocker(s, type);
-    ui.button(X + (i % 2) * (cw + 8), fy + 18 + Math.floor(i / 2) * 32, cw, 28, `${MODULES[type].name}  Fe${r.iron} Si${r.silica} O${r.oxygen} $${r.cash}M`, () => actions.queueLocal(type), {
-      size: 11, enabled: !blocker, hint: blocker ? `${MODULES[type].name}: ${blocker}` : `${MODULES[type].name}: ${r.days} days.`,
+    ui.button(X + (i % 2) * (cw + 8), fy + 18 + Math.floor(i / 2) * 32, cw, 28, `${r.name ?? MODULES[type].name}  Fe${r.iron} Si${r.silica} O${r.oxygen} $${r.cash}M`, () => actions.queueLocal(type), {
+      size: 11, enabled: !blocker, hint: blocker ? `${r.name ?? MODULES[type].name}: ${blocker}` : `${r.name ?? MODULES[type].name}: ${r.days} days.`,
     });
   });
   base.fabQueue.slice(0, 3).forEach((q, i) => {
-    const y = fy + 86 + i * 24;
+    const y = fy + 122 + i * 24;
     ui.row(X, y, W, 21);
-    ui.label(X + 8, y + 3, MODULES[q.type].name, { size: 12, bold: true });
+    ui.label(X + 8, y + 3, LOCAL_RECIPES[q.type].name ?? MODULES[q.type].name, { size: 12, bold: true });
     ui.bar(X + 150, y + 6, 200, 8, (q.total - q.daysLeft) / q.total, COL.accent);
     ui.label(X + W - 8, y + 3, `${Math.ceil(q.daysLeft)}d left`, { size: 11, right: true, color: COL.dimText });
   });

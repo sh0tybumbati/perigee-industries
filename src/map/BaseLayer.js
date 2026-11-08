@@ -121,6 +121,11 @@ export class BaseLayer {
       const p = along(2.5, 5);
       g.fillStyle(0x4a5568, alpha).fillCircle(p.x, p.y, 3.5);
       g.fillStyle(0xff8a3d, alpha).fillCircle(p.x, p.y, 1.6);
+    } else if (type === 'icer') {
+      const p = along(2, 4);
+      g.fillStyle(0x2b6c99, alpha).fillTriangle(p.x - 3, p.y - 4, p.x + 3, p.y - 4, p.x, p.y + 5);
+    } else if (type === 'refinery') {
+      for (let i = 1; i <= 2; i++) { const p = along(i, 3); g.lineStyle(1.5, 0x2e8f6e, alpha).strokeCircle(p.x, p.y, 3.2); }
     } else if (type === 'drones') {
       for (let i = 1; i <= 2; i++) { const p = along(i, 3); g.lineStyle(1.5, 0x2e6b2e, alpha).strokeRect(p.x - 3, p.y - 3, 6, 6); }
     } else {

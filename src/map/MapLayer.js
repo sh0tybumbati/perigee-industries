@@ -202,7 +202,17 @@ export class MapLayer {
   tripPath(trip) {
     const d = DESTINATIONS[trip.dest];
     const globe = this.globe;
+    if (trip.origin === 'moon' && this.bodyId === 'moon') {
+      // A Moon-based Mars flight lifts off from the base and leaves toward the corner of the view.
+      const site = DESTINATIONS[trip.fromSite];
+      const from = surfacePoint(site.lat, site.lon, 1.004);
+      const pts = this.arcLocal(from, from.clone().multiplyScalar(1.12), 8).map((p) => globe.world(p));
+      const last = pts[pts.length - 1];
+      for (let i = 1; i <= 20; i++) pts.push(last.clone().lerp(FAR_OUT, smooth(i / 20)));
+      return pts;
+    }
     if (this.bodyId === 'earth') {
+      if (trip.origin === 'moon') return null;
       const origin = SITES[trip.site ?? 'cape'];
       const cape = surfacePoint(origin.lat, origin.lon, 1.004);
       const leo = this.earthAnchor(d.body === 'earth' ? trip.dest : 'leo');
@@ -305,10 +315,11 @@ export class MapLayer {
       if (active) {
         const span = Math.max(1, t.arriveDay - t.launchDay);
         const p = Math.min(1, Math.max(0, (s.day + dayFrac - t.launchDay) / span));
-        const far = DESTINATIONS[t.dest].body !== 'earth';
+        const originBody = t.origin === 'moon' ? 'moon' : 'earth';
+        const far = DESTINATIONS[t.dest].body !== originBody;
         let f = p;
         if (far) {
-          if (this.bodyId === 'earth') f = p <= 0.35 ? p / 0.35 : null;
+          if (this.bodyId === originBody) f = p <= 0.35 ? p / 0.35 : null;
           else f = p >= 0.65 ? (p - 0.65) / 0.35 : null;
         }
         if (f !== null) {

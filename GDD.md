@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 0.4 (Pre-Alpha Spec: Earth sites, recovery and supply)
+Version: 0.5 (Pre-Alpha Spec: lunar ice, Moon-built ships and Mars)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -176,6 +176,8 @@ A transit lane along the bottom shows flights that are between bodies, with thei
 2.7 Contracts vs. Building the Base
 The central tension of the game: the same Skyship capacity can carry a paying customer's payload or the company's own base modules. Customer contracts fund the base, and every flight spent on the base is a flight not earning money. Base modules are delivered to a chosen landing site on the Moon map, and the base is built up there following the dependencies in 2.4. Mars follows the same pattern after the Mars Transfer tech.
 
+Reputation: every successful flight builds the company's reputation. At 40 flights new contracts arrive every 2 days and the board holds 10, and at 120 flights they arrive daily and the board holds 12. A bigger fleet, more pads and more hangars only pay off when there is more work, and this is how the work grows.
+
 2.8 Lunar Base Construction (Phase 4a)
 Choosing the site: the first module ship the player launches to a Moon landing site founds the base there. Every later module ship must land at that same site. Sites differ in terrain and in the contracts and propellant economics around them.
 
@@ -204,12 +206,25 @@ Local construction: a powered, staffed Fabricator can build Habitat, Reactor, Sm
 
 The tension: every module ship competes with customer contracts for depot propellant, Skyship pad time and cash. Customers pay for deliveries now, and the base only pays back once smelters and the Fabricator are running.
 
-2.9 Lunar Industry and Mars (Phase 4b, planned)
-Ice mining and propellant: water ice from Shackleton gives lunar-made methane and oxygen propellant, so ships can refuel on the Moon.
-Ships built on the Moon: iron, silica and oxygen plus imported engines become Skyship hulls built at the base.
-The Moon as a launch point for Mars: lunar-made propellant and hulls make the Moon the cheapest departure point for Mars.
-Direct to Mars: the player can also launch to Mars straight from Earth, with a longer transit, more propellant from Earth and higher risk.
-Mars sites then follow the same base-construction pattern as the Moon.
+2.9 Lunar Ice, Moon-Built Ships and Mars (Phase 4b)
+Ice mining: water ice only exists at Shackleton Crater, so the ice chain only works for a base founded there. Two new module ships (Lunar Ice Mining tech) extend the base:
+
+| Module | Role | Power | Crew needed | Notes |
+| Ice Miner | Drills ice | uses 0.4 MW | 2 | 1.2 t of ice per day at full output. Only works at Shackleton |
+| Refinery | Turns ice into methalox | uses 0.6 MW | 2 | Eats 3 t of ice per day and makes 2 t of methalox |
+
+The base stockpile now also holds ice (up to 300 t) and lunar methalox (up to 600 t). Lunar methalox fuels ships that leave from the Moon, so they need no Earth tankers.
+
+Ships built on the Moon: the Fabricator can build a Skyship hull from stockpiled iron, silica and oxygen (300 t, 150 t and 50 t) plus $35M of imported engines, in 30 days. The hull appears in the fleet marked as based at the Moon. A Moon-based hull can only fly from the Moon, and an Earth hull can never fly from there.
+
+Mars: the Mars Transfer Vehicle tech (needs Lunar Ice Mining and the Habitat tech) unlocks Mars orbit, Jezero Crater and Utopia Planitia, and Mars cargo contracts. Mars contracts are large (30 to 100 t) and pay roughly four times what lunar cargo pays per tonne, but the cash only arrives when the flight does, about 6 months later. Mars hulls are single use because there is no fuel at Mars yet.
+Launch windows: the planets line up for about 60 days every 780 days (the first window opens on day 420). Outside a window no Mars flight can launch, so the player has to plan ahead. Mars contracts last 200 days to give time to prepare.
+Two routes to Mars:
+- Direct from Earth: any Earth Skyship with a catch tower. It burns depot propellant (5 t per tonne of payload plus the usual launch fuel). It is risky: +12% risk on ascent and 15% risk of being lost on arrival. 180 days.
+- From the Moon: a Moon-built Skyship leaves the base. It burns the base's lunar methalox (450 t plus 4 t per tonne of payload) and needs no Earth pad, tanker or depot. The arrival risk is 6%. 175 days. It needs the whole chain: a base at Shackleton, ice miners, refineries and a Fabricator.
+Arrival can fail: a Mars-bound flight that survives launch can still be lost entering the Martian atmosphere.
+
+Later (phase 6): Mars bases, Mars ice and fuel, and return flights.
 
 2.10 Launch Sites, Infrastructure & Supply (Phase 5)
 The company no longer owns a generic pad. It uses launch sites, and a site is either leased or owned.
@@ -289,6 +304,6 @@ Visual Style: Vector-based 2D flat isometric UI with clean line art, high-contra
 Audio Direction: Synthesized Web Audio soundtrack featuring ambient synth-wave music during planning phases and punchy, low-frequency sound effects for rocket engine ignition, stage separation, and docking confirmation.
 
 6. Implementation Status
-Built: Earth operations, contract board, manifest stacking, Skylink constellation and revenue, R&D tree, LEO depot, save/load, fleet, factory queue, destinations, Earth/Moon/Mars map with flight trails, Moon base (module ships, base view, ducts, burial drones, smelters, local fabrication).
-This phase (5): launch sites (lease or own), hangars, droneships and expendable recovery, upper stages, the fuel and steel market, tanks, propellant plants, site factories.
-Next (4b): ice mining and lunar propellant, ships built on the Moon, Mars Transfer, direct-to-Mars flights, Mars bases, Web Audio.
+Built: Earth operations, contract board with reputation, manifest stacking, Skylink constellation and revenue, R&D tree, LEO depot, save/load, fleet, factory queue per site, destinations, Earth/Moon/Mars map with flight trails, Moon base (module ships, base view, ducts, burial drones, smelters, local fabrication), launch sites, hangars, droneships, recovery modes, fuel market and plants.
+This phase (4b): ice miners and refineries, lunar methalox, Moon-built Skyships, the Mars Transfer tech, Mars contracts and launch windows, direct and Moon-based Mars routes, arrival risk.
+Next: Mars bases and Mars fuel, return flights, Web Audio.

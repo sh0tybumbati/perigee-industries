@@ -49,6 +49,8 @@ export const ROCKETS = {
   modDrones: modShip('Drone Bay Skyship', 'Drone Bay', 'DRN', 'drones', ['habitat'], 70, 26),
   modSmelter: modShip('Smelter Skyship', 'Smelter', 'SML', 'smelter', ['isru'], 85, 32),
   modFab: modShip('Fabricator Skyship', 'Fabricator', 'FAB', 'fab', ['isru'], 100, 36),
+  modIce: modShip('Ice Miner Skyship', 'Ice Miner', 'ICE', 'icer', ['ice'], 85, 32),
+  modRefinery: modShip('Refinery Skyship', 'Refinery', 'REF', 'refinery', ['ice'], 95, 34),
 };
 
 // ---- Launch sites, recovery and supply (GDD 2.10) ----------------------------------------
@@ -134,9 +136,9 @@ export const DESTINATIONS = {
   shackleton: { name: 'Shackleton Crater', body: 'moon', kind: 'site', days: 5, prop: 3, lat: -88, lon: 0 },
   tranq: { name: 'Mare Tranquillitatis', body: 'moon', kind: 'site', days: 5, prop: 3, lat: 8.5, lon: 31.4 },
   procellarum: { name: 'Oceanus Procellarum', body: 'moon', kind: 'site', days: 5, prop: 3, lat: 18, lon: -57 },
-  marsOrbit: { name: 'Mars Orbit', body: 'mars', kind: 'orbit', days: 180, prop: 6, locked: 'marsTransit', ring: { r: 1.3, incl: 45, node: 0, phase: 50 } },
-  jezero: { name: 'Jezero Crater', body: 'mars', kind: 'site', days: 180, prop: 6, locked: 'marsTransit', lat: 18.4, lon: 77.5 },
-  utopia: { name: 'Utopia Planitia', body: 'mars', kind: 'site', days: 180, prop: 6, locked: 'marsTransit', lat: 46, lon: 118 },
+  marsOrbit: { name: 'Mars Orbit', body: 'mars', kind: 'orbit', days: 180, prop: 5, locked: 'marsTransit', ring: { r: 1.3, incl: 45, node: 0, phase: 50 } },
+  jezero: { name: 'Jezero Crater', body: 'mars', kind: 'site', days: 180, prop: 5, locked: 'marsTransit', lat: 18.4, lon: 77.5 },
+  utopia: { name: 'Utopia Planitia', body: 'mars', kind: 'site', days: 180, prop: 5, locked: 'marsTransit', lat: 46, lon: 118 },
 };
 export const EARTH_ORBITS = ['leo', 'polar', 'sso', 'gto'];
 export const LUNAR_DESTS = ['llo', 'shackleton', 'tranq', 'procellarum'];
@@ -181,7 +183,8 @@ export const TECH = [
   { id: 'tanker', name: 'Orbital Tanker', cost: 600, era: 'Lunar', desc: 'Skyship depot and tanker missions, and lunar contracts', requires: ['skyship'] },
   { id: 'habitat', name: 'Moon Habitat Core', cost: 900, era: 'Lunar', desc: 'Lunar base (coming soon)', requires: ['skyship'] },
   { id: 'isru', name: 'Lunar ISRU Mining', cost: 1200, era: 'Lunar', desc: 'Lunar base (coming soon)', requires: ['skyship'] },
-  { id: 'marsTransit', name: 'Mars Transfer Vehicle', cost: 2000, era: 'Mars', desc: 'Mars orbit and landing sites (coming soon)', requires: ['isru', 'habitat'] },
+  { id: 'ice', name: 'Lunar Ice Mining', cost: 700, era: 'Lunar', desc: 'Ice miners and refineries at Shackleton make lunar methalox', requires: ['isru'] },
+  { id: 'marsTransit', name: 'Mars Transfer Vehicle', cost: 2000, era: 'Mars', desc: 'Mars orbit and landing sites, Mars contracts and launch windows', requires: ['ice', 'habitat'] },
 ];
 
 // ---- Lunar base (GDD 2.8) ----------------------------------------------------
@@ -191,7 +194,9 @@ export const MODULES = {
   reactor: { name: 'Reactor', len: 4, power: 1.0, need: 0, cover: 30, color: 0xf0a35a, blurb: 'Fission power: 1.0 MW.' },
   drones: { name: 'Drone Bay', len: 3, power: -0.2, need: 1, drones: 4, cover: 20, color: 0x8fd18f, blurb: 'Houses 4 construction drones.' },
   smelter: { name: 'Smelter', len: 5, power: -0.5, need: 2, cover: 30, color: 0x9fb0c8, blurb: 'Makes oxygen, iron and silica from regolith.' },
-  fab: { name: 'Fabricator', len: 5, power: -0.3, need: 2, cover: 30, color: 0xe8d36a, blurb: 'Builds modules from local materials.' },
+  fab: { name: 'Fabricator', len: 5, power: -0.3, need: 2, cover: 30, color: 0xe8d36a, blurb: 'Builds modules and Skyships from local materials.' },
+  icer: { name: 'Ice Miner', len: 4, power: -0.4, need: 2, cover: 30, color: 0x7fd0ff, blurb: 'Drills ice. Only works at Shackleton.' },
+  refinery: { name: 'Refinery', len: 5, power: -0.6, need: 2, cover: 30, color: 0x6fd6b0, blurb: 'Turns ice into lunar methalox.' },
 };
 export const BASE_W = 48; // grid size in tiles (one tile is about 10 m)
 export const BASE_H = 30;
@@ -202,6 +207,10 @@ export const SMELTER_REGOLITH = 2; // t of regolith per day at full output
 export const SMELTER_OUT = { oxygen: 3, iron: 1.2, silica: 2 }; // t per day at full output
 export const STOCK_PRICES = { oxygen: 0.1, iron: 0.24, silica: 0.08 }; // $M per tonne
 export const STOCK_KEEP = { oxygen: 40, iron: 120, silica: 80 }; // surplus selling leaves this much
+export const ICE_RATE = 1.2; // t of ice per day per miner at full output (Shackleton only)
+export const REFINERY_ICE = 3; // t of ice a refinery eats per day
+export const REFINERY_OUT = 2; // t of methalox it makes from that
+export const BASE_CAPS = { ice: 300, methalox: 600 };
 export const SPE_CHANCE = 1 / 50; // solar particle event chance per day
 export const CREW_DEATH_COST = 5; // $M
 export const CREW_REPLACE_COST = 1; // $M
@@ -216,4 +225,17 @@ export const LOCAL_RECIPES = {
   reactor: { iron: 60, silica: 20, oxygen: 10, cash: 45, days: 25 },
   drones: { iron: 40, silica: 15, oxygen: 5, cash: 20, days: 12 },
   smelter: { iron: 70, silica: 40, oxygen: 10, cash: 25, days: 20 },
+  // A hull built on the Moon joins the fleet based at the Moon, and can only fly from there.
+  skyship: { iron: 300, silica: 150, oxygen: 50, cash: 35, days: 30, ship: 'skyship', name: 'Skyship hull' },
 };
+
+// ---- Mars (GDD 2.9) ----------------------------------------------------------------------------
+// The planets line up for `length` days every `period` days, first at day `first`. No flight can launch outside it.
+export const MARS_WINDOW = { first: 420, period: 780, length: 60 };
+// ascentRisk is added to the launch failure chance, landRisk is rolled when the ship arrives at Mars.
+export const MARS_ROUTES = {
+  direct: { name: 'Direct from Earth', ascentRisk: 0.12, landRisk: 0.15, days: 180 },
+  moon: { name: 'From the Moon', ascentRisk: 0, landRisk: 0.06, days: 175, fuelPerTon: 4, hullFuel: 450 },
+};
+export const MARS_DESTS = ['marsOrbit', 'jezero', 'utopia'];
+export const MARS_CONTRACT = { chance: 0.15, mass: [30, 100], rate: [2.6, 3.4], base: [15, 30], expires: 200 };

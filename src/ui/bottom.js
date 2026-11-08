@@ -37,7 +37,7 @@ export class Lane {
     const far = s.trips.filter((t) => DESTINATIONS[t.dest].body !== 'earth' && t.status !== 'enroute').slice(-8);
     far.forEach((t, i) => {
       const body = DESTINATIONS[t.dest].body;
-      const x0 = this.x('moon', 0);
+      const x0 = t.origin === 'moon' ? LANE.x0 + LANE.moon : this.x('moon', 0);
       const x1 = LANE.x0 + LANE[body];
       const h = 14 + (i % 4) * 5;
       g.lineStyle(1, t.status === 'lost' ? COL.bad : ROLE_COLOR[t.role], 0.35);
@@ -57,7 +57,8 @@ export class Lane {
       const d = DESTINATIONS[t.dest];
       const span = Math.max(1, t.arriveDay - t.launchDay);
       const p = Math.min(1, Math.max(0, (s.day + dayFrac - t.launchDay) / span));
-      const x = d.body === 'earth' ? this.x('moon', 0) + 16 + (i % 4) * 11 : this.x(d.body === 'moon' ? 'moon' : 'mars', 0) + (LANE[d.body] - LANE.earth) * p;
+      const startX = t.origin === 'moon' ? LANE.x0 + LANE.moon : this.x('moon', 0);
+      const x = d.body === 'earth' ? startX + 16 + (i % 4) * 11 : startX + (LANE.x0 + LANE[d.body] - startX) * p;
       const y = LANE.y - (d.body === 'earth' ? 0 : 0);
       g.fillStyle(ROLE_COLOR[t.role], 1).fillCircle(x, y, 4);
       g.lineStyle(1.5, 0xffffff, 0.9).strokeCircle(x, y, 6.5);

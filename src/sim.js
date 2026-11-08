@@ -8,6 +8,7 @@ import {
   PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND, DRONESHIP_FEE, DRONESHIP_COST, MAX_DRONESHIPS, DRONESHIP_CYCLE,
   DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
   RUSH_PREMIUM, START_CAPS, START_STOCK, TANK_STEP, PLANT_RATE, PLANT_COST, PLANT_MAX, PLANT_COST_FRAC,
+  MARS_WINDOW, MARS_ROUTES, MARS_DESTS, MARS_CONTRACT,
 } from './data.js';
 import { createBase, tickBase } from './base.js';
 
@@ -65,6 +66,7 @@ export function createState() {
     rocket: 'peregrine9', // selected vehicle type
     dest: 'leo', // selected destination
     recovery: 'rtls', // rtls | drone | expend (booster-class vehicles only)
+    marsRoute: 'direct', // direct (from Earth) | moon (a Moon-built Skyship leaves the base)
     region: 'na',
     constellation: Object.fromEntries(REGIONS.map((r) => [r.id, 0])),
     depot: { built: false, prop: 0 },
@@ -193,6 +195,22 @@ export function setDest(s, id) {
   return true;
 }
 
+// ---- Mars: launch windows and routes ------------------------------------------------------
+
+export function marsWindow(day) {
+  const { first, period, length } = MARS_WINDOW;
+  if (day < first) return { open: false, opensIn: first - day, closesIn: 0 };
+  const phase = (day - first) % period;
+  if (phase < length) return { open: true, opensIn: 0, closesIn: length - phase };
+  return { open: false, opensIn: period - phase, closesIn: 0 };
+}
+
+export const isMars = (id) => DESTINATIONS[id].body === 'mars';
+// A Mars flight from the Moon uses a Moon-built hull and the base's methalox, with no Earth pad at all.
+export const originIsMoon = (s) => rocketDef(s).role === 'payload' && isMars(s.dest) && s.marsRoute === 'moon';
+export const marsMoonNeed = (s) => Math.ceil(MARS_ROUTES.moon.hullFuel + MARS_ROUTES.moon.fuelPerTon * manifestTotals(s).mass);
+export const setMarsRoute = (s, route) => { if (MARS_ROUTES[route]) s.marsRoute = route; };
+
 // ---- contracts -------------------------------------------------------------------
 
 function pickTier(s) {
@@ -204,7 +222,23 @@ function pickTier(s) {
 }
 
 // Bigger payloads pay more per tonne (heavy-lift premium), and appear as each vehicle tier unlocks.
+function newMarsContract(s) {
+  const dest = pickWeighted(MARS_DESTS, [0.3, 0.4, 0.3]);
+  const mass = +rnd(...MARS_CONTRACT.mass).toFixed(1);
+  return {
+    id: s.nextId++,
+    customer: pick(CUSTOMERS),
+    dest,
+    mass,
+    volume: Math.min(380, Math.round(mass * rnd(1.5, 2.4))),
+    prop: Math.ceil(mass * DESTINATIONS[dest].prop),
+    payout: +(mass * rnd(...MARS_CONTRACT.rate) + rnd(...MARS_CONTRACT.base)).toFixed(1),
+    expires: s.day + MARS_CONTRACT.expires,
+  };
+}
+
 function newContract(s) {
+  if (s.tech.has('marsTransit') && Math.random() < MARS_CONTRACT.chance) return newMarsContract(s);
   if (s.tech.has('tanker') && Math.random() < 0.3) return newLunarContract(s);
   const tier = pickTier(s);
   const mass = +rnd(tier.min, tier.max).toFixed(1);
@@ -272,7 +306,8 @@ export function vehicleState(s, v) {
 
 export const readyVehicles = (s, type) => fleetOf(s, type).filter((v) => vehicleState(s, v) === 'ready');
 // The least-worn ready hull flies first.
-export const nextVehicle = (s, type) => readyVehicles(s, type).sort((a, b) => a.flights - b.flights)[0] ?? null;
+// Moon-based hulls fly only from the Moon, and Earth hulls only from Earth.
+export const nextVehicle = (s, type) => readyVehicles(s, type).filter((v) => (v.site === 'moon') === originIsMoon(s)).sort((a, b) => a.flights - b.flights)[0] ?? null;
 
 export function setRocket(s, id) {
   if (!ROCKETS[id] || !rocketUnlocked(s, id)) return;
@@ -285,6 +320,7 @@ export function failChance(s, v = nextVehicle(s, s.rocket)) {
   const r = rocketDef(s);
   let base = r.baseRisk;
   if (s.rocket === 'behemoth') base = Math.max(BEHEMOTH_MIN_RISK, base - BEHEMOTH_LEARNING * (s.flightCounts.behemoth ?? 0));
+  if (isMars(effDest(s)) && !originIsMoon(s)) base += MARS_ROUTES.direct.ascentRisk;
   return base + r.wearRisk * (v?.flights ?? 0);
 }
 
@@ -559,6 +595,15 @@ export function buyLine(s, siteId = 'cape') {
   return true;
 }
 
+// Reputation: every successful flight makes customers more likely to call, so a bigger fleet has work to do.
+export const reputation = (s) => Object.values(s.flightCounts).reduce((n, c) => n + c, 0);
+export function boardSize(s) {
+  const rep = reputation(s);
+  if (rep >= 120) return { every: 1, cap: 12 };
+  if (rep >= 40) return { every: 2, cap: 10 };
+  return { every: 3, cap: 8 };
+}
+
 // ---- manifest ----------------------------------------------------------------
 
 export function manifestTotals(s) {
@@ -598,6 +643,10 @@ export const fuelNeed = (s) => {
 // Itemized cash cost of the planned launch. Propellant already in the site's tanks costs nothing more here.
 export function launchCosts(s) {
   const r = rocketDef(s);
+  if (originIsMoon(s)) {
+    const need = marsMoonNeed(s);
+    return { items: [{ label: 'Operations', amt: r.ops }], total: r.ops, fuel: { type: 'methalox', t: need, fromTanks: need, short: 0 } };
+  }
   const site = s.sites[s.site];
   const rec = recoveryOf(s);
   const items = [];
@@ -622,21 +671,26 @@ export const launchCost = (s) => launchCosts(s).total;
 export function launchBlocker(s) {
   const r = rocketDef(s);
   const v = nextVehicle(s, s.rocket);
+  const moon = originIsMoon(s);
   if (!v) {
-    const owned = fleetOf(s, s.rocket);
+    if (moon) return 'No Moon-built Skyship at the base (build one with the Fabricator)';
+    const owned = fleetOf(s, s.rocket).filter((x) => (x.site === 'moon') === moon);
     if (!owned.length) return `No ${r.short} in the fleet: build one in the Factory`;
     return `${r.short} not ready: ${Math.min(...owned.map((x) => x.readyDay)) - s.day} day(s)`;
   }
-  const site = s.sites[s.site];
-  if (!site || site.status === 'locked') return 'Pick a launch site you have access to';
-  const eff = effDest(s);
-  if (!siteAllows(s.site, eff)) return `${SITES[s.site].short} cannot launch to ${DESTINATIONS[eff].name}`;
-  if (pickPad(site, r.catch, s.day) < 0) {
-    if (r.catch && site.pads.length && !site.pads.some((p) => p.tower)) return 'Needs a catch tower on a pad (Sites tab)';
-    const soon = Math.min(...site.pads.filter((p) => !r.catch || p.tower).map((p) => p.busyUntil));
-    return `All pads busy: ${soon - s.day} day(s)`;
+  if (!moon) {
+    const site = s.sites[s.site];
+    if (!site || site.status === 'locked') return 'Pick a launch site you have access to';
+    const eff = effDest(s);
+    if (!siteAllows(s.site, eff)) return `${SITES[s.site].short} cannot launch to ${DESTINATIONS[eff].name}`;
+    if (pickPad(site, r.catch, s.day) < 0) {
+      if (r.catch && site.pads.length && !site.pads.some((p) => p.tower)) return 'Needs a catch tower on a pad (Sites tab)';
+      const soon = Math.min(...site.pads.filter((p) => !r.catch || p.tower).map((p) => p.busyUntil));
+      return `All pads busy: ${soon - s.day} day(s)`;
+    }
+    if (!r.catch && s.recovery === 'drone' && freeDroneship(s) < 0) return `No droneship free: ${Math.min(...s.droneships.map((d) => d.busyUntil)) - s.day} day(s)`;
+
   }
-  if (!r.catch && s.recovery === 'drone' && freeDroneship(s) < 0) return `No droneship free: ${Math.min(...s.droneships.map((d) => d.busyUntil)) - s.day} day(s)`;
 
   if (r.role === 'tanker') {
     if (!s.depot.built) return 'Needs a LEO depot first';
@@ -647,6 +701,7 @@ export function launchBlocker(s) {
     const d = DESTINATIONS[s.dest];
     if (d.body !== 'moon' || d.kind !== 'site') return 'Module ships land at a Moon site';
     if (s.base && s.base.site !== s.dest) return `Your base is at ${DESTINATIONS[s.base.site].name}`;
+    if (r.module === 'icer' && s.dest !== 'shackleton') return 'Ice only exists at Shackleton Crater';
     if (!s.depot.built) return 'Lunar flights need a LEO depot';
     if (modulePropNeed(s) > s.depot.prop) return `Depot propellant ${Math.floor(s.depot.prop)}/${modulePropNeed(s)} t`;
   } else {
@@ -658,7 +713,19 @@ export function launchBlocker(s) {
     if (t.mass > cap.mass) return 'Over payload mass limit';
     if (t.volume > cap.volume) return 'Over fairing volume limit';
     if (s.sats && !SAT_DESTS.includes(s.dest)) return 'Skylink satellites fly to LEO or Polar LEO';
-    if (d.body !== 'earth') {
+    if (d.body === 'mars') {
+      if (s.rocket !== 'skyship') return 'Mars needs a Skyship';
+      const w = marsWindow(s.day);
+      if (!w.open) return `Mars window opens in ${w.opensIn} days`;
+      if (moon) {
+        const need = marsMoonNeed(s);
+        if (!s.base) return 'A Moon base is needed';
+        if (s.base.stock.methalox < need) return `Base methalox ${Math.floor(s.base.stock.methalox)}/${need} t`;
+      } else {
+        if (!s.depot.built) return 'Mars flights need a LEO depot';
+        if (tliNeed(s) > s.depot.prop) return `Depot propellant ${Math.floor(s.depot.prop)}/${tliNeed(s)} t`;
+      }
+    } else if (d.body !== 'earth') {
       if (s.rocket !== 'skyship') return `${d.name} needs a Skyship`;
       const need = tliNeed(s);
       if (!s.depot.built) return 'Lunar flights need a LEO depot';
@@ -675,22 +742,28 @@ export function launch(s) {
   if (reason) return { ok: false, reason };
   const r = rocketDef(s);
   const v = nextVehicle(s, s.rocket);
-  const site = s.sites[s.site];
-  const pad = site.pads[pickPad(site, r.catch, s.day)];
+  const moon = originIsMoon(s);
+  const site = moon ? null : s.sites[s.site];
+  const pad = moon ? null : site.pads[pickPad(site, r.catch, s.day)];
   const destId = effDest(s);
   const d = DESTINATIONS[destId];
-  const rec = recoveryOf(s);
+  const mars = isMars(destId);
+  const rec = moon ? 'catch' : recoveryOf(s);
   const costs = launchCosts(s);
   const cost = costs.total;
   // Propellant leaves the tanks whatever happens on ascent.
-  site.stock[costs.fuel.type] -= costs.fuel.fromTanks;
+  if (moon) s.base.stock.methalox -= costs.fuel.t;
+  else site.stock[costs.fuel.type] -= costs.fuel.fromTanks;
   s.cash -= cost;
   s.totalLaunches++;
   const failed = Math.random() < failChance(s, v);
+  const route = mars ? MARS_ROUTES[moon ? 'moon' : 'direct'] : null;
 
   const trip = {
-    id: s.nextId++, serial: v.serial, type: s.rocket, role: r.role, dest: destId, site: s.site,
-    launchDay: s.day, arriveDay: s.day + d.days, status: 'enroute', payout: 0, sats: 0, region: s.region,
+    id: s.nextId++, serial: v.serial, type: s.rocket, role: r.role, dest: destId, site: moon ? null : s.site,
+    origin: moon ? 'moon' : 'earth', fromSite: moon ? s.base.site : undefined,
+    launchDay: s.day, arriveDay: s.day + (route ? route.days : d.days), status: 'enroute', payout: 0, sats: 0, region: s.region,
+    landRisk: route ? route.landRisk : 0,
   };
   if (r.role === 'module') {
     trip.module = r.module;
@@ -700,25 +773,26 @@ export function launch(s) {
     const t = manifestTotals(s);
     trip.payout = t.payout;
     trip.sats = s.sats;
-    const need = tliNeed(s);
+    const need = moon ? 0 : tliNeed(s);
     s.contracts = s.contracts.filter((c) => !s.manifest.includes(c.id));
     s.manifest = [];
     s.sats = 0;
     if (!failed && need) s.depot.prop -= need;
   }
 
+  const from = moon ? 'the Moon base' : SITES[s.site].short;
   if (failed) {
     trip.status = 'lost';
     s.fleet = s.fleet.filter((x) => x !== v);
-    pad.busyUntil = s.day + (r.catch ? PAD_FAIL_CLOSED * 2 : PAD_FAIL_CLOSED);
-    note(s, `${v.serial} LOST on ascent to ${d.name}. Hull and payload destroyed, ${pad.busyUntil - s.day} day pad repair.`);
+    if (pad) pad.busyUntil = s.day + (r.catch ? PAD_FAIL_CLOSED * 2 : PAD_FAIL_CLOSED);
+    note(s, `${v.serial} LOST on ascent from ${from} to ${d.name}. Hull and payload destroyed${pad ? `, ${pad.busyUntil - s.day} day pad repair` : ''}.`);
   } else {
-    pad.busyUntil = s.day + PAD_TURN;
+    if (pad) pad.busyUntil = s.day + PAD_TURN;
     s.flightCounts[s.rocket] = (s.flightCounts[s.rocket] ?? 0) + 1;
     v.flights++;
     if (rec === 'drone') s.droneships[freeDroneship(s)].busyUntil = s.day + DRONESHIP_CYCLE;
-    if (r.role === 'depot' || r.role === 'module' || rec === 'expend') {
-      s.fleet = s.fleet.filter((x) => x !== v); // single use, or the booster was expended
+    if (r.role === 'depot' || r.role === 'module' || rec === 'expend' || mars) {
+      s.fleet = s.fleet.filter((x) => x !== v); // single use, expended, or on a one-way trip to Mars
     } else {
       const bay = bestBay(site);
       const start = Math.max(s.day + roundTripDays(destId) + (rec === 'drone' ? DRONE_TOW_DAYS : 0), bay.freeAt);
@@ -728,7 +802,7 @@ export function launch(s) {
       v.site = s.site;
     }
     const how = rec === 'expend' ? ', booster expended' : rec === 'drone' ? ', droneship landing' : '';
-    note(s, `${v.serial} launched from ${SITES[s.site].short} to ${d.name}, arrives day ${trip.arriveDay}${how} (cost $${cost}M).`);
+    note(s, `${v.serial} launched from ${from} to ${d.name}, arrives day ${trip.arriveDay}${how} (cost $${cost}M).`);
     if (s.rocket === 'behemoth') {
       const n = s.flightCounts.behemoth;
       note(s, `Behemoth test flight ${n} complete.${n === 3 ? ' Skyship qualification flights done.' : ''}`);
@@ -745,8 +819,13 @@ export function launch(s) {
 export const activeTrips = (s) => s.trips.filter((t) => t.status === 'enroute');
 
 function arrive(s, trip) {
-  trip.status = 'done';
   const d = DESTINATIONS[trip.dest];
+  if (trip.landRisk && Math.random() < trip.landRisk) {
+    trip.status = 'lost';
+    note(s, `${trip.serial} was lost entering the Martian atmosphere. Payload and hull destroyed.`);
+    return;
+  }
+  trip.status = 'done';
   if (trip.role === 'payload') {
     s.cash += trip.payout;
     const region = REGIONS.find((x) => x.id === trip.region);
@@ -800,7 +879,9 @@ export function buyTech(s, id) {
   if (id === 'skyship') note(s, 'Operational Skyship unlocked: 150 t, 3-day turnaround.');
   if (id === 'plants') note(s, 'Propellant Plants unlocked: owned sites can make their own fuel.');
   if (id === 'tanker') note(s, 'Orbital Tanker unlocked. Build a Depot and Tanker Skyships, and the Moon opens up.');
-  if (id === 'isru') note(s, 'Lunar logistics era reached. The Moon base is the next milestone (coming soon).');
+  if (id === 'isru') note(s, 'Lunar ISRU unlocked: smelters and a Fabricator can run on the Moon.');
+  if (id === 'ice') note(s, 'Lunar Ice Mining unlocked: Ice Miner and Refinery module ships (at Shackleton).');
+  if (id === 'marsTransit') note(s, `Mars Transfer unlocked. ${marsWindow(s.day).open ? 'A launch window is open now.' : `The next window opens in ${marsWindow(s.day).opensIn} days.`}`);
   return true;
 }
 
@@ -814,6 +895,11 @@ export function tick(s) {
 
   for (const t of s.trips) if (t.status === 'enroute' && t.arriveDay <= s.day) arrive(s, t);
   tickBase(s, (m) => note(s, m));
+  while (s.base?.ships?.length) {
+    const made = s.base.ships.shift();
+    const v = addVehicle(s, made.type, 'moon');
+    note(s, `${v.serial} was built at the Moon base and is ready to fly from there.`);
+  }
 
   // Hulls past their rated flights retire once their last refit is done.
   for (const v of [...s.fleet]) {
@@ -857,5 +943,6 @@ export function tick(s) {
     s.contracts = s.contracts.filter((c) => c.expires >= s.day);
     s.manifest = s.manifest.filter((id) => s.contracts.some((c) => c.id === id));
   }
-  if (s.day % 3 === 0 && s.contracts.length < 8) s.contracts.push(newContract(s));
+  const board = boardSize(s);
+  if (s.day % board.every === 0 && s.contracts.length < board.cap) s.contracts.push(newContract(s));
 }

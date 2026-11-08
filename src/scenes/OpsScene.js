@@ -246,6 +246,7 @@ export class OpsScene extends Phaser.Scene {
       queueBuild: (id, siteId) => sim.queueBuild(s, id, siteId),
       cancelBuild: (siteId, id) => sim.cancelBuild(s, siteId, id),
       buyTech: (id) => sim.buyTech(s, id),
+      setMarsRoute: (route) => sim.setMarsRoute(s, route),
       viewSite: (id) => { this.siteView = id; if (s.sites[id].status !== 'locked') sim.setSite(s, id); },
       setSite: (id) => sim.setSite(s, id),
       acquireSite: (id, mode) => sim.acquireSite(s, id, mode),
