@@ -13,3 +13,6 @@ const game = new Phaser.Game({
 });
 
 if (import.meta.env.DEV) window.__perigee = game; // handy for debugging in the console
+
+// Installable and offline-capable in the built game (not in the dev server, where it would cache stale code).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});

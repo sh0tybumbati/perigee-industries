@@ -1,0 +1,16 @@
+// Lets the game install to the home screen and keep working offline: same-origin files are cached as they are
+// fetched, and served from the cache while a fresh copy loads in the background.
+const CACHE = 'perigee-v1';
+
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  e.respondWith(caches.open(CACHE).then(async (cache) => {
+    const hit = await cache.match(e.request);
+    const fresh = fetch(e.request).then((res) => { if (res.ok) cache.put(e.request, res.clone()); return res; }).catch(() => hit);
+    return hit ?? fresh;
+  }));
+});
