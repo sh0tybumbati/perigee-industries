@@ -2,36 +2,45 @@
 
 function modShip(name, short, code, module, requires, buildCost, buildDays) {
   return {
-    name, short, code, role: 'module', module, shipMass: 80, payload: 0, volume: 0, turnaround: 3, refurb: 0, ops: 3.5, sats: 0,
+    name, short, code, role: 'module', module, shipMass: 80, payload: 0, volume: 0, turnaround: 3, refurb: 0, ops: 1.3, sats: 0,
+    fuel: { type: 'methalox', t: 450 }, stage: 0, steel: 500,
     requires, coreLife: 1, buildCost, buildDays, baseRisk: 0.04, wearRisk: 0, catch: true,
   };
 }
 
 // role: 'payload' carries contracts and satellites; 'tanker' fills the LEO depot; 'depot' becomes the depot (single use).
+// fuel: propellant burned per launch. stage: cost of the expendable upper stage (0 when the upper stage is reusable).
+// refurb: refurbishment parts per flight. ops: crew, range and insurance. steel: tonnes of steel to build a hull.
 export const ROCKETS = {
   peregrine9: {
-    name: 'Peregrine 9', short: 'Peregrine 9', code: 'P9', role: 'payload', payload: 22, volume: 60, turnaround: 7, refurb: 0.4, ops: 0.8, sats: 24,
+    name: 'Peregrine 9', short: 'Peregrine 9', code: 'P9', role: 'payload', payload: 22, volume: 60, turnaround: 7, refurb: 0.2, ops: 0.1, sats: 24,
+    fuel: { type: 'kerolox', t: 50 }, stage: 0.4, steel: 50,
     requires: [], coreLife: 10, buildCost: 12, buildDays: 8, baseRisk: 0.01, wearRisk: 0.004,
   },
   peregrineHeavy: {
-    name: 'Peregrine Heavy', short: 'Heavy', code: 'PH', role: 'payload', payload: 64, volume: 140, turnaround: 14, refurb: 1.2, ops: 2.5, sats: 24,
+    name: 'Peregrine Heavy', short: 'Heavy', code: 'PH', role: 'payload', payload: 64, volume: 140, turnaround: 14, refurb: 0.6, ops: 0.3, sats: 24,
+    fuel: { type: 'kerolox', t: 150 }, stage: 0.8, steel: 150,
     requires: ['heavyCores'], coreLife: 10, buildCost: 25, buildDays: 16, baseRisk: 0.015, wearRisk: 0.004,
   },
-  // Prototype: risky until a few test flights have been flown. Lands by tower catch, so no RTLS/droneship choice.
+  // Prototype: risky until a few test flights have been flown. Both stages are caught by the tower.
   behemoth: {
-    name: 'Behemoth Prototype', short: 'Behemoth', code: 'BH', role: 'payload', payload: 100, volume: 260, turnaround: 21, refurb: 3, ops: 6, sats: 36,
+    name: 'Behemoth Prototype', short: 'Behemoth', code: 'BH', role: 'payload', payload: 100, volume: 260, turnaround: 21, refurb: 3, ops: 4.5, sats: 36,
+    fuel: { type: 'methalox', t: 300 }, stage: 0, steel: 400,
     requires: ['hull', 'raptor', 'tiles'], coreLife: 4, buildCost: 30, buildDays: 30, baseRisk: 0.12, wearRisk: 0.02, catch: true,
   },
   skyship: {
-    name: 'Skyship (Cargo)', short: 'Skyship', code: 'SKY', role: 'payload', payload: 150, volume: 400, turnaround: 3, refurb: 0.6, ops: 3.5, sats: 60,
+    name: 'Skyship (Cargo)', short: 'Skyship', code: 'SKY', role: 'payload', payload: 150, volume: 400, turnaround: 3, refurb: 0.6, ops: 1.5, sats: 60,
+    fuel: { type: 'methalox', t: 450 }, stage: 0, steel: 500,
     requires: ['skyship'], coreLife: 40, buildCost: 60, buildDays: 24, baseRisk: 0.03, wearRisk: 0.002, catch: true,
   },
   skyshipTanker: {
-    name: 'Skyship Tanker', short: 'Tanker', code: 'TNK', role: 'tanker', payload: 0, volume: 0, turnaround: 3, refurb: 0.6, ops: 3.5, sats: 0,
+    name: 'Skyship Tanker', short: 'Tanker', code: 'TNK', role: 'tanker', payload: 0, volume: 0, turnaround: 3, refurb: 0.6, ops: 2.5, sats: 0,
+    fuel: { type: 'methalox', t: 450 }, stage: 0, steel: 500,
     requires: ['tanker'], coreLife: 40, buildCost: 50, buildDays: 20, baseRisk: 0.03, wearRisk: 0.002, catch: true,
   },
   skyshipDepot: {
-    name: 'Skyship Depot', short: 'Depot', code: 'DPT', role: 'depot', payload: 0, volume: 0, turnaround: 3, refurb: 0, ops: 3.5, sats: 0,
+    name: 'Skyship Depot', short: 'Depot', code: 'DPT', role: 'depot', payload: 0, volume: 0, turnaround: 3, refurb: 0, ops: 1.3, sats: 0,
+    fuel: { type: 'methalox', t: 450 }, stage: 0, steel: 500,
     requires: ['tanker'], coreLife: 1, buildCost: 75, buildDays: 30, baseRisk: 0.03, wearRisk: 0, catch: true,
   },
   // Module ships are single use: the hull lands at the base site and becomes a base module lying on its side.
@@ -42,12 +51,65 @@ export const ROCKETS = {
   modFab: modShip('Fabricator Skyship', 'Fabricator', 'FAB', 'fab', ['isru'], 100, 36),
 };
 
-export const PAD_NAMES = ['Pad 39A', 'Pad 39B', 'SLC-40'];
-export const PAD_COSTS = [0, 25, 40]; // $M to buy the 1st (free), 2nd and 3rd pad
+// ---- Launch sites, recovery and supply (GDD 2.10) ----------------------------------------
+// price: $M to lease or buy the site. noDests/allowDests: orbits the site can reach.
+export const SITES = {
+  cape: {
+    name: 'Cape Canaveral', short: 'Cape', lat: 28.5, lon: -80.6, pads: ['Pad 39A', 'Pad 39B', 'SLC-40'], factory: true,
+    price: { buy: 60 }, start: 'leased', noDests: ['polar', 'sso'], blurb: 'Home site. No polar launches (overflight rules).',
+  },
+  vandenberg: {
+    name: 'Vandenberg', short: 'Vandenberg', lat: 34.7, lon: -120.6, pads: ['SLC-4E', 'SLC-6'], factory: false,
+    price: { lease: 15, buy: 85 }, allowDests: ['leo', 'polar', 'sso'], blurb: 'The only polar and sun-synchronous launches.',
+  },
+  boca: {
+    name: 'Boca Chica (Starbase)', short: 'Boca Chica', lat: 26.0, lon: -97.2, pads: ['Orbital Pad A', 'Orbital Pad B'], factory: true, towers: true,
+    price: { buy: 120 }, noDests: ['polar', 'sso'], catchDiscount: 0.85, blurb: 'Pads come with catch towers. Catch vehicles build 15% cheaper and faster.',
+  },
+};
+export const SITE_IDS = Object.keys(SITES);
+export const LEASE_FEE = 0.15; // $M per launch from a leased site
+export const BAY_FEE = 0.08; // $M per refit in a rented hangar
+export const BAY_RENT_DEPOSIT = 3; // $M to rent another hangar at a leased site
+export const BAY_BUY_COST = 15; // $M per owned hangar
+export const MAX_BAYS = { leased: 2, owned: 3 };
+export const PAD_COSTS = [0, 25, 40]; // $M for a site's 1st (included), 2nd and 3rd pad
+export const TOWER_COST = 40; // $M per pad
 export const PAD_TURN = 2; // days before a pad can launch again
 export const PAD_FAIL_CLOSED = 14; // days a pad is closed after a failure (28 for tower-catch vehicles)
 export const LINE_COSTS = [0, 40, 80, 120]; // $M to add the 1st (free) .. 4th factory line
 export const CANCEL_REFUND = 0.5;
+
+export const DRONESHIP_FEE = 0.3; // $M per landing
+export const DRONESHIP_COST = 20; // $M to buy another
+export const MAX_DRONESHIPS = 3;
+export const DRONESHIP_CYCLE = 4; // days before a droneship can take another landing
+export const DRONE_TOW_DAYS = 2; // extra days before a droneship-landed booster can start its refit
+export const RTLS_PAYLOAD_PENALTY = 0.2;
+export const EXPEND_BONUS = 0.15;
+export const RECOVERY_MODES = {
+  rtls: { name: 'RTLS', hint: 'Return to the pad: -20% payload, the booster is back at once.' },
+  drone: { name: 'Droneship', hint: `Full payload, but it needs a free droneship and the refit starts ${DRONE_TOW_DAYS} days late.` },
+  expend: { name: 'Expend', hint: `+${EXPEND_BONUS * 100}% payload, but the booster is lost. No refit.` },
+};
+
+// Commodities: base price in $M per tonne. Spot prices drift (see MARKET_*).
+export const COMMODITIES = {
+  kerolox: { name: 'Kerolox (RP-1/LOX)', price: 0.008 },
+  methalox: { name: 'Methalox (CH4/LOX)', price: 0.004 },
+  steel: { name: 'Stainless steel', price: 0.012 },
+};
+export const MARKET_MIN = 0.6;
+export const MARKET_MAX = 1.8;
+export const BULK_DISCOUNT = 0.9; // buying into tanks beats spot by 10%
+export const RUSH_PREMIUM = 1.1; // shortages at launch or build time cost 10% over spot
+export const START_CAPS = { kerolox: 200, methalox: 400, steel: 400 };
+export const START_STOCK = { kerolox: 100, methalox: 200, steel: 150 };
+export const TANK_STEP = { kerolox: { t: 200, cost: 6 }, methalox: { t: 500, cost: 8 }, steel: { t: 400, cost: 4 } };
+export const PLANT_RATE = 40; // t per day per level
+export const PLANT_COST = 25; // $M per level
+export const PLANT_MAX = 3;
+export const PLANT_COST_FRAC = 0.3; // production cost as a share of the base price
 
 export const BEHEMOTH_LEARNING = 0.03; // risk drop per successful Behemoth flight
 export const BEHEMOTH_MIN_RISK = 0.04;
@@ -56,11 +118,8 @@ export const BEHEMOTH_MIN_RISK = 0.04;
 export const DEPOT_COST = 15; // $M hardware
 export const DEPOT_CAP = 500; // t of CH4/LOX
 export const TANKER_LOAD = 100; // t delivered per tanker run
-export const TANKER_PROP_COST = 2; // $M of propellant per run
 export const BOILOFF_PER_DAY = 0.004;
 export const TLI_PROP_PER_TON = 3; // t of propellant per t of lunar payload (surface sites)
-
-export const LAUNCH_SITE = { name: 'Cape Canaveral', lat: 28.5, lon: -80.6 };
 
 // body: which map shows it. kind: orbit (ring) or site (surface pin). days: one-way travel time.
 // ring: radius in planet radii, incl/node in degrees, phase = degrees along the ring, from the point nearest the
@@ -88,9 +147,6 @@ export const BODIES = {
   mars: { name: 'Mars' },
 };
 
-export const RTLS_PAYLOAD_PENALTY = 0.2;
-export const RTLS_TURNAROUND_SAVED = 2;
-export const DRONESHIP_FEE = 0.3; // $M per launch
 export const SAT_MASS = 0.27; // t, Gen-1
 export const SAT_VOLUME = 0.9; // m^3, stacked
 export const SAT_LIFE_DAYS = 5 * 365;
@@ -111,6 +167,7 @@ export const CUSTOMERS = ['Aurora Telecom', 'Helix Earth Obs', 'Kestrel Defense'
 
 export const TECH = [
   { id: 'fastCores', name: 'Fast Turnaround Cores', cost: 12, era: 'Peregrine', desc: 'Peregrine turnaround -2 days', requires: [] },
+  { id: 'plants', name: 'Propellant Plants', cost: 70, era: 'Peregrine', desc: 'Owned sites can build kerolox and methalox plants', requires: ['fastCores'] },
   { id: 'gen1', name: 'Skylink Gen-1', cost: 5, era: 'Peregrine', desc: 'Unlock broadband satellite batches', requires: [] },
   { id: 'heavyCores', name: 'Peregrine Heavy', cost: 60, era: 'Peregrine', desc: 'Unlock 64 t Peregrine Heavy', requires: ['fastCores'] },
   { id: 'hull', name: 'Stainless Hull', cost: 120, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype', requires: ['heavyCores', 'gen1'] },

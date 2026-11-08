@@ -9,6 +9,7 @@ const world = () => {
   const s = sim.createState();
   for (const t of ALL) s.tech.add(t);
   s.cash = 5000;
+  s.sites.cape.pads.forEach((p) => { p.tower = true; });
   return s;
 };
 const withMock = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };

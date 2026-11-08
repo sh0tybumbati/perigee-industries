@@ -1,18 +1,20 @@
 // Pure game simulation: no Phaser or Three here, so it can be tested under plain node.
 import {
-  ROCKETS, RTLS_PAYLOAD_PENALTY, RTLS_TURNAROUND_SAVED, DRONESHIP_FEE,
-  SAT_MASS, SAT_VOLUME, SAT_LIFE_DAYS, SAT_COST, REGIONS, CUSTOMERS, TECH,
+  ROCKETS, SAT_MASS, SAT_VOLUME, SAT_LIFE_DAYS, SAT_COST, REGIONS, CUSTOMERS, TECH,
   OVERHEAD_PER_DAY, CASH_FLOOR, BEHEMOTH_LEARNING, BEHEMOTH_MIN_RISK,
-  DEPOT_CAP, TANKER_LOAD, TANKER_PROP_COST, BOILOFF_PER_DAY,
-  PAD_COSTS, PAD_TURN, PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND,
+  DEPOT_CAP, TANKER_LOAD, BOILOFF_PER_DAY,
   DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS,
+  SITES, SITE_IDS, LEASE_FEE, BAY_FEE, BAY_RENT_DEPOSIT, BAY_BUY_COST, MAX_BAYS, PAD_COSTS, TOWER_COST, PAD_TURN,
+  PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND, DRONESHIP_FEE, DRONESHIP_COST, MAX_DRONESHIPS, DRONESHIP_CYCLE,
+  DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
+  RUSH_PREMIUM, START_CAPS, START_STOCK, TANK_STEP, PLANT_RATE, PLANT_COST, PLANT_MAX, PLANT_COST_FRAC,
 } from './data.js';
 import { createBase, tickBase } from './base.js';
 
 export { OVERHEAD_PER_DAY };
 export const SAT_BATCH = 6;
 export const REVENUE_SCALE = 0.3;
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 const MAX_TRIPS = 80;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -23,16 +25,38 @@ function pickWeighted(items, weights) {
 }
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
+// ---- sites ----------------------------------------------------------------------
+
+const newPad = (d, i) => ({ name: d.pads[i], tower: !!d.towers, busyUntil: 0 });
+
+// status: 'locked' (not available yet), 'leased' or 'owned'.
+function makeSite(id, status) {
+  const d = SITES[id];
+  const active = status !== 'locked';
+  return {
+    id,
+    status,
+    pads: active ? [newPad(d, 0)] : [],
+    bays: active ? [{ tenure: status === 'owned' ? 'owned' : 'rented', freeAt: 0 }] : [],
+    stock: id === 'cape' ? { ...START_STOCK } : { kerolox: 0, methalox: 0, steel: 0 },
+    cap: { ...START_CAPS },
+    plants: { kerolox: 0, methalox: 0 },
+    lines: active && d.factory ? 1 : 0,
+    queue: [],
+  };
+}
+
 export function createState() {
   const s = {
     day: 1,
-    cash: 40,
+    cash: 60,
     income: 0,
     fleet: [], // individual hulls
     serials: {},
-    pads: [{ busyUntil: 1 }],
-    lines: 1,
-    queue: [], // factory build queue
+    sites: Object.fromEntries(SITE_IDS.map((id) => [id, makeSite(id, SITES[id].start ?? 'locked')])),
+    site: 'cape', // selected launch site
+    droneships: [{ busyUntil: 0 }],
+    market: { kerolox: 1, methalox: 1, steel: 1 }, // spot price multipliers
     trips: [], // flight records, active and past
     flightCounts: {}, // successful flights per vehicle type
     contracts: [],
@@ -40,7 +64,7 @@ export function createState() {
     sats: 0,
     rocket: 'peregrine9', // selected vehicle type
     dest: 'leo', // selected destination
-    recovery: 'rtls',
+    recovery: 'rtls', // rtls | drone | expend (booster-class vehicles only)
     region: 'na',
     constellation: Object.fromEntries(REGIONS.map((r) => [r.id, 0])),
     depot: { built: false, prop: 0 },
@@ -50,7 +74,7 @@ export function createState() {
     totalLaunches: 0,
     nextId: 1,
   };
-  addVehicle(s, 'peregrine9');
+  addVehicle(s, 'peregrine9', 'cape');
   for (let i = 0; i < 5; i++) s.contracts.push(newContract(s));
   note(s, 'Welcome to Perigee Industries. Pick a destination on the map, then plan a launch.');
   return s;
@@ -76,8 +100,9 @@ export function deserialize(json) {
       o.cores = { peregrine9: o.core?.launches ?? 0 };
       o.v = 2;
     }
-    if (o.v === 2) return migrateV2(o);
+    if (o.v === 2) return migrateV4(migrateV2(o));
     if (o.v === 3) o.v = 4; // v4 only adds the lunar base
+    if (o.v === 4) return migrateV4(o);
     if (o.v !== SAVE_VERSION) return null;
     const base = createState();
     const s = { ...base, ...o, tech: new Set(Array.isArray(o.tech) ? o.tech : []) };
@@ -86,13 +111,16 @@ export function deserialize(json) {
     s.depot = { ...base.depot, ...o.depot };
     s.flightCounts = { ...o.flightCounts };
     s.serials = { ...o.serials };
-    for (const k of ['fleet', 'pads', 'queue', 'trips', 'contracts', 'manifest']) if (!Array.isArray(s[k])) s[k] = base[k];
+    s.market = { ...base.market, ...o.market };
+    for (const k of ['fleet', 'trips', 'queue', 'contracts', 'manifest', 'droneships']) if (k in s && !Array.isArray(s[k])) s[k] = base[k];
+    s.droneships = Array.isArray(o.droneships) ? o.droneships : base.droneships;
     s.base = s.base && Array.isArray(s.base.modules) ? { ...createBase(s.base.site), ...s.base, stock: { ...createBase('').stock, ...s.base.stock } } : null;
-    s.fleet = s.fleet.filter((v) => ROCKETS[v.type]);
-    s.queue = s.queue.filter((q) => ROCKETS[q.type]);
-    if (!s.pads.length) s.pads = base.pads;
+    s.sites = Object.fromEntries(SITE_IDS.map((id) => [id, o.sites?.[id] ? { ...makeSite(id, 'locked'), ...o.sites[id] } : base.sites[id]]));
+    s.fleet = s.fleet.filter((v) => ROCKETS[v.type]).map((v) => ({ site: 'cape', ...v }));
     if (!ROCKETS[s.rocket] || !rocketUnlocked(s, s.rocket)) s.rocket = 'peregrine9';
     if (!DESTINATIONS[s.dest] || !destUnlocked(s, s.dest)) s.dest = 'leo';
+    if (!s.sites[s.site] || s.sites[s.site].status === 'locked') s.site = 'cape';
+    if (!['rtls', 'drone', 'expend'].includes(s.recovery)) s.recovery = 'rtls';
     if (!REGIONS.some((r) => r.id === s.region)) s.region = 'na';
     if (!Number.isFinite(s.cash) || !Number.isFinite(s.day)) return null;
     return s;
@@ -113,12 +141,37 @@ function migrateV2(o) {
   if (o.depot) s.depot = { built: !!o.depot.built, prop: o.depot.prop ?? 0 };
   for (const id of ['peregrine9', 'peregrineHeavy', 'behemoth', 'skyship']) {
     const worn = o.cores?.[id] ?? 0;
-    if (rocketUnlocked(s, id) && worn < ROCKETS[id].coreLife) addVehicle(s, id).flights = worn;
+    if (rocketUnlocked(s, id) && worn < ROCKETS[id].coreLife) addVehicle(s, id, 'cape').flights = worn;
   }
-  if (!s.fleet.length) addVehicle(s, 'peregrine9');
+  if (!s.fleet.length) addVehicle(s, 'peregrine9', 'cape');
   if (ROCKETS[o.rocket] && rocketUnlocked(s, o.rocket)) s.rocket = o.rocket;
   if (!REGIONS.some((r) => r.id === s.region)) s.region = 'na';
-  note(s, 'Save upgraded: your boosters are now individual hulls in the fleet.');
+  // Hand the v4 migration the pieces it expects.
+  return { ...s, tech: [...s.tech], pads: [{ busyUntil: 0 }], lines: 1, queue: [], v: 4 };
+}
+
+// v4 had a flat list of pads and one factory. They become Cape Canaveral, owned if the company had grown.
+function migrateV4(o) {
+  const s = createState();
+  for (const k of ['day', 'cash', 'income', 'fleet', 'serials', 'trips', 'flightCounts', 'contracts', 'manifest', 'sats', 'rocket', 'dest', 'region', 'constellation', 'depot', 'base', 'log', 'totalLaunches', 'nextId']) {
+    if (o[k] !== undefined) s[k] = o[k];
+  }
+  if (['rtls', 'drone'].includes(o.recovery)) s.recovery = o.recovery;
+  s.tech = new Set(Array.isArray(o.tech) ? o.tech : []);
+  s.fleet = (s.fleet ?? []).filter((v) => ROCKETS[v.type]).map((v) => ({ site: 'cape', ...v }));
+  const pads = Array.isArray(o.pads) && o.pads.length ? o.pads : [{ busyUntil: 0 }];
+  const grown = pads.length > 1 || (o.lines ?? 1) > 1;
+  const cape = s.sites.cape;
+  const hasCatch = s.fleet.some((v) => ROCKETS[v.type].catch);
+  cape.status = grown ? 'owned' : 'leased';
+  cape.pads = pads.slice(0, 3).map((p, i) => ({ name: SITES.cape.pads[i], tower: hasCatch, busyUntil: p.busyUntil ?? 0 }));
+  const bayN = Math.min(grown ? 3 : 2, Math.max(1, Math.ceil(s.fleet.length / 2)));
+  cape.bays = Array.from({ length: bayN }, () => ({ tenure: grown ? 'owned' : 'rented', freeAt: 0 }));
+  cape.lines = o.lines ?? 1;
+  cape.queue = Array.isArray(o.queue) ? o.queue : [];
+  if (!ROCKETS[s.rocket] || !rocketUnlocked(s, s.rocket)) s.rocket = 'peregrine9';
+  if (!DESTINATIONS[s.dest] || !destUnlocked(s, s.dest)) s.dest = 'leo';
+  note(s, 'Save upgraded: launch sites, hangars, droneships and the fuel market are new.');
   return s;
 }
 
@@ -143,10 +196,10 @@ export function setDest(s, id) {
 // ---- contracts -------------------------------------------------------------------
 
 function pickTier(s) {
-  const tiers = [{ w: 0.5, min: 1.5, max: 17, rate: [0.28, 0.45] }];
-  if (s.tech.has('heavyCores')) tiers.push({ w: 0.2, min: 22, max: 60, rate: [0.55, 0.8] });
-  if (rocketUnlocked(s, 'behemoth')) tiers.push({ w: 0.15, min: 60, max: 100, rate: [0.7, 1.0] });
-  if (s.tech.has('skyship')) tiers.push({ w: 0.12, min: 100, max: 140, rate: [0.55, 0.8] });
+  const tiers = [{ w: 0.5, min: 1.5, max: 17, rate: [0.31, 0.5] }];
+  if (s.tech.has('heavyCores')) tiers.push({ w: 0.2, min: 22, max: 60, rate: [0.6, 0.88] });
+  if (rocketUnlocked(s, 'behemoth')) tiers.push({ w: 0.15, min: 60, max: 100, rate: [0.77, 1.1] });
+  if (s.tech.has('skyship')) tiers.push({ w: 0.12, min: 100, max: 140, rate: [0.6, 0.88] });
   return pickWeighted(tiers, tiers.map((t) => t.w));
 }
 
@@ -202,9 +255,9 @@ export function toggleContract(s, id) {
 export const rocketDef = (s) => ROCKETS[s.rocket];
 export const rocketUnlocked = (s, id) => ROCKETS[id].requires.every((t) => s.tech.has(t));
 
-function addVehicle(s, type) {
+function addVehicle(s, type, siteId = 'cape') {
   const n = (s.serials[type] = (s.serials[type] ?? 0) + 1);
-  const v = { id: s.nextId++, type, serial: `${ROCKETS[type].code}-${String(n).padStart(2, '0')}`, flights: 0, returnDay: 0, readyDay: s.day };
+  const v = { id: s.nextId++, type, serial: `${ROCKETS[type].code}-${String(n).padStart(2, '0')}`, flights: 0, returnDay: 0, readyDay: s.day, site: siteId };
   s.fleet.push(v);
   return v;
 }
@@ -235,68 +288,274 @@ export function failChance(s, v = nextVehicle(s, s.rocket)) {
   return base + r.wearRisk * (v?.flights ?? 0);
 }
 
+// How the booster comes back: catch vehicles use the tower, others pick RTLS, droneship or expend.
+export const recoveryOf = (s) => (rocketDef(s).catch ? 'catch' : s.recovery);
+
 export function capacity(s) {
   const r = rocketDef(s);
-  const rtls = !r.catch && s.recovery === 'rtls';
-  return { mass: +(r.payload * (rtls ? 1 - RTLS_PAYLOAD_PENALTY : 1)).toFixed(1), volume: r.volume };
+  const rec = recoveryOf(s);
+  const f = rec === 'rtls' ? 1 - RTLS_PAYLOAD_PENALTY : rec === 'expend' ? 1 + EXPEND_BONUS : 1;
+  return { mass: +(r.payload * f).toFixed(1), volume: r.volume };
 }
 
-export function turnaround(s) {
+// Days a hull spends in a hangar after it has landed and been recovered.
+export function refitDays(s) {
   const r = rocketDef(s);
-  let d = r.turnaround;
-  if (!r.catch && s.tech.has('fastCores')) d -= 2;
-  if (!r.catch && s.recovery === 'rtls') d -= RTLS_TURNAROUND_SAVED;
-  return Math.max(2, d);
+  if (r.catch) return r.turnaround;
+  return Math.max(2, r.turnaround - 2 - (s.tech.has('fastCores') ? 2 : 0));
 }
 
-// ---- pads ---------------------------------------------------------------------
+// ---- sites: leasing, pads, hangars, towers ---------------------------------------------------
 
-export const freePad = (s) => s.pads.findIndex((p) => s.day >= p.busyUntil);
+export const siteDef = (id) => SITES[id];
+export const siteActive = (s, id) => s.sites[id].status !== 'locked';
 
-export function buyPad(s) {
-  const cost = PAD_COSTS[s.pads.length];
-  if (cost === undefined || !canSpend(s, cost)) return false;
-  s.cash -= cost;
-  s.pads.push({ busyUntil: s.day });
-  note(s, `New launch pad commissioned (-$${cost}M).`);
+export function setSite(s, id) {
+  if (!s.sites[id] || !siteActive(s, id)) return false;
+  s.site = id;
   return true;
 }
 
-// ---- factory ----------------------------------------------------------------
+export function siteAllows(id, destId) {
+  const d = SITES[id];
+  if (d.allowDests) return d.allowDests.includes(destId);
+  return !(d.noDests ?? []).includes(destId);
+}
 
-export function buildBlocker(s, type) {
-  const r = ROCKETS[type];
-  if (!rocketUnlocked(s, type)) return 'Locked';
-  if (r.role === 'depot' && (s.depot.built || fleetOf(s, type).length || s.queue.some((q) => q.type === type))) return 'Only one depot is needed';
-  if (!canSpend(s, r.buildCost)) return 'Not enough cash';
+export function siteBlocker(s, id, mode) {
+  const site = s.sites[id];
+  const price = SITES[id].price[mode];
+  if (price === undefined) return 'Not available';
+  if (mode === 'lease' && site.status !== 'locked') return 'Already open';
+  if (mode === 'buy' && site.status === 'owned') return 'Already owned';
+  if (!canSpend(s, price)) return 'Not enough cash';
   return null;
 }
 
-export function queueBuild(s, type) {
-  if (buildBlocker(s, type)) return false;
-  const r = ROCKETS[type];
-  s.cash -= r.buildCost;
-  s.queue.push({ id: s.nextId++, type, daysLeft: r.buildDays, total: r.buildDays });
-  note(s, `Queued ${r.name} (-$${r.buildCost}M, ${r.buildDays} days).`);
+export function acquireSite(s, id, mode) {
+  if (siteBlocker(s, id, mode)) return false;
+  const price = SITES[id].price[mode];
+  s.cash -= price;
+  if (mode === 'lease') {
+    s.sites[id] = makeSite(id, 'leased');
+    note(s, `Leased ${SITES[id].name} (-$${price}M).`);
+  } else {
+    if (s.sites[id].status === 'locked') s.sites[id] = makeSite(id, 'owned');
+    else {
+      s.sites[id].status = 'owned';
+      s.sites[id].bays.forEach((b) => { b.tenure = 'owned'; });
+    }
+    note(s, `Bought ${SITES[id].name} (-$${price}M).`);
+  }
   return true;
 }
 
-export function cancelBuild(s, id) {
-  const q = s.queue.find((x) => x.id === id);
+export function padBlocker(s, id) {
+  const site = s.sites[id];
+  if (site.status !== 'owned') return 'Own the site first';
+  if (site.pads.length >= SITES[id].pads.length) return 'All pads built';
+  return canSpend(s, PAD_COSTS[site.pads.length]) ? null : 'Not enough cash';
+}
+
+export function buyPad(s, id) {
+  if (padBlocker(s, id)) return false;
+  const site = s.sites[id];
+  const cost = PAD_COSTS[site.pads.length];
+  s.cash -= cost;
+  site.pads.push(newPad(SITES[id], site.pads.length));
+  note(s, `${SITES[id].pads[site.pads.length - 1]} built at ${SITES[id].short} (-$${cost}M).`);
+  return true;
+}
+
+export function towerBlocker(s, id, i) {
+  const site = s.sites[id];
+  if (site.status !== 'owned') return 'Own the site first';
+  if (site.pads[i].tower) return 'Has a tower';
+  return canSpend(s, TOWER_COST) ? null : 'Not enough cash';
+}
+
+export function buildTower(s, id, i) {
+  if (towerBlocker(s, id, i)) return false;
+  s.cash -= TOWER_COST;
+  s.sites[id].pads[i].tower = true;
+  note(s, `Catch tower built on ${s.sites[id].pads[i].name} (-$${TOWER_COST}M).`);
+  return true;
+}
+
+export function bayBlocker(s, id) {
+  const site = s.sites[id];
+  if (site.status === 'locked') return 'Not available';
+  if (site.bays.length >= MAX_BAYS[site.status]) return site.status === 'leased' ? 'Buy the site for more hangars' : 'All hangars built';
+  const cost = site.status === 'owned' ? BAY_BUY_COST : BAY_RENT_DEPOSIT;
+  return canSpend(s, cost) ? null : 'Not enough cash';
+}
+
+export function addBay(s, id) {
+  if (bayBlocker(s, id)) return false;
+  const site = s.sites[id];
+  const owned = site.status === 'owned';
+  const cost = owned ? BAY_BUY_COST : BAY_RENT_DEPOSIT;
+  s.cash -= cost;
+  site.bays.push({ tenure: owned ? 'owned' : 'rented', freeAt: s.day });
+  note(s, `${owned ? 'Bought' : 'Rented'} a hangar at ${SITES[id].short} (-$${cost}M).`);
+  return true;
+}
+
+export const bestBay = (site) => site.bays.reduce((a, b) => (b.freeAt < a.freeAt ? b : a), site.bays[0]);
+
+// A free pad at the site (with a catch tower when the vehicle needs one).
+export function pickPad(site, needTower, day) {
+  return site.pads.findIndex((p) => day >= p.busyUntil && (!needTower || p.tower));
+}
+
+// ---- droneships ---------------------------------------------------------------------------------
+
+export const freeDroneship = (s) => s.droneships.findIndex((d) => s.day >= d.busyUntil);
+
+export function buyDroneship(s) {
+  if (s.droneships.length >= MAX_DRONESHIPS || !canSpend(s, DRONESHIP_COST)) return false;
+  s.cash -= DRONESHIP_COST;
+  s.droneships.push({ busyUntil: 0 });
+  note(s, `Droneship ${s.droneships.length} commissioned (-$${DRONESHIP_COST}M).`);
+  return true;
+}
+
+// ---- market, tanks and plants ------------------------------------------------------------------------
+
+export const spot = (s, type) => COMMODITIES[type].price * s.market[type];
+
+export function buyBlocker(s, id, type) {
+  const site = s.sites[id];
+  if (site.status === 'locked') return 'Not available';
+  if (site.stock[type] >= site.cap[type] - 0.01) return 'Tank is full';
+  return null;
+}
+
+// Fills up to `amount` tonnes of free tank space at the bulk price. Returns the tonnes bought.
+export function buyCommodity(s, id, type, amount) {
+  if (buyBlocker(s, id, type)) return 0;
+  const site = s.sites[id];
+  let t = Math.min(amount, site.cap[type] - site.stock[type]);
+  const unit = spot(s, type) * BULK_DISCOUNT;
+  while (t > 0.01 && !canSpend(s, t * unit)) t = Math.floor(t / 2);
+  if (t < 0.01) return 0;
+  site.stock[type] += t;
+  s.cash -= t * unit;
+  return +t.toFixed(1);
+}
+
+export function tankBlocker(s, id, type) {
+  if (s.sites[id].status !== 'owned') return 'Own the site first';
+  return canSpend(s, TANK_STEP[type].cost) ? null : 'Not enough cash';
+}
+
+export function expandTank(s, id, type) {
+  if (tankBlocker(s, id, type)) return false;
+  s.cash -= TANK_STEP[type].cost;
+  s.sites[id].cap[type] += TANK_STEP[type].t;
+  note(s, `${COMMODITIES[type].name} storage at ${SITES[id].short} grew by ${TANK_STEP[type].t} t (-$${TANK_STEP[type].cost}M).`);
+  return true;
+}
+
+export function plantBlocker(s, id, fuel) {
+  const site = s.sites[id];
+  if (!s.tech.has('plants')) return 'Research Propellant Plants';
+  if (site.status !== 'owned') return 'Own the site first';
+  if (site.plants[fuel] >= PLANT_MAX) return 'Fully built';
+  return canSpend(s, PLANT_COST) ? null : 'Not enough cash';
+}
+
+export function buildPlant(s, id, fuel) {
+  if (plantBlocker(s, id, fuel)) return false;
+  s.cash -= PLANT_COST;
+  s.sites[id].plants[fuel]++;
+  note(s, `${COMMODITIES[fuel].name} plant level ${s.sites[id].plants[fuel]} at ${SITES[id].short} (-$${PLANT_COST}M).`);
+  return true;
+}
+
+function tickMarket(s) {
+  for (const type of Object.keys(COMMODITIES)) {
+    const m = s.market[type];
+    s.market[type] = Math.min(MARKET_MAX, Math.max(MARKET_MIN, m + (1 - m) * 0.06 + (Math.random() - 0.5) * 0.1));
+  }
+}
+
+function tickPlants(s) {
+  for (const site of Object.values(s.sites)) {
+    if (site.status !== 'owned') continue;
+    for (const fuel of ['kerolox', 'methalox']) {
+      const level = site.plants[fuel];
+      if (!level) continue;
+      const make = Math.min(level * PLANT_RATE, site.cap[fuel] - site.stock[fuel]);
+      const cost = make * COMMODITIES[fuel].price * PLANT_COST_FRAC;
+      if (make > 0 && s.cash >= cost) { site.stock[fuel] += make; s.cash -= cost; }
+    }
+  }
+}
+
+// ---- factory (one per site) ----------------------------------------------------------------------------------
+
+export const factorySites = (s) => SITE_IDS.filter((id) => SITES[id].factory && s.sites[id].status !== 'locked');
+
+export function buildCostAt(type, siteId) {
+  const r = ROCKETS[type];
+  const k = r.catch && SITES[siteId].catchDiscount ? SITES[siteId].catchDiscount : 1;
+  return { cost: +(r.buildCost * k).toFixed(1), days: Math.max(1, Math.round(r.buildDays * k)) };
+}
+
+const steelShortage = (s, siteId, type) => Math.max(0, ROCKETS[type].steel - s.sites[siteId].stock.steel);
+
+export function buildBlocker(s, type, siteId = 'cape') {
+  const r = ROCKETS[type];
+  const site = s.sites[siteId];
+  if (!rocketUnlocked(s, type)) return 'Locked';
+  if (!site || !site.lines) return 'No factory here';
+  if (r.role === 'depot' && (s.depot.built || fleetOf(s, type).length || Object.values(s.sites).some((x) => x.queue.some((q) => q.type === type)))) return 'Only one depot is needed';
+  const total = buildCostAt(type, siteId).cost + steelShortage(s, siteId, type) * spot(s, 'steel') * RUSH_PREMIUM;
+  if (!canSpend(s, total)) return 'Not enough cash';
+  return null;
+}
+
+export function queueBuild(s, type, siteId = 'cape') {
+  if (buildBlocker(s, type, siteId)) return false;
+  const r = ROCKETS[type];
+  const site = s.sites[siteId];
+  const { cost, days } = buildCostAt(type, siteId);
+  const short = steelShortage(s, siteId, type);
+  const rush = short * spot(s, 'steel') * RUSH_PREMIUM;
+  site.stock.steel -= r.steel - short;
+  s.cash -= cost + rush;
+  site.queue.push({ id: s.nextId++, type, daysLeft: days, total: days, cost });
+  note(s, `Queued ${r.name} at ${SITES[siteId].short} (-$${(cost + rush).toFixed(1)}M, ${days} days).`);
+  return true;
+}
+
+export function cancelBuild(s, siteId, id) {
+  const site = s.sites[siteId];
+  const q = site.queue.find((x) => x.id === id);
   if (!q || q.daysLeft < q.total) return false; // work has started
-  const refund = +(ROCKETS[q.type].buildCost * CANCEL_REFUND).toFixed(1);
-  s.queue = s.queue.filter((x) => x.id !== id);
+  const refund = +(q.cost * CANCEL_REFUND).toFixed(1);
+  site.queue = site.queue.filter((x) => x.id !== id);
   s.cash += refund;
   note(s, `Cancelled ${ROCKETS[q.type].name}, refunded $${refund}M.`);
   return true;
 }
 
-export function buyLine(s) {
-  const cost = LINE_COSTS[s.lines];
-  if (cost === undefined || !canSpend(s, cost)) return false;
+export function lineBlocker(s, siteId) {
+  const site = s.sites[siteId];
+  if (!SITES[siteId].factory || site.status !== 'owned') return 'Own the site first';
+  const cost = LINE_COSTS[site.lines];
+  if (cost === undefined) return 'All lines built';
+  return canSpend(s, cost) ? null : 'Not enough cash';
+}
+
+export function buyLine(s, siteId = 'cape') {
+  if (lineBlocker(s, siteId)) return false;
+  const site = s.sites[siteId];
+  const cost = LINE_COSTS[site.lines];
   s.cash -= cost;
-  s.lines++;
-  note(s, `Production line ${s.lines} online (-$${cost}M).`);
+  site.lines++;
+  note(s, `Production line ${site.lines} online at ${SITES[siteId].short} (-$${cost}M).`);
   return true;
 }
 
@@ -331,14 +590,34 @@ export const dailyRevenue = (s) => REGIONS.reduce((sum, r) => sum + regionRevenu
 // Purchases must leave enough cash to fly the cheapest launch, or the game could soft-lock.
 export const canSpend = (s, amount) => s.cash - amount >= CASH_FLOOR;
 
-export function launchCost(s) {
+export const fuelNeed = (s) => {
   const r = rocketDef(s);
-  let c = r.refurb + r.ops;
-  if (!r.catch && s.recovery === 'drone') c += DRONESHIP_FEE;
-  if (r.role === 'payload') c += s.sats * SAT_COST;
-  if (r.role === 'tanker') c += TANKER_PROP_COST;
-  return +c.toFixed(2);
+  return { type: r.fuel.type, t: r.fuel.t + (r.role === 'tanker' ? TANKER_LOAD : 0) };
+};
+
+// Itemized cash cost of the planned launch. Propellant already in the site's tanks costs nothing more here.
+export function launchCosts(s) {
+  const r = rocketDef(s);
+  const site = s.sites[s.site];
+  const rec = recoveryOf(s);
+  const items = [];
+  const add = (label, amt) => { if (amt > 0.0005) items.push({ label, amt: +amt.toFixed(2) }); };
+  const need = fuelNeed(s);
+  const have = site?.stock[need.type] ?? 0;
+  const short = Math.max(0, need.t - have);
+  add(`Propellant bought (${Math.ceil(short)} t at spot)`, short * spot(s, need.type) * RUSH_PREMIUM);
+  if (!r.catch) add('Expended upper stage', r.stage);
+  if (rec !== 'expend') add('Refurbishment parts', r.refurb);
+  add('Operations', r.ops);
+  if (site?.status === 'leased') add('Pad lease', LEASE_FEE);
+  if (site?.bays.length && rec !== 'expend' && r.role !== 'depot' && r.role !== 'module' && bestBay(site).tenure === 'rented') add('Hangar rental', BAY_FEE);
+  if (rec === 'drone') add('Droneship', DRONESHIP_FEE);
+  if (r.role === 'payload') add('Skylink satellites', s.sats * SAT_COST);
+  const total = +items.reduce((n, i) => n + i.amt, 0).toFixed(2);
+  return { items, total, fuel: { ...need, fromTanks: Math.min(need.t, have), short } };
 }
+
+export const launchCost = (s) => launchCosts(s).total;
 
 export function launchBlocker(s) {
   const r = rocketDef(s);
@@ -348,8 +627,16 @@ export function launchBlocker(s) {
     if (!owned.length) return `No ${r.short} in the fleet: build one in the Factory`;
     return `${r.short} not ready: ${Math.min(...owned.map((x) => x.readyDay)) - s.day} day(s)`;
   }
-  const pad = freePad(s);
-  if (pad < 0) return `All pads busy: ${Math.min(...s.pads.map((p) => p.busyUntil)) - s.day} day(s)`;
+  const site = s.sites[s.site];
+  if (!site || site.status === 'locked') return 'Pick a launch site you have access to';
+  const eff = effDest(s);
+  if (!siteAllows(s.site, eff)) return `${SITES[s.site].short} cannot launch to ${DESTINATIONS[eff].name}`;
+  if (pickPad(site, r.catch, s.day) < 0) {
+    if (r.catch && site.pads.length && !site.pads.some((p) => p.tower)) return 'Needs a catch tower on a pad (Sites tab)';
+    const soon = Math.min(...site.pads.filter((p) => !r.catch || p.tower).map((p) => p.busyUntil));
+    return `All pads busy: ${soon - s.day} day(s)`;
+  }
+  if (!r.catch && s.recovery === 'drone' && freeDroneship(s) < 0) return `No droneship free: ${Math.min(...s.droneships.map((d) => d.busyUntil)) - s.day} day(s)`;
 
   if (r.role === 'tanker') {
     if (!s.depot.built) return 'Needs a LEO depot first';
@@ -378,7 +665,7 @@ export function launchBlocker(s) {
       if (need > s.depot.prop) return `Depot propellant ${Math.floor(s.depot.prop)}/${need} t`;
     }
   }
-  if (s.cash < launchCost(s)) return 'Not enough cash for launch costs';
+  if (s.cash < launchCosts(s).total) return 'Not enough cash for launch costs';
   return null;
 }
 
@@ -388,16 +675,21 @@ export function launch(s) {
   if (reason) return { ok: false, reason };
   const r = rocketDef(s);
   const v = nextVehicle(s, s.rocket);
-  const pad = s.pads[freePad(s)];
+  const site = s.sites[s.site];
+  const pad = site.pads[pickPad(site, r.catch, s.day)];
   const destId = effDest(s);
   const d = DESTINATIONS[destId];
-  const cost = launchCost(s);
+  const rec = recoveryOf(s);
+  const costs = launchCosts(s);
+  const cost = costs.total;
+  // Propellant leaves the tanks whatever happens on ascent.
+  site.stock[costs.fuel.type] -= costs.fuel.fromTanks;
   s.cash -= cost;
   s.totalLaunches++;
   const failed = Math.random() < failChance(s, v);
 
   const trip = {
-    id: s.nextId++, serial: v.serial, type: s.rocket, role: r.role, dest: destId,
+    id: s.nextId++, serial: v.serial, type: s.rocket, role: r.role, dest: destId, site: s.site,
     launchDay: s.day, arriveDay: s.day + d.days, status: 'enroute', payout: 0, sats: 0, region: s.region,
   };
   if (r.role === 'module') {
@@ -424,13 +716,19 @@ export function launch(s) {
     pad.busyUntil = s.day + PAD_TURN;
     s.flightCounts[s.rocket] = (s.flightCounts[s.rocket] ?? 0) + 1;
     v.flights++;
-    if (r.role === 'depot' || r.role === 'module') {
-      s.fleet = s.fleet.filter((x) => x !== v); // single use
+    if (rec === 'drone') s.droneships[freeDroneship(s)].busyUntil = s.day + DRONESHIP_CYCLE;
+    if (r.role === 'depot' || r.role === 'module' || rec === 'expend') {
+      s.fleet = s.fleet.filter((x) => x !== v); // single use, or the booster was expended
     } else {
+      const bay = bestBay(site);
+      const start = Math.max(s.day + roundTripDays(destId) + (rec === 'drone' ? DRONE_TOW_DAYS : 0), bay.freeAt);
+      v.readyDay = start + refitDays(s);
+      bay.freeAt = v.readyDay;
       v.returnDay = s.day + (d.body === 'earth' ? d.days : d.days * 2);
-      v.readyDay = s.day + roundTripDays(destId) + turnaround(s);
+      v.site = s.site;
     }
-    note(s, `${v.serial} launched to ${d.name}, arrives day ${trip.arriveDay} (cost $${cost}M).`);
+    const how = rec === 'expend' ? ', booster expended' : rec === 'drone' ? ', droneship landing' : '';
+    note(s, `${v.serial} launched from ${SITES[s.site].short} to ${d.name}, arrives day ${trip.arriveDay}${how} (cost $${cost}M).`);
     if (s.rocket === 'behemoth') {
       const n = s.flightCounts.behemoth;
       note(s, `Behemoth test flight ${n} complete.${n === 3 ? ' Skyship qualification flights done.' : ''}`);
@@ -497,9 +795,10 @@ export function buyTech(s, id) {
   s.tech.add(id);
   note(s, `Research complete: ${t.name} (-$${t.cost}M).`);
   if (['hull', 'raptor', 'tiles'].includes(id) && rocketUnlocked(s, 'behemoth')) {
-    note(s, 'Behemoth Prototype unlocked. Fly 3 successful test flights to qualify the Skyship.');
+    note(s, 'Behemoth Prototype unlocked. It needs a pad with a catch tower: build one, or buy Boca Chica.');
   }
   if (id === 'skyship') note(s, 'Operational Skyship unlocked: 150 t, 3-day turnaround.');
+  if (id === 'plants') note(s, 'Propellant Plants unlocked: owned sites can make their own fuel.');
   if (id === 'tanker') note(s, 'Orbital Tanker unlocked. Build a Depot and Tanker Skyships, and the Moon opens up.');
   if (id === 'isru') note(s, 'Lunar logistics era reached. The Moon base is the next milestone (coming soon).');
   return true;
@@ -511,6 +810,7 @@ export function tick(s) {
   s.day++;
   for (const r of REGIONS) s.constellation[r.id] *= 1 - 1 / SAT_LIFE_DAYS;
   if (s.depot.built) s.depot.prop *= 1 - BOILOFF_PER_DAY;
+  tickMarket(s);
 
   for (const t of s.trips) if (t.status === 'enroute' && t.arriveDay <= s.day) arrive(s, t);
   tickBase(s, (m) => note(s, m));
@@ -523,13 +823,16 @@ export function tick(s) {
     }
   }
 
-  // Factory: each line works on one queued item.
-  for (const q of s.queue.slice(0, s.lines)) q.daysLeft--;
-  for (const q of s.queue.filter((x) => x.daysLeft <= 0)) {
-    const v = addVehicle(s, q.type);
-    note(s, `${v.serial} rolled out of the factory.`);
+  // Each site's factory: every line works on one queued item.
+  for (const site of Object.values(s.sites)) {
+    for (const q of site.queue.slice(0, site.lines)) q.daysLeft--;
+    for (const q of site.queue.filter((x) => x.daysLeft <= 0)) {
+      const v = addVehicle(s, q.type, site.id);
+      note(s, `${v.serial} rolled out of the ${SITES[site.id].short} factory.`);
+    }
+    site.queue = site.queue.filter((q) => q.daysLeft > 0);
   }
-  s.queue = s.queue.filter((q) => q.daysLeft > 0);
+  tickPlants(s);
 
   s.income = dailyRevenue(s);
   s.cash += s.income;
@@ -538,12 +841,13 @@ export function tick(s) {
 
   // Investors step in when the company can no longer fly anything.
   const p9 = ROCKETS.peregrine9;
-  const hasCargoHull = [...s.fleet, ...s.queue].some((x) => ROCKETS[x.type].role === 'payload');
-  if (!hasCargoHull && s.cash < p9.buildCost + CASH_FLOOR) {
-    s.cash = p9.buildCost + CASH_FLOOR;
+  const queued = Object.values(s.sites).flatMap((x) => x.queue);
+  const hasCargoHull = [...s.fleet, ...queued].some((x) => ROCKETS[x.type].role === 'payload');
+  if (!hasCargoHull && s.cash < p9.buildCost + CASH_FLOOR + 2) {
+    s.cash = p9.buildCost + CASH_FLOOR + 2;
     note(s, 'Investors wire emergency funding: queue a new Peregrine 9.');
   }
-  if (hasCargoHull && s.income < 0.05 && s.cash < p9.refurb + p9.ops && !activeTrips(s).length) {
+  if (hasCargoHull && s.income < 0.05 && s.cash < 2.5 && !activeTrips(s).length) {
     s.cash = CASH_FLOOR;
     note(s, 'Investors cover launch costs.');
   }

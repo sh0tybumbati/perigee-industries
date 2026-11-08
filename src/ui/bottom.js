@@ -88,7 +88,7 @@ export function renderDepotAndLog(ui, s) {
   if (!s.tech.has('tanker')) {
     ui.label(X, 558, 'Locked. Research Orbital Tanker.', { size: 13, color: COL.dimText });
   } else if (!s.depot.built) {
-    const queued = s.queue.some((q) => q.type === 'skyshipDepot') || s.trips.some((t) => t.role === 'depot' && t.status === 'enroute');
+    const queued = Object.values(s.sites).some((x) => x.queue.some((q) => q.type === 'skyshipDepot')) || s.trips.some((t) => t.role === 'depot' && t.status === 'enroute');
     ui.label(X, 558, queued ? 'Depot ship on its way.' : 'Not deployed. Build a Skyship Depot, then launch it.', { size: 13, color: COL.dimText });
   } else {
     const f = s.depot.prop / DEPOT_CAP;

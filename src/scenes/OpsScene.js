@@ -1,17 +1,17 @@
 import Phaser from 'phaser';
-import { BODIES, DESTINATIONS, REGIONS, DUCT_COST } from '../data.js';
+import { BODIES, DESTINATIONS, REGIONS, DUCT_COST, SITES } from '../data.js';
 import * as sim from '../sim.js';
 import * as B from '../base.js';
 import { MapLayer } from '../map/MapLayer.js';
 import { BaseLayer } from '../map/BaseLayer.js';
 import { COL, FONT, UI, hex } from '../ui/ui.js';
-import { renderMission, renderFleet, renderFactory, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
+import { renderMission, renderFleet, renderFactory, renderSites, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
 import { Lane, renderFlights, renderDepotAndLog } from '../ui/bottom.js';
 
 const SAVE_KEY = 'perigee-industries-save';
 const MAP = { x: 10, y: 90, w: 690, h: 432 };
 const DOCK = { x: 722, y: 98, w: 536 };
-const TABS = [['mission', 'Mission'], ['fleet', 'Fleet'], ['factory', 'Factory'], ['base', 'Base'], ['tech', 'R&D'], ['skylink', 'Skylink']];
+const TABS = [['mission', 'Mission'], ['fleet', 'Fleet'], ['factory', 'Factory'], ['sites', 'Sites'], ['base', 'Base'], ['tech', 'R&D'], ['skylink', 'Skylink']];
 const TICK_MS = 1200;
 
 export class OpsScene extends Phaser.Scene {
@@ -22,6 +22,8 @@ export class OpsScene extends Phaser.Scene {
     this.lastTickAt = 0;
     this.baseView = 'closed'; // closed | zooming | open
     this.baseSub = 'control';
+    this.factorySite = 'cape';
+    this.siteView = null;
     this.baseMode = { kind: 'idle', rot: 0 };
   }
 
@@ -32,6 +34,7 @@ export class OpsScene extends Phaser.Scene {
     this.map = new MapLayer(this, MAP, {
       getState: () => this.s,
       onSelect: (id) => this.act(() => this.selectDest(id)),
+      onSite: (id) => this.act(() => this.pickSite(id)),
       setHint: (t) => this.hint.setText(t),
     });
     this.base = new BaseLayer(this, MAP, {
@@ -206,6 +209,13 @@ export class OpsScene extends Phaser.Scene {
   }
 
   // ---- actions ------------------------------------------------------------
+  pickSite(id) {
+    if (sim.setSite(this.s, id)) { this.siteView = id; return; }
+    this.siteView = id;
+    this.tab = 'sites';
+    this.hint.setText(`${SITES[id].name} is closed: lease or buy it in the Sites tab.`);
+  }
+
   selectDest(id) {
     const s = this.s;
     if (!DESTINATIONS[id].locked || s.tech.has(DESTINATIONS[id].locked)) {
@@ -232,10 +242,21 @@ export class OpsScene extends Phaser.Scene {
       cycleRegion: () => { s.region = REGIONS[(REGIONS.findIndex((r) => r.id === s.region) + 1) % REGIONS.length].id; },
       pickRegion: (id) => { s.region = id; },
       buyPad: () => sim.buyPad(s),
-      buyLine: () => sim.buyLine(s),
-      queueBuild: (id) => sim.queueBuild(s, id),
-      cancelBuild: (id) => sim.cancelBuild(s, id),
+      buyLine: (id) => sim.buyLine(s, id),
+      queueBuild: (id, siteId) => sim.queueBuild(s, id, siteId),
+      cancelBuild: (siteId, id) => sim.cancelBuild(s, siteId, id),
       buyTech: (id) => sim.buyTech(s, id),
+      viewSite: (id) => { this.siteView = id; if (s.sites[id].status !== 'locked') sim.setSite(s, id); },
+      setSite: (id) => sim.setSite(s, id),
+      acquireSite: (id, mode) => sim.acquireSite(s, id, mode),
+      buyPad: (id) => sim.buyPad(s, id),
+      buildTower: (id, i) => sim.buildTower(s, id, i),
+      addBay: (id) => sim.addBay(s, id),
+      buyCommodity: (id, type, amt) => sim.buyCommodity(s, id, type, amt),
+      expandTank: (id, type) => sim.expandTank(s, id, type),
+      buildPlant: (id, fuel) => sim.buildPlant(s, id, fuel),
+      buyDroneship: () => sim.buyDroneship(s),
+      factorySite: (id) => { this.factorySite = id; },
       openBase: () => this.openBase(),
       closeBase: () => this.closeBase(),
       baseSub: (id) => { this.baseSub = id; },
@@ -269,8 +290,9 @@ export class OpsScene extends Phaser.Scene {
     this.renderDockTabs(ui);
     const { x, y, w } = DOCK;
     const actions = this.actions;
-    if (this.tab === 'base') renderBase(ui, s, x, y, w, actions, { mode: this.baseMode, sub: this.baseSub, view: this.baseView });
-    else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, tech: renderTech, skylink: renderSkylink })[this.tab](ui, s, x, y, w, actions);
+    const ctx = { mode: this.baseMode, sub: this.baseSub, view: this.baseView, factorySite: this.factorySite, siteView: this.siteView };
+    if (this.tab === 'base') renderBase(ui, s, x, y, w, actions, ctx);
+    else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink })[this.tab](ui, s, x, y, w, actions, ctx);
     renderFlights(ui, s);
     renderDepotAndLog(ui, s);
   }
@@ -315,8 +337,8 @@ export class OpsScene extends Phaser.Scene {
   renderDockTabs(ui) {
     TABS.forEach(([id, name], i) => {
       const on = this.tab === id;
-      ui.button(720 + i * 91, 63, 87, 24, name, () => { this.tab = id; }, {
-        size: 12, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent,
+      ui.button(720 + i * 78, 63, 74, 24, name, () => { this.tab = id; }, {
+        size: 11, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent,
       });
     });
   }

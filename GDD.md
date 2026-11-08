@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 0.3 (Pre-Alpha Spec: Moon base construction)
+Version: 0.4 (Pre-Alpha Spec: Earth sites, recovery and supply)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -50,6 +50,13 @@ Booster Recovery: After each launch, players choose landing trajectories (Drones
 20% total payload tonnage due to fuel reservation.
 
 Core Degradation: Every booster launch accumulates wear and tear. Players can spend cash/time to refurbish or decommission worn cores.
+
+Vehicle Classes: Boosters, Upper Stages and Recovery
+The Peregrine family is a two-stage rocket. Its first-stage booster is reusable, and its upper stage is expendable: every launch burns one (about $0.4M for the Peregrine 9, $0.8M for the Heavy). The Behemoth and the Skyship are different. They are the first vehicles with a reusable upper stage, and both stages are caught by the launch tower. A Skyship is also the one hull that can be its own payload (tanker, depot and Moon-base modules).
+Booster recovery has three modes for Peregrine launches:
+- RTLS (return to launch site): -20% payload, and the booster is back at the pad at once.
+- Droneship: full payload, but it needs a free droneship, which is out at sea and busy for 4 days, and the booster reaches its hangar 2 days later.
+- Expend: the booster is thrown away for +15% payload. The hull is lost and needs no refit.
 
 2.2 Broadband Constellation Network (Passive Income)
 Orbital Shells: Earth orbit is split into 4 distinct latitude/altitude shells (LEO Equatorial, LEO Polar, MEO, GEO).
@@ -204,6 +211,35 @@ The Moon as a launch point for Mars: lunar-made propellant and hulls make the Mo
 Direct to Mars: the player can also launch to Mars straight from Earth, with a longer transit, more propellant from Earth and higher risk.
 Mars sites then follow the same base-construction pattern as the Moon.
 
+2.10 Launch Sites, Infrastructure & Supply (Phase 5)
+The company no longer owns a generic pad. It uses launch sites, and a site is either leased or owned.
+
+Rent first, buy later: the company starts by leasing Pad 39A and a rented hangar at Cape Canaveral. Leasing keeps early capital free but costs a fee on every launch ($0.15M per leased launch) and every refit ($0.08M per rented hangar refit), and a leased site cannot expand. Buying a site removes the fees and lets it grow.
+
+| Site | Role | Pads | Acquire | Notes |
+| Cape Canaveral | Home site: LEO, GTO, lunar | 3 | Starts leased, buy for $60M | No polar or sun-synchronous launches (overflight rules) |
+| Vandenberg | The only polar and sun-synchronous launches | 2 | Lease for $15M, buy for $85M | LEO family only, and no factory |
+| Boca Chica (Starbase) | Super-heavy site | 2 | Buy for $120M | Pads come with catch towers. Catch vehicles (Behemoth, Skyship) cost 15% less and build 15% faster here |
+
+Leased site limits: 1 pad, up to 2 rented hangars, no towers, no plants, no extra factory lines.
+Owned site options: more pads ($25M and $40M for the 2nd and 3rd), up to 3 owned hangars ($15M each), catch towers ($40M per pad), tank expansion, propellant plants and factory lines.
+
+Pads: a pad launches one vehicle and then needs 2 days. A failed launch closes that pad for 14 days (28 for tower-catch vehicles). Behemoth and Skyship launches need a pad with a catch tower.
+
+Hangars (refit bays): after a flight, a hull needs a free hangar for its refit. With one hangar, only one hull refits at a time, so extra hulls wait. Hangars are the thing that limits a growing fleet, along with pads. A leased site rents a hangar for $3M and $0.08M per refit. An owned site buys one for $15M with no fee.
+
+Droneships: the company starts with one and can buy up to 3 ($20M each). Each can take one landing, then needs 4 days to return. Droneship landings add 2 days before the refit can start, in exchange for full payload.
+
+Commodities and the market: three commodities are traded in tonnes. Kerolox (RP-1/LOX) fuels the Peregrine family, methalox (CH4/LOX) fuels the Behemoth, the Skyship and tankers, and stainless steel is the raw material for hulls. Each has a spot price that drifts day to day (60% to 180% of its base price), so there are cheap and expensive periods.
+Each site has storage tanks and a steel yard with a capacity. Bulk purchases of up to the free capacity cost 10% less than spot. A launch draws its propellant from the site's tanks first, and any shortage is bought automatically at spot plus a 10% rush premium. Owned sites can expand their storage.
+Launch cost breakdown: propellant (from the tanks, or bought), the expended upper stage, refurbishment parts, operations, the pad lease fee, the hangar fee and the droneship fee. The breakdown is shown before launching.
+
+Plants: with the Propellant Plants tech, an owned site can build kerolox and methalox plants (3 levels each, $25M per level, 40 t per day per level). A plant fills the site's tanks at about 30% of the spot price, so it pays for itself on fuel-hungry fleets.
+
+Factory sites: each site with a factory has its own production lines and queue. Hulls are built at a chosen factory site and consume steel from that site's yard (the shortage is bought at spot plus the rush premium). Hulls can launch from any site.
+
+Why this matters: fuel, pads, hangars and factories all become real capacity limits and real investments. The growth path is rent, then buy, then expand: more hulls need more hangars, more hangars need more pads, and a bigger fleet needs cheaper fuel from its own plants.
+
 3. Technology Tree
                       [ PEREGRINE ERA ]
                               │
@@ -253,6 +289,6 @@ Visual Style: Vector-based 2D flat isometric UI with clean line art, high-contra
 Audio Direction: Synthesized Web Audio soundtrack featuring ambient synth-wave music during planning phases and punchy, low-frequency sound effects for rocket engine ignition, stage separation, and docking confirmation.
 
 6. Implementation Status
-Built: Earth operations, contract board, manifest stacking, Skylink constellation and revenue, R&D tree, LEO depot, save/load, fleet, pads, factory queue, destinations, Earth/Moon/Mars map with flight trails.
-This phase (4a): module ships, base founding, zoom to the base view, module placement, ducts, power and crew networks, construction drones and burial, radiation events, smelters, stockpile sales, local module fabrication.
+Built: Earth operations, contract board, manifest stacking, Skylink constellation and revenue, R&D tree, LEO depot, save/load, fleet, factory queue, destinations, Earth/Moon/Mars map with flight trails, Moon base (module ships, base view, ducts, burial drones, smelters, local fabrication).
+This phase (5): launch sites (lease or own), hangars, droneships and expendable recovery, upper stages, the fuel and steel market, tanks, propellant plants, site factories.
 Next (4b): ice mining and lunar propellant, ships built on the Moon, Mars Transfer, direct-to-Mars flights, Mars bases, Web Audio.

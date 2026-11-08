@@ -3,14 +3,17 @@ import assert from 'node:assert/strict';
 import * as sim from '../src/sim.js';
 import { DEPOT_CAP, TANKER_LOAD, PAD_TURN, ROCKETS } from '../src/data.js';
 
+const cape = (s) => s.sites.cape;
+
 const ALL = ['fastCores', 'gen1', 'heavyCores', 'hull', 'raptor', 'tiles', 'skyship', 'tanker'];
 const rich = (...tech) => {
   const s = sim.createState();
   for (const t of tech) s.tech.add(t);
   s.cash = 1000;
+  cape(s).pads.forEach((p) => { p.tower = true; }); // so catch vehicles can fly in tests
   return s;
 };
-const give = (s, type, n = 1) => { for (let i = 0; i < n; i++) sim.queueBuild(s, type); for (let i = 0; i < 40 && s.queue.length; i++) sim.tick(s); };
+const give = (s, type, n = 1) => { for (let i = 0; i < n; i++) sim.queueBuild(s, type); for (let i = 0; i < 60 && cape(s).queue.length; i++) sim.tick(s); };
 const withMock = (value, fn) => {
   const real = Math.random;
   Math.random = () => value;
@@ -70,7 +73,8 @@ test('hulls are individual: refit blocks reuse, a second hull flies at once', ()
   const s = rich();
   give(s, 'peregrine9');
   assert.equal(sim.fleetOf(s, 'peregrine9').length, 2);
-  s.pads.push({ busyUntil: 0 });
+  cape(s).pads.push({ name: 'x', tower: true, busyUntil: 0 });
+  cape(s).bays.push({ tenure: 'owned', freeAt: 0 });
   for (let i = 0; i < 2; i++) {
     const c = contract(s, {});
     s.manifest = [c.id];
@@ -91,7 +95,7 @@ test('pads gate launches per day and fail-close for repairs', () => {
   idle(s, PAD_TURN);
   assert.equal(sim.launchBlocker(s), null);
   withMock(0, () => sim.launch(s)); // failure
-  assert.ok(s.pads[0].busyUntil - s.day >= 14);
+  assert.ok(cape(s).pads[0].busyUntil - s.day >= 14);
 });
 
 test('a failed launch destroys the hull and the payload', () => {
@@ -125,15 +129,17 @@ test('factory: parallel lines, upfront cost, 50% refund only before work starts'
   assert.equal(s.cash, start - 24);
   idle(s, 9);
   assert.equal(sim.fleetOf(s, 'peregrine9').length, 2, 'first rolls out after 8 days');
-  assert.equal(s.queue.length, 1);
-  assert.equal(sim.cancelBuild(s, s.queue[0].id), false, 'work already started');
+  assert.equal(cape(s).queue.length, 1);
+  assert.equal(sim.cancelBuild(s, 'cape', cape(s).queue[0].id), false, 'work already started');
   const q2 = sim.queueBuild(s, 'peregrine9');
   assert.ok(q2);
+  assert.equal(sim.buyLine(s), false, 'a leased site cannot add lines');
+  cape(s).status = 'owned';
   assert.equal(sim.buyLine(s), true);
-  assert.equal(s.lines, 2);
-  const waiting = s.queue.find((q) => q.daysLeft === q.total);
+  assert.equal(cape(s).lines, 2);
+  const waiting = cape(s).queue.find((q) => q.daysLeft === q.total);
   const cash = s.cash;
-  assert.equal(sim.cancelBuild(s, waiting.id), true);
+  assert.equal(sim.cancelBuild(s, 'cape', waiting.id), true);
   assert.equal(s.cash, cash + 6);
 });
 
@@ -174,7 +180,7 @@ test('tower-catch vehicles ignore recovery penalties', () => {
   sim.setRocket(s, 'skyship');
   s.recovery = 'rtls';
   assert.equal(sim.capacity(s).mass, 150);
-  assert.equal(sim.turnaround(s), 3);
+  assert.equal(sim.refitDays(s), 3);
 });
 
 test('manifests hold one destination: contracts follow the map selection', () => {
