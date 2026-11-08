@@ -1,5 +1,12 @@
 // Static game data, taken from GDD sections 2.1-2.2 and 3.
 
+function modShip(name, short, code, module, requires, buildCost, buildDays) {
+  return {
+    name, short, code, role: 'module', module, shipMass: 80, payload: 0, volume: 0, turnaround: 3, refurb: 0, ops: 3.5, sats: 0,
+    requires, coreLife: 1, buildCost, buildDays, baseRisk: 0.04, wearRisk: 0, catch: true,
+  };
+}
+
 // role: 'payload' carries contracts and satellites; 'tanker' fills the LEO depot; 'depot' becomes the depot (single use).
 export const ROCKETS = {
   peregrine9: {
@@ -27,14 +34,13 @@ export const ROCKETS = {
     name: 'Skyship Depot', short: 'Depot', code: 'DPT', role: 'depot', payload: 0, volume: 0, turnaround: 3, refurb: 0, ops: 3.5, sats: 0,
     requires: ['tanker'], coreLife: 1, buildCost: 75, buildDays: 30, baseRisk: 0.03, wearRisk: 0, catch: true,
   },
+  // Module ships are single use: the hull lands at the base site and becomes a base module lying on its side.
+  modHab: modShip('Habitat Skyship', 'Habitat', 'HAB', 'habitat', ['habitat'], 80, 30),
+  modReactor: modShip('Reactor Skyship', 'Reactor', 'RCT', 'reactor', ['habitat'], 90, 34),
+  modDrones: modShip('Drone Bay Skyship', 'Drone Bay', 'DRN', 'drones', ['habitat'], 70, 26),
+  modSmelter: modShip('Smelter Skyship', 'Smelter', 'SML', 'smelter', ['isru'], 85, 32),
+  modFab: modShip('Fabricator Skyship', 'Fabricator', 'FAB', 'fab', ['isru'], 100, 36),
 };
-
-// Moon-base ship variants, shown locked in the factory until that phase is built.
-export const FUTURE_VARIANTS = [
-  { name: 'Habitat Skyship', tech: 'habitat' },
-  { name: 'Reactor Skyship', tech: 'habitat' },
-  { name: 'ISRU Skyship', tech: 'isru' },
-];
 
 export const PAD_NAMES = ['Pad 39A', 'Pad 39B', 'SLC-40'];
 export const PAD_COSTS = [0, 25, 40]; // $M to buy the 1st (free), 2nd and 3rd pad
@@ -120,3 +126,37 @@ export const TECH = [
   { id: 'isru', name: 'Lunar ISRU Mining', cost: 1200, era: 'Lunar', desc: 'Lunar base (coming soon)', requires: ['skyship'] },
   { id: 'marsTransit', name: 'Mars Transfer Vehicle', cost: 2000, era: 'Mars', desc: 'Mars orbit and landing sites (coming soon)', requires: ['isru', 'habitat'] },
 ];
+
+// ---- Lunar base (GDD 2.8) ----------------------------------------------------
+// len: tiles along the tube. power: MW (positive makes power). need: crew to run it. cover: tonnes of regolith to bury it.
+export const MODULES = {
+  habitat: { name: 'Habitat', len: 5, power: -0.15, need: 0, crew: 6, cover: 30, color: 0xdfe6f2, blurb: 'Houses 6 crew.' },
+  reactor: { name: 'Reactor', len: 4, power: 1.0, need: 0, cover: 30, color: 0xf0a35a, blurb: 'Fission power: 1.0 MW.' },
+  drones: { name: 'Drone Bay', len: 3, power: -0.2, need: 1, drones: 4, cover: 20, color: 0x8fd18f, blurb: 'Houses 4 construction drones.' },
+  smelter: { name: 'Smelter', len: 5, power: -0.5, need: 2, cover: 30, color: 0x9fb0c8, blurb: 'Makes oxygen, iron and silica from regolith.' },
+  fab: { name: 'Fabricator', len: 5, power: -0.3, need: 2, cover: 30, color: 0xe8d36a, blurb: 'Builds modules from local materials.' },
+};
+export const BASE_W = 48; // grid size in tiles (one tile is about 10 m)
+export const BASE_H = 30;
+export const DUCT_COST = 1.5; // $M each, shipped from Earth
+export const DUCT_MAX = 10; // tiles
+export const DRONE_RATE = 0.6; // tonnes of regolith moved per drone per day
+export const SMELTER_REGOLITH = 2; // t of regolith per day at full output
+export const SMELTER_OUT = { oxygen: 3, iron: 1.2, silica: 2 }; // t per day at full output
+export const STOCK_PRICES = { oxygen: 0.1, iron: 0.24, silica: 0.08 }; // $M per tonne
+export const STOCK_KEEP = { oxygen: 40, iron: 120, silica: 80 }; // surplus selling leaves this much
+export const SPE_CHANCE = 1 / 50; // solar particle event chance per day
+export const CREW_DEATH_COST = 5; // $M
+export const CREW_REPLACE_COST = 1; // $M
+export const DRONE_POLICIES = {
+  bury: { name: 'Bury', dig: 0.5, place: 0.5, hint: 'Modules first: half dig, half place.' },
+  balanced: { name: 'Balanced', dig: 0.75, place: 0.25, hint: 'Mostly dig, so smelters stay fed, with some burying.' },
+  mine: { name: 'Mine', dig: 1, place: 0, hint: 'All digging: build up regolith for smelters.' },
+};
+// What the Fabricator needs to build a module on the Moon, with the imported components paid in cash ($M).
+export const LOCAL_RECIPES = {
+  habitat: { iron: 80, silica: 50, oxygen: 20, cash: 18, days: 20 },
+  reactor: { iron: 60, silica: 20, oxygen: 10, cash: 45, days: 25 },
+  drones: { iron: 40, silica: 15, oxygen: 5, cash: 20, days: 12 },
+  smelter: { iron: 70, silica: 40, oxygen: 10, cash: 25, days: 20 },
+};

@@ -7,11 +7,12 @@ import {
   PAD_COSTS, PAD_TURN, PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND,
   DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS,
 } from './data.js';
+import { createBase, tickBase } from './base.js';
 
 export { OVERHEAD_PER_DAY };
 export const SAT_BATCH = 6;
 export const REVENUE_SCALE = 0.3;
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 const MAX_TRIPS = 80;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -43,6 +44,7 @@ export function createState() {
     region: 'na',
     constellation: Object.fromEntries(REGIONS.map((r) => [r.id, 0])),
     depot: { built: false, prop: 0 },
+    base: null, // the lunar base, founded by the first module ship to land
     tech: new Set(),
     log: [],
     totalLaunches: 0,
@@ -75,6 +77,7 @@ export function deserialize(json) {
       o.v = 2;
     }
     if (o.v === 2) return migrateV2(o);
+    if (o.v === 3) o.v = 4; // v4 only adds the lunar base
     if (o.v !== SAVE_VERSION) return null;
     const base = createState();
     const s = { ...base, ...o, tech: new Set(Array.isArray(o.tech) ? o.tech : []) };
@@ -84,6 +87,7 @@ export function deserialize(json) {
     s.flightCounts = { ...o.flightCounts };
     s.serials = { ...o.serials };
     for (const k of ['fleet', 'pads', 'queue', 'trips', 'contracts', 'manifest']) if (!Array.isArray(s[k])) s[k] = base[k];
+    s.base = s.base && Array.isArray(s.base.modules) ? { ...createBase(s.base.site), ...s.base, stock: { ...createBase('').stock, ...s.base.stock } } : null;
     s.fleet = s.fleet.filter((v) => ROCKETS[v.type]);
     s.queue = s.queue.filter((q) => ROCKETS[q.type]);
     if (!s.pads.length) s.pads = base.pads;
@@ -126,7 +130,7 @@ export const isLunar = (id) => DESTINATIONS[id].body === 'moon';
 export const roundTripDays = (id) => (DESTINATIONS[id].body === 'earth' ? 0 : DESTINATIONS[id].days * 2);
 
 // Tankers and depot ships always work in LEO, whatever is selected on the map.
-export const effDest = (s) => (rocketDef(s).role === 'payload' ? s.dest : 'leo');
+export const effDest = (s) => (['payload', 'module'].includes(rocketDef(s).role) ? s.dest : 'leo');
 
 export function setDest(s, id) {
   if (!DESTINATIONS[id] || !destUnlocked(s, id)) return false;
@@ -308,6 +312,9 @@ export function manifestTotals(s) {
   return { mass: +mass.toFixed(2), volume: +volume.toFixed(1), payout: +payout.toFixed(1) };
 }
 
+// Depot propellant a module ship burns on its way to the selected site.
+export const modulePropNeed = (s) => Math.ceil((rocketDef(s).shipMass ?? 0) * DESTINATIONS[s.dest].prop);
+
 export const tliNeed = (s) => s.contracts.reduce((n, c) => n + (s.manifest.includes(c.id) && c.prop ? c.prop : 0), 0);
 
 export function adjustSats(s, delta) {
@@ -349,6 +356,12 @@ export function launchBlocker(s) {
     if (s.depot.prop >= DEPOT_CAP) return 'Depot is full';
   } else if (r.role === 'depot') {
     if (s.depot.built) return 'Depot already deployed';
+  } else if (r.role === 'module') {
+    const d = DESTINATIONS[s.dest];
+    if (d.body !== 'moon' || d.kind !== 'site') return 'Module ships land at a Moon site';
+    if (s.base && s.base.site !== s.dest) return `Your base is at ${DESTINATIONS[s.base.site].name}`;
+    if (!s.depot.built) return 'Lunar flights need a LEO depot';
+    if (modulePropNeed(s) > s.depot.prop) return `Depot propellant ${Math.floor(s.depot.prop)}/${modulePropNeed(s)} t`;
   } else {
     const d = DESTINATIONS[s.dest];
     const t = manifestTotals(s);
@@ -387,6 +400,10 @@ export function launch(s) {
     id: s.nextId++, serial: v.serial, type: s.rocket, role: r.role, dest: destId,
     launchDay: s.day, arriveDay: s.day + d.days, status: 'enroute', payout: 0, sats: 0, region: s.region,
   };
+  if (r.role === 'module') {
+    trip.module = r.module;
+    if (!failed) s.depot.prop -= modulePropNeed(s);
+  }
   if (r.role === 'payload') {
     const t = manifestTotals(s);
     trip.payout = t.payout;
@@ -407,7 +424,7 @@ export function launch(s) {
     pad.busyUntil = s.day + PAD_TURN;
     s.flightCounts[s.rocket] = (s.flightCounts[s.rocket] ?? 0) + 1;
     v.flights++;
-    if (r.role === 'depot') {
+    if (r.role === 'depot' || r.role === 'module') {
       s.fleet = s.fleet.filter((x) => x !== v); // single use
     } else {
       v.returnDay = s.day + (d.body === 'earth' ? d.days : d.days * 2);
@@ -440,6 +457,13 @@ function arrive(s, trip) {
     if (trip.payout) bits.push(`+$${trip.payout}M`);
     if (trip.sats) bits.push(`${trip.sats} Skylink sats to ${region.name}`);
     note(s, `${trip.serial} arrived at ${d.name}.${bits.length ? ` ${bits.join(', ')}.` : ''}`);
+  } else if (trip.role === 'module') {
+    if (!s.base) {
+      s.base = createBase(trip.dest);
+      note(s, `${d.name} chosen as the base site.`);
+    }
+    s.base.pending.push({ id: s.base.nextId++, type: trip.module });
+    note(s, `${trip.serial} landed at ${d.name}: open the Base view to place the module.`);
   } else if (trip.role === 'tanker') {
     s.depot.prop = Math.min(DEPOT_CAP, s.depot.prop + TANKER_LOAD);
     note(s, `${trip.serial} delivered ${TANKER_LOAD} t. Depot: ${Math.round(s.depot.prop)}/${DEPOT_CAP} t.`);
@@ -489,6 +513,7 @@ export function tick(s) {
   if (s.depot.built) s.depot.prop *= 1 - BOILOFF_PER_DAY;
 
   for (const t of s.trips) if (t.status === 'enroute' && t.arriveDay <= s.day) arrive(s, t);
+  tickBase(s, (m) => note(s, m));
 
   // Hulls past their rated flights retire once their last refit is done.
   for (const v of [...s.fleet]) {

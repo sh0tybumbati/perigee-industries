@@ -1,6 +1,6 @@
 // The map view: a 3D planet with 2D orbit rings, landing-site pins, and dashed flight trails drawn on top.
 import * as THREE from 'three';
-import { Globe, ringPoints, ringAnchor, surfacePoint } from './globe.js';
+import { Globe, ringPoints, ringAnchor, surfacePoint, CAM_DIST } from './globe.js';
 import { DESTINATIONS, LAUNCH_SITE } from '../data.js';
 import * as sim from '../sim.js';
 import { COL, FONT, hex } from '../ui/ui.js';
@@ -67,6 +67,9 @@ export class MapLayer {
     this.bodyId = null;
     this.lastTripId = 0;
     this.pulse = null;
+    this.zoom = null; // active zoom animation
+    this.overlays = true; // rings, trails and pins hide while zoomed in
+    this.active = true;
     this.capeLabel = scene.add.text(0, 0, LAUNCH_SITE.name, { fontFamily: FONT, fontSize: 11, color: '#cfe6ff', stroke: '#05070d', strokeThickness: 3 });
     this.capeLabel.setMask(this.mask);
     this.zone = scene.add.zone(rect.x, rect.y, rect.w, rect.h).setOrigin(0).setInteractive({ useHandCursor: true });
@@ -111,6 +114,42 @@ export class MapLayer {
       hit.on('pointerout', () => this.setHint(''));
       this.pins[id] = { dot, hit, label };
     }
+  }
+
+  // Dolly in to a landing site over `ms`, then call done. progress(p) reports 0..1 for fades.
+  zoomIn(destId, done, progress) {
+    const d = DESTINATIONS[destId];
+    this.globe.faceTo(d.lat, d.lon);
+    this.zoom = { from: this.globe.dist, to: 1.18, t: 0, ms: 1300, done, progress };
+  }
+
+  zoomOut(done, progress) {
+    this.zoom = { from: this.globe.dist, to: CAM_DIST, t: 0, ms: 1000, done, progress };
+  }
+
+  resetZoom() {
+    this.zoom = null;
+    this.globe.setDist(CAM_DIST);
+    this.setActive(true);
+  }
+
+  setActive(on) {
+    this.active = on;
+    this.image.setVisible(on);
+    this.zone.input.enabled = on;
+    this.g.setVisible(on);
+    if (!on) this.setOverlays(false);
+    else this.overlays = null; // the next frame decides whether pins and labels show
+  }
+
+  stepZoom(dtMs) {
+    const z = this.zoom;
+    if (!z) return;
+    z.t = Math.min(1, z.t + dtMs / z.ms);
+    const e = z.t * z.t * (3 - 2 * z.t);
+    this.globe.setDist(z.from + (z.to - z.from) * e);
+    z.progress?.(z.t);
+    if (z.t >= 1) { this.zoom = null; z.done?.(); }
   }
 
   // Turn the planet toward a destination (sites only; rings are visible from anywhere).
@@ -183,6 +222,8 @@ export class MapLayer {
   update(dtMs, dayFrac) {
     const s = this.getState();
     const { rect, g, globe } = this;
+    this.stepZoom(dtMs);
+    if (!this.active) return;
     globe.update(dtMs);
     globe.render();
     this.tex.refresh();
@@ -193,9 +234,19 @@ export class MapLayer {
     const cy = rect.y + rect.h / 2;
     g.lineStyle(1, 0x2a3a5e, 0.5).strokeCircle(cx, cy, globe.planetRadiusPx + 1);
 
+    const show = globe.dist > CAM_DIST - 0.05;
+    if (show !== this.overlays) this.setOverlays(show);
+    if (!show) return;
     this.drawRings(s);
     this.drawTrips(s, dayFrac);
     this.updatePins(s);
+  }
+
+  setOverlays(on) {
+    this.overlays = on;
+    for (const p of Object.values(this.pins)) { p.dot.setVisible(on); p.label.setVisible(on); p.hit.input.enabled = on; }
+    this.capeLabel.setVisible(false);
+    for (const t of this.markerTexts ?? []) t.setVisible(false);
   }
 
   drawRings(s) {

@@ -3,13 +3,12 @@
 import * as THREE from 'three';
 import { makeEarth, makeMoon, makeMars } from './textures.js';
 
-export const CAM_DIST = 3.6;
+export const CAM_DIST = 3.6; // default camera distance in planet radii
 export const FOV = 38;
 const DEG = Math.PI / 180;
 const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
-const CAMERA = new THREE.Vector3(0, 0, CAM_DIST);
 
 // lat/lon to a point on a sphere, matching how three's SphereGeometry wraps an equirectangular map.
 export function surfacePoint(lat, lon, r = 1) {
@@ -72,7 +71,9 @@ export class Globe {
     this.renderer.setSize(width, height);
     this.renderer.setClearColor(0x000000, 0);
     this.camera = new THREE.PerspectiveCamera(FOV, width / height, 0.1, 50);
-    this.camera.position.copy(CAMERA);
+    this.dist = CAM_DIST;
+    this.cam = new THREE.Vector3(0, 0, CAM_DIST);
+    this.camera.position.copy(this.cam);
     this.camera.lookAt(0, 0, 0);
     this.view = document.createElement('canvas'); // 2D copy that Phaser can upload as a texture
     this.view.width = width;
@@ -103,6 +104,14 @@ export class Globe {
 
   setBody(id) {
     this.body = this.ensure(id);
+  }
+
+  // Dolly the camera toward or away from the planet (used for the zoom into a base site).
+  setDist(d) {
+    this.dist = d;
+    this.cam.set(0, 0, d);
+    this.camera.position.copy(this.cam);
+    this.camera.lookAt(0, 0, 0);
   }
 
   rotate(dx, dy) {
@@ -138,17 +147,17 @@ export class Globe {
 
   // World point to pixels inside the globe view. `hidden` is true when the planet blocks the camera's view of it.
   project(w) {
-    const dz = CAM_DIST - w.z;
+    const dz = this.dist - w.z;
     const x = this.width / 2 + (w.x / dz / (this.tanHalf * (this.width / this.height))) * (this.width / 2);
     const y = this.height / 2 - (w.y / dz / this.tanHalf) * (this.height / 2);
     return { x, y, hidden: dz <= 0.05 || this.occluded(w) };
   }
 
   occluded(w) {
-    const d = w.clone().sub(CAMERA);
+    const d = w.clone().sub(this.cam);
     const a = d.dot(d);
-    const b = 2 * CAMERA.dot(d);
-    const c = CAMERA.dot(CAMERA) - 0.995;
+    const b = 2 * this.cam.dot(d);
+    const c = this.cam.dot(this.cam) - 0.995;
     const disc = b * b - 4 * a * c;
     if (disc <= 0) return false;
     const t = (-b - Math.sqrt(disc)) / (2 * a);
@@ -156,6 +165,6 @@ export class Globe {
   }
 
   get planetRadiusPx() {
-    return (Math.tan(Math.asin(1 / CAM_DIST)) / this.tanHalf) * (this.height / 2);
+    return (Math.tan(Math.asin(1 / this.dist)) / this.tanHalf) * (this.height / 2);
   }
 }

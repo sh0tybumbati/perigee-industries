@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 0.2 (Pre-Alpha Spec: fleet, production and map interface)
+Version: 0.3 (Pre-Alpha Spec: Moon base construction)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -166,8 +166,43 @@ Active flights are 2D pins with a dashed trail from the launch site (or the arri
 Past flights stay on the map as faded dashed lines, so the history of the company's flights is readable at a glance. Lost flights are drawn in red.
 A transit lane along the bottom shows flights that are between bodies, with their arrival times.
 
-2.7 Contracts vs. Building the Base (Moon-base phase, planned)
+2.7 Contracts vs. Building the Base
 The central tension of the game: the same Skyship capacity can carry a paying customer's payload or the company's own base modules. Customer contracts fund the base, and every flight spent on the base is a flight not earning money. Base modules are delivered to a chosen landing site on the Moon map, and the base is built up there following the dependencies in 2.4. Mars follows the same pattern after the Mars Transfer tech.
+
+2.8 Lunar Base Construction (Phase 4a)
+Choosing the site: the first module ship the player launches to a Moon landing site founds the base there. Every later module ship must land at that same site. Sites differ in terrain and in the contracts and propellant economics around them.
+
+Zooming in: when a module arrives, the Moon map offers a Base button. Pressing it turns the Moon model to the site and zooms the camera in, then fades to the close-up base grid. A back button zooms out again.
+
+Modules are starships on their sides: each module is a Skyship hull built in the factory, flown to the site (burning depot propellant like any lunar cargo), and delivered as a pending module. The player places it on the base grid as a horizontal or vertical tube.
+
+| Module | Role | Power | Crew needed | Notes |
+| Habitat | Houses 6 crew | uses 0.15 MW | 0 | The place crew live and breathe |
+| Reactor | Fission power | makes 1.0 MW | 0 | Powers everything in its connected network |
+| Drone Bay | Houses 4 construction drones | uses 0.2 MW | 1 | Drones dig regolith and bury modules |
+| Smelter | Makes oxygen, iron and silica from regolith | uses 0.5 MW | 2 | Eats 2 t of regolith per day at full output |
+| Fabricator | Builds new modules on the Moon from local materials | uses 0.3 MW | 2 | Needs smelter output and imported components |
+
+Ducts: each module has a port at each end. Rubber ducts connect ports on different modules (an Earth-supplied part, $1.5M each, up to 10 tiles long). Only connected modules form a network. Power and crew are shared inside a network and not across separate ones. A module that is not connected to a reactor has no power.
+
+Power and staffing: each network balances reactor output against its demand, and when demand is higher everything in it runs at a reduced rate. Smelters, drone bays and the fabricator need crew from a habitat in the same network, and without enough crew they run at a reduced rate. A habitat with no power loses crew.
+
+Construction drones and burial: drones dig regolith from the surface (leaving visible pits) and place it over modules. Each module has a burial level from 0 to 100%, and a Habitat needs about 30 t of regolith to be fully buried (a Drone Bay needs 20 t). The player sets a drone focus: Bury (modules first), Mine (feed the smelters) or Balanced.
+
+Radiation: solar particle events strike about once every 50 days with varying severity. Crew in habitats are lost with a probability that falls sharply with burial, so an unburied habitat is a real risk. Each lost crew member costs $5M, and replacements cost $1M each. Burying habitats first is the central early-game decision.
+
+Smelters and stockpile: the base keeps a stockpile of regolith, oxygen, iron and silica. The player can sell surplus above a reserve (oxygen $0.10M per t, iron $0.24M per t, silica $0.08M per t) or keep it for local construction.
+
+Local construction: a powered, staffed Fabricator can build Habitat, Reactor, Smelter and Drone Bay modules on the Moon. Each recipe uses stockpiled iron, silica and oxygen plus a smaller cash cost for imported components. The finished module appears as a pending module ready to place. This is how the base grows without paying Earth launch and propellant costs.
+
+The tension: every module ship competes with customer contracts for depot propellant, Skyship pad time and cash. Customers pay for deliveries now, and the base only pays back once smelters and the Fabricator are running.
+
+2.9 Lunar Industry and Mars (Phase 4b, planned)
+Ice mining and propellant: water ice from Shackleton gives lunar-made methane and oxygen propellant, so ships can refuel on the Moon.
+Ships built on the Moon: iron, silica and oxygen plus imported engines become Skyship hulls built at the base.
+The Moon as a launch point for Mars: lunar-made propellant and hulls make the Moon the cheapest departure point for Mars.
+Direct to Mars: the player can also launch to Mars straight from Earth, with a longer transit, more propellant from Earth and higher risk.
+Mars sites then follow the same base-construction pattern as the Moon.
 
 3. Technology Tree
                       [ PEREGRINE ERA ]
@@ -211,13 +246,13 @@ The primary screen is the map view, with a docked control panel and a bottom str
 
 Map layers: the 3D planet model (Three.js, rendered to a texture inside Phaser), 2D pins and labels, and 2D dashed flight trails. Pins on the back of the planet are hidden.
 Dock tabs: Mission (planning and launch), Fleet (hulls and pads), Factory (queue and lines), R&D (tech tree), Skylink (regional coverage and satellite target).
-Later phase: a Lunar Outpost view for the isometric base grid at the selected landing site.
+Base view: once a base exists the Moon tab gains a Base button. It zooms the 3D Moon into the landing site and fades to a top-down grid of the base, where modules are drawn as tubes, ducts as ribbed hoses, buried modules under regolith and drones moving between pits and modules. A Base tab in the dock shows power, crew, stockpile, pending modules, drone focus and the Fabricator queue.
 5. Sound & Visual Style Guide
 Visual Style: Vector-based 2D flat isometric UI with clean line art, high-contrast HUD overlays, and subtle particle telemetry effects for launches.
 
 Audio Direction: Synthesized Web Audio soundtrack featuring ambient synth-wave music during planning phases and punchy, low-frequency sound effects for rocket engine ignition, stage separation, and docking confirmation.
 
 6. Implementation Status
-Built: Earth operations, contract board, manifest stacking, Skylink constellation and revenue, R&D tree through the Operational Skyship and Orbital Tanker, LEO depot, save/load.
-This phase: fleet inventory, pads, factory queue, destinations, Earth/Moon/Mars map interface with flight trails.
-Next: Moon base modules (habitat, reactor, ISRU), contracts-vs-base tension, Mars Transfer and Mars sites, Web Audio.
+Built: Earth operations, contract board, manifest stacking, Skylink constellation and revenue, R&D tree, LEO depot, save/load, fleet, pads, factory queue, destinations, Earth/Moon/Mars map with flight trails.
+This phase (4a): module ships, base founding, zoom to the base view, module placement, ducts, power and crew networks, construction drones and burial, radiation events, smelters, stockpile sales, local module fabrication.
+Next (4b): ice mining and lunar propellant, ships built on the Moon, Mars Transfer, direct-to-Mars flights, Mars bases, Web Audio.
