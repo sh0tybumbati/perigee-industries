@@ -10,16 +10,17 @@ function modShip(name, short, code, module, requires, buildCost, buildDays) {
 
 // role: 'payload' carries contracts and satellites; 'tanker' fills the LEO depot; 'depot' becomes the depot (single use).
 // fuel: propellant burned per launch. stage: cost of the expendable upper stage (0 when the upper stage is reusable).
-// refurb: refurbishment parts per flight. ops: crew, range and insurance. steel: tonnes of steel to build a hull.
+// refurb: refurbishment parts per flight. ops: crew, range and insurance. steel: tonnes of metal to build a hull
+// (stainless steel, or aluminum-lithium when metal is 'aluminum').
 export const ROCKETS = {
   peregrine9: {
     name: 'Peregrine 9', short: 'Peregrine 9', code: 'P9', role: 'payload', payload: 22, volume: 60, turnaround: 7, refurb: 0.2, ops: 0.1, sats: 24,
-    fuel: { type: 'kerolox', t: 50 }, stage: 0.4, steel: 50,
-    requires: [], coreLife: 10, buildCost: 12, buildDays: 8, baseRisk: 0.01, wearRisk: 0.004,
+    fuel: { type: 'kerolox', t: 50 }, stage: 0.4, steel: 30, metal: 'aluminum',
+    requires: [], coreLife: 10, buildCost: 3, buildDays: 8, baseRisk: 0.01, wearRisk: 0.004,
   },
   peregrineHeavy: {
     name: 'Peregrine Heavy', short: 'Heavy', code: 'PH', role: 'payload', payload: 64, volume: 140, turnaround: 14, refurb: 0.6, ops: 0.3, sats: 24,
-    fuel: { type: 'kerolox', t: 150 }, stage: 0.8, steel: 150,
+    fuel: { type: 'kerolox', t: 150 }, stage: 0.8, steel: 150, metal: 'aluminum',
     requires: ['heavyCores'], coreLife: 10, buildCost: 25, buildDays: 16, baseRisk: 0.015, wearRisk: 0.004,
   },
   // Prototype: risky until a few test flights have been flown. Both stages are caught by the tower.
@@ -100,14 +101,15 @@ export const COMMODITIES = {
   kerolox: { name: 'Kerolox (RP-1/LOX)', price: 0.008 },
   methalox: { name: 'Methalox (CH4/LOX)', price: 0.004 },
   steel: { name: 'Stainless steel', price: 0.012 },
+  aluminum: { name: 'Aluminum-lithium', price: 0.035, vol: 0.2 },
 };
 export const MARKET_MIN = 0.6;
 export const MARKET_MAX = 1.8;
 export const BULK_DISCOUNT = 0.9; // buying into tanks beats spot by 10%
 export const RUSH_PREMIUM = 1.1; // shortages at launch or build time cost 10% over spot
-export const START_CAPS = { kerolox: 200, methalox: 400, steel: 400 };
-export const START_STOCK = { kerolox: 100, methalox: 200, steel: 150 };
-export const TANK_STEP = { kerolox: { t: 200, cost: 6 }, methalox: { t: 500, cost: 8 }, steel: { t: 400, cost: 4 } };
+export const START_CAPS = { kerolox: 200, methalox: 400, steel: 400, aluminum: 150 };
+export const START_STOCK = { kerolox: 100, methalox: 200, steel: 150, aluminum: 100 };
+export const TANK_STEP = { kerolox: { t: 200, cost: 6 }, methalox: { t: 500, cost: 8 }, steel: { t: 400, cost: 4 }, aluminum: { t: 100, cost: 3 } };
 export const PLANT_RATE = 40; // t per day per level
 export const PLANT_COST = 25; // $M per level
 export const PLANT_MAX = 3;
@@ -168,24 +170,41 @@ export const REGIONS = [
 export const CUSTOMERS = ['Aurora Telecom', 'Helix Earth Obs', 'Kestrel Defense', 'Meridian Labs', 'Polaris Comms', 'Tern Weather', 'Vela Science', 'Orion Media'];
 
 export const TECH = [
-  { id: 'fastCores', name: 'Fast Turnaround Cores', cost: 12, era: 'Peregrine', desc: 'Peregrine turnaround -2 days', requires: [] },
+  { id: 'landing', name: 'Booster Landing', cost: 30, era: 'Peregrine', desc: 'Boosters land and fly again (RTLS). Needs a test flight.', requires: [] },
+  { id: 'droneship', name: 'Droneship Recovery', cost: 40, era: 'Peregrine', desc: 'Ocean landings at full payload. Needs a test flight.', requires: ['landing'] },
+  { id: 'fastCores', name: 'Rapid Reflight', cost: 25, era: 'Peregrine', desc: 'Peregrine turnaround -2 days', requires: ['landing'] },
   { id: 'plants', name: 'Propellant Plants', cost: 70, era: 'Peregrine', desc: 'Owned sites can build kerolox and methalox plants', requires: ['fastCores'] },
   { id: 'gen1', name: 'Skylink Gen-1', cost: 5, era: 'Peregrine', desc: 'Unlock broadband satellite batches', requires: [] },
-  { id: 'heavyCores', name: 'Peregrine Heavy', cost: 60, era: 'Peregrine', desc: 'Unlock 64 t Peregrine Heavy', requires: ['fastCores'] },
-  { id: 'hull', name: 'Stainless Hull', cost: 120, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype', requires: ['heavyCores', 'gen1'] },
-  { id: 'raptor', name: 'Harrier V3', cost: 150, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype', requires: ['heavyCores', 'gen1'] },
-  { id: 'tiles', name: 'Heat Shield Tiles', cost: 140, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype', requires: ['heavyCores', 'gen1'] },
+  { id: 'heavyCores', name: 'Peregrine Heavy', cost: 60, era: 'Peregrine', desc: 'Unlock 64 t Peregrine Heavy. Needs a test flight.', requires: ['fastCores'] },
+  { id: 'hull', name: 'Stainless Hull', cost: 120, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },
+  { id: 'raptor', name: 'Harrier V3', cost: 150, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },
+  { id: 'tiles', name: 'Heat Shield Tiles', cost: 140, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },
   {
     id: 'skyship', name: 'Operational Skyship', cost: 400, era: 'Super-Heavy',
     desc: 'Rapid-turnaround 150 t Skyship. Qualify it with 3 successful Behemoth flights.',
     requires: ['hull', 'raptor', 'tiles'], flights: { rocket: 'behemoth', n: 3 },
   },
-  { id: 'tanker', name: 'Orbital Tanker', cost: 600, era: 'Lunar', desc: 'Skyship depot and tanker missions, and lunar contracts', requires: ['skyship'] },
-  { id: 'habitat', name: 'Moon Habitat Core', cost: 900, era: 'Lunar', desc: 'Lunar base (coming soon)', requires: ['skyship'] },
-  { id: 'isru', name: 'Lunar ISRU Mining', cost: 1200, era: 'Lunar', desc: 'Lunar base (coming soon)', requires: ['skyship'] },
+  { id: 'tanker', name: 'Orbital Tanker', cost: 600, era: 'Lunar', desc: 'Skyship depot and tanker missions, and lunar contracts. Needs a test flight.', requires: ['skyship'] },
+  { id: 'habitat', name: 'Moon Habitat Core', cost: 900, era: 'Lunar', desc: 'Habitat, reactor and drone bay module ships', requires: ['skyship'] },
+  { id: 'isru', name: 'Lunar ISRU Mining', cost: 1200, era: 'Lunar', desc: 'Smelter and Fabricator module ships', requires: ['skyship'] },
   { id: 'ice', name: 'Lunar Ice Mining', cost: 700, era: 'Lunar', desc: 'Ice miners and refineries at Shackleton make lunar methalox', requires: ['isru'] },
   { id: 'marsTransit', name: 'Mars Transfer Vehicle', cost: 2000, era: 'Mars', desc: 'Mars orbit and landing sites, Mars contracts and launch windows', requires: ['ice', 'habitat'] },
 ];
+
+// Techs that are finished by flying a prototype (GDD 2.12). Funding the research moves the tech to "testing":
+// build a test article in a factory (cost $M, days, t of metal), then fly it. odds is the first attempt's chance,
+// and every failure adds ODDS_LEARNING to the next one.
+export const PROTOS = {
+  landing: { name: 'Landing test article', cost: 3, days: 6, metal: 'aluminum', t: 20, odds: 0.5, ops: 0.5 },
+  droneship: { name: 'Ocean landing article', cost: 4, days: 8, metal: 'aluminum', t: 25, odds: 0.55, ops: 0.6 },
+  heavyCores: { name: 'Heavy test article', cost: 9, days: 14, metal: 'aluminum', t: 60, odds: 0.6, ops: 1.2 },
+  hull: { name: 'Hull test article', cost: 14, days: 12, metal: 'steel', t: 120, odds: 0.5, ops: 2 },
+  raptor: { name: 'Engine test article', cost: 18, days: 14, metal: 'steel', t: 100, odds: 0.45, ops: 2.5 },
+  tiles: { name: 'Re-entry test article', cost: 16, days: 12, metal: 'steel', t: 100, odds: 0.5, ops: 2 },
+  tanker: { name: 'Transfer demo article', cost: 22, days: 14, metal: 'steel', t: 150, odds: 0.6, ops: 3 },
+};
+export const ODDS_LEARNING = 0.12;
+export const ODDS_MAX = 0.9;
 
 // ---- Lunar base (GDD 2.8) ----------------------------------------------------
 // len: tiles along the tube. power: MW (positive makes power). need: crew to run it. cover: tonnes of regolith to bury it.
@@ -231,7 +250,18 @@ export const LOCAL_RECIPES = {
 
 // ---- Mars (GDD 2.9) ----------------------------------------------------------------------------
 // The planets line up for `length` days every `period` days, first at day `first`. No flight can launch outside it.
-export const MARS_WINDOW = { first: 420, period: 780, length: 60 };
+// Calendar (GDD 2.11): day 1 is 1 January 2010.
+export const START_DATE = Date.UTC(2010, 0, 1);
+const D = (y, m, d) => Math.round((Date.UTC(y, m - 1, d) - START_DATE) / 86400000) + 1;
+// Real Earth to Mars launch windows [open day, close day], then predicted ones from the 779.94-day synodic period.
+export const MARS_WINDOWS = (() => {
+  const w = [
+    [D(2011, 11, 25), D(2011, 12, 18)], [D(2013, 11, 18), D(2013, 12, 7)], [D(2016, 3, 4), D(2016, 3, 25)],
+    [D(2018, 5, 5), D(2018, 6, 8)], [D(2020, 7, 17), D(2020, 8, 15)],
+  ];
+  for (let i = 1; i <= 10; i++) { const o = Math.round(D(2020, 7, 17) + 779.94 * i); w.push([o, o + 30]); }
+  return w;
+})();
 // ascentRisk is added to the launch failure chance, landRisk is rolled when the ship arrives at Mars.
 export const MARS_ROUTES = {
   direct: { name: 'Direct from Earth', ascentRisk: 0.12, landRisk: 0.15, days: 180 },

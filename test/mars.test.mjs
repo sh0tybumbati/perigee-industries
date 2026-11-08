@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as sim from '../src/sim.js';
 import * as B from '../src/base.js';
-import { MARS_ROUTES, MARS_DESTS, BASE_CAPS, REFINERY_ICE, REFINERY_OUT, ICE_RATE } from '../src/data.js';
+import { MARS_WINDOWS, MARS_ROUTES, MARS_DESTS, BASE_CAPS, REFINERY_ICE, REFINERY_OUT, ICE_RATE } from '../src/data.js';
 
-const ALL = ['fastCores', 'plants', 'gen1', 'heavyCores', 'hull', 'raptor', 'tiles', 'skyship', 'tanker', 'habitat', 'isru', 'ice', 'marsTransit'];
+const ALL = ['landing', 'droneship', 'fastCores', 'plants', 'gen1', 'heavyCores', 'hull', 'raptor', 'tiles', 'skyship', 'tanker', 'habitat', 'isru', 'ice', 'marsTransit'];
 const world = () => {
   const s = sim.createState();
   for (const t of ALL) s.tech.add(t);
   s.cash = 5000;
   s.sites.cape.pads.forEach((p) => { p.tower = true; });
-  s.day = 430; // inside the first Mars window
+  s.day = MARS_WINDOWS[0][0] + 5; // inside the first Mars window
   return s;
 };
 const withMock = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
@@ -34,14 +34,20 @@ const industrialBase = (site) => {
   return { b, hb };
 };
 
-test('Mars windows open for 60 days every 780 days, starting on day 420', () => {
-  assert.deepEqual(sim.marsWindow(100), { open: false, opensIn: 320, closesIn: 0 });
-  assert.equal(sim.marsWindow(420).open, true);
-  assert.equal(sim.marsWindow(479).open, true);
-  assert.equal(sim.marsWindow(479).closesIn, 1);
-  assert.equal(sim.marsWindow(480).open, false);
-  assert.equal(sim.marsWindow(480).opensIn, 720);
-  assert.equal(sim.marsWindow(1200).open, true, 'the second window');
+test('Mars windows follow the real calendar', () => {
+  const day = (y, m, d) => Math.round((Date.UTC(y, m - 1, d) - Date.UTC(2010, 0, 1)) / 86400000) + 1;
+  assert.equal(sim.dateOf(1).text, '1 Jan 2010');
+  assert.equal(sim.dateOf(day(2011, 11, 25)).text, '25 Nov 2011');
+  const first = sim.marsWindow(day(2011, 1, 1));
+  assert.equal(first.open, false);
+  assert.equal(first.opens, day(2011, 11, 25));
+  assert.equal(sim.marsWindow(day(2011, 11, 25)).open, true, 'MSL window opens');
+  assert.equal(sim.marsWindow(day(2011, 12, 18)).closesIn, 1, 'and closes on the 18th');
+  assert.equal(sim.marsWindow(day(2011, 12, 19)).open, false);
+  assert.equal(sim.marsWindow(day(2020, 7, 31)).open, true, 'Perseverance');
+  assert.equal(sim.marsWindow(day(2020, 10, 1)).open, false);
+  const gap = MARS_WINDOWS[6][0] - MARS_WINDOWS[5][0];
+  assert.ok(Math.abs(gap - 779.94) < 1, 'predicted windows follow the synodic period');
 });
 
 test('Mars contracts only appear once the tech is known', () => {
@@ -68,9 +74,9 @@ test('a direct Mars flight needs a Skyship, an open window, a depot and propella
   assert.match(sim.launchBlocker(s), /propellant 100\/250/);
   s.depot.prop = 300;
   assert.equal(sim.launchBlocker(s), null);
-  s.day = 200;
+  s.day = MARS_WINDOWS[0][0] - 220;
   assert.match(sim.launchBlocker(s), /window opens in 220 days/);
-  s.day = 430;
+  s.day = MARS_WINDOWS[0][0] + 5;
   sim.setRocket(s, 'peregrine9');
   give(s, 'peregrine9');
   assert.ok(sim.launchBlocker(s));

@@ -3,7 +3,7 @@ import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
   PLANT_COST, PLANT_MAX, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
-  MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
+  PROTOS, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
 import * as B from '../base.js';
@@ -95,9 +95,11 @@ export function renderMission(ui, s, X, Y, W, actions) {
   } else if (!r.catch) {
     ui.label(X + W - 262, Y + 148, 'Booster', { size: 11, color: COL.dimText });
     Object.entries(RECOVERY_MODES).forEach(([id, m], i) => {
-      const on = s.recovery === id;
+      const on = sim.recoveryOf(s) === id;
+      const ok = sim.recoveryAllowed(s, id);
       ui.button(X + W - 204 + i * 68, Y + 142, 64, 22, m.name, () => { s.recovery = id; }, {
-        size: 11, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent, hint: m.hint,
+        size: 11, enabled: ok, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent,
+        hint: ok ? m.hint : `Research ${id === 'rtls' ? 'Booster Landing' : 'Droneship Recovery'} first.`,
       });
     });
   } else {
@@ -206,7 +208,7 @@ export function renderFleet(ui, s, X, Y, W, actions) {
   const dy = Y + 262;
   ui.heading(X, dy, `DRONESHIPS  ·  ${s.droneships.length}/${MAX_DRONESHIPS}`);
   if (s.droneships.length < MAX_DRONESHIPS) {
-    ui.button(X + W - 190, dy - 4, 190, 22, `Buy droneship  $${DRONESHIP_COST}M`, () => actions.buyDroneship(), { enabled: sim.canSpend(s, DRONESHIP_COST), size: 11 });
+    ui.button(X + W - 190, dy - 4, 190, 22, `Buy droneship  $${DRONESHIP_COST}M`, () => actions.buyDroneship(), { enabled: s.tech.has('droneship') && sim.canSpend(s, DRONESHIP_COST), size: 11, hint: s.tech.has('droneship') ? undefined : 'Research Droneship Recovery first.' });
   }
   s.droneships.forEach((d, i) => {
     const y = dy + 20 + i * 26;
@@ -238,18 +240,21 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
     ui.label(X + W, Y + 52, 'Own the site to add lines', { size: 12, right: true, color: COL.dimText });
   }
 
-  // Steel yard
-  const m = s.market.steel;
-  ui.label(X, Y + 78, `Steel ${Math.round(site.stock.steel)} / ${site.cap.steel} t`, { size: 12 });
-  ui.bar(X + 150, Y + 82, 150, 8, site.stock.steel / site.cap.steel, COL.accent);
-  ui.label(X + 312, Y + 78, `spot $${sim.spot(s, 'steel').toFixed(3)}M/t`, { size: 11, color: hex(m > 1.15 ? COL.bad : m < 0.9 ? COL.good : COL.dim) });
-  ui.button(X + W - 130, Y + 74, 130, 22, 'Buy 100 t', () => actions.buyCommodity(fid, 'steel', 100), { size: 11, enabled: !sim.buyBlocker(s, fid, 'steel') });
+  // Aluminum and steel yards
+  ['aluminum', 'steel'].forEach((metal, k) => {
+    const m = s.market[metal];
+    const y = Y + 70 + k * 22;
+    ui.label(X, y + 4, `${metal === 'steel' ? 'Steel' : 'Aluminum'} ${Math.round(site.stock[metal])} / ${site.cap[metal]} t`, { size: 12 });
+    ui.bar(X + 150, y + 8, 150, 8, site.stock[metal] / site.cap[metal], COL.accent);
+    ui.label(X + 312, y + 4, `$${sim.spot(s, metal).toFixed(3)}M/t`, { size: 11, color: hex(m > 1.15 ? COL.bad : m < 0.9 ? COL.good : COL.dim) });
+    ui.button(X + W - 130, y, 130, 20, 'Buy 100 t', () => actions.buyCommodity(fid, metal, 100), { size: 11, enabled: !sim.buyBlocker(s, fid, metal) });
+  });
 
-  ui.heading(X, Y + 104, `BUILD QUEUE  ·  ${site.queue.length}`);
-  if (!site.queue.length) ui.label(X, Y + 122, 'Nothing in production here.', { size: 12, color: COL.dimText });
-  site.queue.slice(0, 3).forEach((q, i) => {
-    const y = Y + 120 + i * 26;
-    const r = ROCKETS[q.type];
+  ui.heading(X, Y + 116, `BUILD QUEUE  ·  ${site.queue.length}`);
+  if (!site.queue.length) ui.label(X, Y + 134, 'Nothing in production here.', { size: 12, color: COL.dimText });
+  site.queue.slice(0, 2).forEach((q, i) => {
+    const y = Y + 132 + i * 26;
+    const r = q.kind === 'test' ? { name: PROTOS[q.tech].name } : ROCKETS[q.type];
     const working = i < site.lines;
     ui.row(X, y, W, 24);
     ui.label(X + 8, y + 5, r.name, { size: 12, bold: true });
@@ -257,10 +262,10 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
     ui.label(X + 392, y + 5, working ? `${q.daysLeft}d left` : 'waiting', { size: 12, color: COL.dimText });
     if (q.daysLeft === q.total) ui.button(X + W - 74, y + 2, 72, 20, 'Cancel', () => actions.cancelBuild(fid, q.id), { size: 11, hint: 'Refunds 50% of the build cost.' });
   });
-  if (site.queue.length > 3) ui.label(X, Y + 120 + 3 * 26, `+${site.queue.length - 3} more queued`, { size: 11, color: COL.dimText });
+  if (site.queue.length > 2) ui.label(X, Y + 132 + 2 * 26, `+${site.queue.length - 2} more queued`, { size: 11, color: COL.dimText });
 
-  const by = Y + 208;
-  ui.heading(X, by, 'BUILD  ·  steel from this yard, shortages bought at +10%');
+  const by = Y + 196;
+  ui.heading(X, by, 'BUILD  ·  metal from this yard, shortages bought at +10%');
   const types = Object.keys(ROCKETS);
   const cw = (W - 8) / 2;
   types.forEach((id, i) => {
@@ -268,11 +273,11 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
     const blocker = sim.buildBlocker(s, id, fid);
     const { cost, days } = sim.buildCostAt(id, fid);
     const x = X + (i % 2) * (cw + 8);
-    const y = by + 18 + Math.floor(i / 2) * 28;
+    const y = by + 18 + Math.floor(i / 2) * 27;
     const nm = r.role === 'module' ? r.name : r.short;
     ui.button(x, y, cw, 25, blocker === 'Locked' ? `${nm}: locked` : `${nm}  $${cost}M · ${days}d`, () => actions.queueBuild(id, fid), {
       enabled: !blocker, size: 12,
-      hint: blocker && blocker !== 'Locked' ? `${r.name}: ${blocker}` : `${r.name}: ${r.payload ? `${r.payload} t, ` : ''}rated ${r.coreLife} flight${r.coreLife > 1 ? 's' : ''}. ${r.steel} t of steel.`,
+      hint: blocker && blocker !== 'Locked' ? `${r.name}: ${blocker}` : `${r.name}: ${r.payload ? `${r.payload} t, ` : ''}rated ${r.coreLife} flight${r.coreLife > 1 ? 's' : ''}. ${r.steel} t of ${r.metal === 'aluminum' ? 'aluminum' : 'steel'}.`,
     });
   });
 }
@@ -348,44 +353,60 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
   const fy = hy + 26;
   ui.heading(X, fy, 'TANKS AND MATERIALS  ·  spot price drifts, bulk buys are 10% cheaper');
   Object.keys(COMMODITIES).forEach((type, i) => {
-    const y = fy + 16 + i * 44;
+    const y = fy + 16 + i * 34;
     const m = s.market[type];
-    const isFuel = type !== 'steel';
-    ui.row(X, y, W, 41);
-    ui.label(X + 8, y + 3, COMMODITIES[type].name, { size: 12, bold: true });
+    const isFuel = type === 'kerolox' || type === 'methalox';
+    ui.row(X, y, W, 32);
+    ui.label(X + 8, y + 1, COMMODITIES[type].name, { size: 11, bold: true });
     ui.bar(X + 190, y + 7, 140, 8, st.stock[type] / st.cap[type], st.stock[type] < st.cap[type] * 0.2 ? COL.warn : COL.accent);
     ui.label(X + 338, y + 3, `${Math.round(st.stock[type])} / ${st.cap[type]} t`, { size: 11 });
     ui.label(X + W - 8, y + 3, `$${sim.spot(s, type).toFixed(3)}M/t`, { size: 11, bold: true, right: true, color: hex(m > 1.15 ? COL.bad : m < 0.9 ? COL.good : COL.dim) });
-    ui.button(X + 8, y + 19, 86, 19, 'Buy 100 t', () => actions.buyCommodity(view, type, 100), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
-    ui.button(X + 100, y + 19, 86, 19, 'Fill tank', () => actions.buyCommodity(view, type, 99999), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
-    ui.button(X + 192, y + 19, 138, 19, `Tank +${TANK_STEP[type].t} t  $${TANK_STEP[type].cost}M`, () => actions.expandTank(view, type), { size: 10, enabled: !sim.tankBlocker(s, view, type) });
+    ui.button(X + 8, y + 16, 86, 15, 'Buy 100 t', () => actions.buyCommodity(view, type, 100), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
+    ui.button(X + 100, y + 16, 86, 15, 'Fill tank', () => actions.buyCommodity(view, type, 99999), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
+    ui.button(X + 192, y + 16, 138, 15, `Tank +${TANK_STEP[type].t} t  $${TANK_STEP[type].cost}M`, () => actions.expandTank(view, type), { size: 10, enabled: !sim.tankBlocker(s, view, type) });
     if (isFuel) {
       const lvl = st.plants[type];
       const b = sim.plantBlocker(s, view, type);
-      ui.button(X + 336, y + 19, W - 344, 19, lvl >= PLANT_MAX ? `Plant L${lvl}: ${lvl * PLANT_RATE} t/day` : `Plant L${lvl + 1}  $${PLANT_COST}M${lvl ? `  (now ${lvl * PLANT_RATE} t/day)` : ''}`, () => actions.buildPlant(view, type), {
+      ui.button(X + 336, y + 16, W - 344, 15, lvl >= PLANT_MAX ? `Plant L${lvl}: ${lvl * PLANT_RATE} t/day` : `Plant L${lvl + 1}  $${PLANT_COST}M${lvl ? `  (now ${lvl * PLANT_RATE} t/day)` : ''}`, () => actions.buildPlant(view, type), {
         size: 10, enabled: !b, hint: b ?? `A plant makes ${PLANT_RATE} t per day per level at about 30% of the base price.`,
       });
     }
   });
 }
 
-export function renderTech(ui, s, X, Y, W, actions) {
+export function renderTech(ui, s, X, Y, W, actions, ctx) {
+  const fid = ctx.factorySite && s.sites[ctx.factorySite]?.lines ? ctx.factorySite : 'cape';
+  const clip = (str, n) => (str.length > n ? `${str.slice(0, n - 1)}…` : str);
   TECH.forEach((t, i) => {
-    const y = Y + i * 38;
+    const y = Y + i * 27;
     const st = sim.techState(s, t.id);
     const afford = sim.canSpend(s, t.cost);
-    const stroke = st === 'owned' ? COL.good : st === 'available' && afford ? COL.accent : COL.line;
-    ui.row(X, y, W, 35, {
+    const stroke = st === 'owned' ? COL.good : st === 'testing' ? COL.warn : st === 'available' && afford ? COL.accent : COL.line;
+    ui.row(X, y, W, 25, {
       stroke, fill: st === 'owned' ? 0x123524 : COL.row,
       onClick: st === 'available' && afford ? () => actions.buyTech(t.id) : null,
       hint: st === 'locked' ? `${t.name} needs: ${sim.techBlockers(s, t.id).join(', ')}` : t.desc,
     });
     const dim = st === 'locked';
-    ui.label(X + 10, y + 3, t.name, { size: 13, bold: true, color: dim ? COL.dimText : COL.text });
+    ui.label(X + 10, y + 5, t.name, { size: 12, bold: true, color: dim ? COL.dimText : COL.text });
+    if (st === 'testing') {
+      const tr = s.trials[t.id];
+      const p = PROTOS[t.id];
+      ui.label(X + 168, y + 6, `${Math.round(sim.testOdds(s, t.id) * 100)}% odds · ${tr.attempts} failed · ${tr.articles} ready`, { size: 10, color: hex(COL.warn) });
+      const buildB = sim.testBuildBlocker(s, t.id, fid);
+      ui.button(X + W - 232, y + 2, 112, 21, `Build $${p.cost}M · ${p.days}d`, () => actions.queueTest(t.id, fid), {
+        size: 10, enabled: !buildB, hint: buildB ?? `${p.name}: ${p.t} t of ${p.metal}.`,
+      });
+      const flyB = sim.testFlightBlocker(s, t.id);
+      ui.button(X + W - 116, y + 2, 112, 21, `Fly test $${p.ops}M`, () => actions.flyTest(t.id), {
+        size: 10, enabled: !flyB, fill: flyB ? COL.btn : COL.btnOn, stroke: flyB ? COL.accent : COL.warn, hint: flyB ?? 'Success or failure is a dice roll. A failure closes the pad for 14 days.',
+      });
+      return;
+    }
     const sub = st === 'locked' ? `Needs: ${sim.techBlockers(s, t.id).join(', ')}` : t.desc;
-    ui.label(X + 10, y + 19, sub, { size: 11, color: COL.dimText });
-    ui.label(X + W - 10, y + 8, st === 'owned' ? 'DONE' : `$${t.cost}M`, {
-      size: 13, bold: true, right: true, color: st === 'owned' ? hex(COL.good) : afford || dim ? COL.dimText : hex(COL.bad),
+    ui.label(X + 168, y + 6, clip(sub, 56), { size: 10, color: COL.dimText });
+    ui.label(X + W - 10, y + 5, st === 'owned' ? 'DONE' : `$${t.cost}M`, {
+      size: 12, bold: true, right: true, color: st === 'owned' ? hex(COL.good) : afford || dim ? COL.dimText : hex(COL.bad),
     });
   });
 }

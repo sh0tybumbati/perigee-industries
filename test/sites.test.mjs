@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as sim from '../src/sim.js';
-import { SITES, PLANT_RATE, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT, RUSH_PREMIUM, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, DRONE_TOW_DAYS, DRONESHIP_CYCLE, PLANT_COST_FRAC, COMMODITIES } from '../src/data.js';
+const reuse = (s) => { s.tech.add('landing'); s.tech.add('droneship'); s.recovery = 'rtls'; return s; };
+import { SITES, PLANT_RATE, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT, RUSH_PREMIUM, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, DRONE_TOW_DAYS, DRONESHIP_CYCLE, PLANT_COST_FRAC, COMMODITIES, ROCKETS } from '../src/data.js';
 
 const ALL = ['fastCores', 'plants', 'gen1', 'heavyCores', 'hull', 'raptor', 'tiles', 'skyship', 'tanker'];
-const rich = (...tech) => { const s = sim.createState(); for (const t of tech) s.tech.add(t); s.cash = 2000; return s; };
+const rich = (...tech) => { const s = reuse(sim.createState()); for (const t of tech) s.tech.add(t); s.cash = 2000; return s; };
 const cape = (s) => s.sites.cape;
 const withMock = (v, fn) => { const r = Math.random; Math.random = () => v; try { return fn(); } finally { Math.random = r; } };
 const win = (fn) => withMock(0.999, fn);
@@ -223,14 +224,14 @@ test('Boca Chica builds catch vehicles cheaper and faster; Vandenberg has no fac
   const capeBuild = sim.buildCostAt('skyship', 'cape');
   const bocaBuild = sim.buildCostAt('skyship', 'boca');
   assert.ok(bocaBuild.cost < capeBuild.cost && bocaBuild.days < capeBuild.days);
-  assert.equal(sim.buildCostAt('peregrine9', 'boca').cost, 12, 'no discount on non-catch hulls');
+  assert.equal(sim.buildCostAt('peregrine9', 'boca').cost, ROCKETS.peregrine9.buildCost, 'no discount on non-catch hulls');
   assert.equal(sim.buildBlocker(s, 'peregrine9', 'vandenberg'), 'No factory here');
   assert.equal(sim.queueBuild(s, 'skyship', 'boca'), true);
   assert.equal(s.sites.boca.queue.length, 1);
 });
 
 test('sites cost money to acquire and cannot be bought twice', () => {
-  const s = sim.createState();
+  const s = reuse(sim.createState());
   assert.match(sim.siteBlocker(s, 'boca', 'buy'), /Not enough cash/);
   s.cash = 500;
   assert.equal(sim.siteBlocker(s, 'boca', 'lease'), 'Not available');
@@ -241,7 +242,7 @@ test('sites cost money to acquire and cannot be bought twice', () => {
 
 test('v4 saves become Cape Canaveral: a grown company owns it, a small one leases it', () => {
   const v4 = (pads, lines) => JSON.stringify({
-    ...JSON.parse(sim.serialize(sim.createState())), v: 4, pads, lines, queue: [], sites: undefined, droneships: undefined, market: undefined,
+    ...JSON.parse(sim.serialize(reuse(sim.createState()))), v: 4, pads, lines, queue: [], sites: undefined, droneships: undefined, market: undefined,
   });
   const small = sim.deserialize(v4([{ busyUntil: 0 }], 1));
   assert.equal(small.sites.cape.status, 'leased');
@@ -255,13 +256,13 @@ test('v4 saves become Cape Canaveral: a grown company owns it, a small one lease
 });
 
 test('reputation grows the contract board and its pace', () => {
-  const s = sim.createState();
-  assert.deepEqual(sim.boardSize(s), { every: 3, cap: 8 });
+  const s = reuse(sim.createState());
+  assert.deepEqual(sim.boardSize(s), { every: 6, cap: 8 });
   s.flightCounts = { peregrine9: 40 };
-  assert.deepEqual(sim.boardSize(s), { every: 2, cap: 10 });
+  assert.deepEqual(sim.boardSize(s), { every: 3, cap: 10 });
   s.flightCounts = { peregrine9: 100, skyship: 20 };
-  assert.deepEqual(sim.boardSize(s), { every: 1, cap: 12 });
+  assert.deepEqual(sim.boardSize(s), { every: 2, cap: 12 });
   s.contracts = [];
   for (let i = 0; i < 20; i++) sim.tick(s);
-  assert.ok(s.contracts.length >= 10, `board filled faster: ${s.contracts.length}`);
+  assert.ok(s.contracts.length >= 8, `board filled faster: ${s.contracts.length}`);
 });

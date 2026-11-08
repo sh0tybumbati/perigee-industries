@@ -12,7 +12,7 @@ const SAVE_KEY = 'perigee-industries-save';
 const MAP = { x: 10, y: 90, w: 690, h: 432 };
 const DOCK = { x: 722, y: 98, w: 536 };
 const TABS = [['mission', 'Mission'], ['fleet', 'Fleet'], ['factory', 'Factory'], ['sites', 'Sites'], ['base', 'Base'], ['tech', 'R&D'], ['skylink', 'Skylink']];
-const TICK_MS = 1200;
+const TICK_MS = 2400;
 
 export class OpsScene extends Phaser.Scene {
   constructor() {
@@ -246,6 +246,8 @@ export class OpsScene extends Phaser.Scene {
       queueBuild: (id, siteId) => sim.queueBuild(s, id, siteId),
       cancelBuild: (siteId, id) => sim.cancelBuild(s, siteId, id),
       buyTech: (id) => sim.buyTech(s, id),
+      queueTest: (id, siteId) => sim.queueTest(s, id, siteId),
+      flyTest: (id) => { const r = sim.flyTest(s, id); if (r.ok && !r.success) this.cameras.main.shake(300, 0.006); },
       setMarsRoute: (route) => sim.setMarsRoute(s, route),
       viewSite: (id) => { this.siteView = id; if (s.sites[id].status !== 'locked') sim.setSite(s, id); },
       setSite: (id) => sim.setSite(s, id),
@@ -301,9 +303,9 @@ export class OpsScene extends Phaser.Scene {
   renderTopBar(s, ui) {
     const net = sim.dailyRevenue(s) - sim.OVERHEAD_PER_DAY;
     ui.label(20, 13, 'PERIGEE INDUSTRIES', { size: 20, bold: true, color: hex(COL.accent) });
-    ui.label(330, 15, `Day ${s.day}`, { size: 16 });
-    ui.label(430, 15, `Cash $${s.cash.toFixed(1)}M`, { size: 16, color: hex(COL.good) });
-    ui.label(600, 15, `Net ${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}M/day`, { size: 16 });
+    ui.label(275, 15, `${sim.dateOf(s.day).text}  ·  Day ${s.day}`, { size: 16 });
+    ui.label(520, 15, `Cash $${s.cash.toFixed(1)}M`, { size: 16, color: hex(COL.good) });
+    ui.label(680, 15, `Net ${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}M/day`, { size: 16 });
     [[0, 'Pause'], [1, '1x'], [3, '3x'], [8, '8x']].forEach(([v, name], i) => {
       ui.button(880 + i * 66, 10, 60, 30, name, () => this.setSpeed(v), {
         fill: this.speed === v ? COL.btnOn : COL.btn, stroke: this.speed === v ? COL.good : COL.accent, size: 13,

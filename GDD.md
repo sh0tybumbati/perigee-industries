@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 0.5 (Pre-Alpha Spec: lunar ice, Moon-built ships and Mars)
+Version: 0.6 (Pre-Alpha Spec: 2010 start, calendar and real Mars windows)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -53,10 +53,10 @@ Core Degradation: Every booster launch accumulates wear and tear. Players can sp
 
 Vehicle Classes: Boosters, Upper Stages and Recovery
 The Peregrine family is a two-stage rocket. Its first-stage booster is reusable, and its upper stage is expendable: every launch burns one (about $0.4M for the Peregrine 9, $0.8M for the Heavy). The Behemoth and the Skyship are different. They are the first vehicles with a reusable upper stage, and both stages are caught by the launch tower. A Skyship is also the one hull that can be its own payload (tanker, depot and Moon-base modules).
-Booster recovery has three modes for Peregrine launches:
-- RTLS (return to launch site): -20% payload, and the booster is back at the pad at once.
-- Droneship: full payload, but it needs a free droneship, which is out at sea and busy for 4 days, and the booster reaches its hangar 2 days later.
-- Expend: the booster is thrown away for +15% payload. The hull is lost and needs no refit.
+In January 2010 nobody has landed a booster yet, so the company starts with expendable boosters and has to research reuse (see 2.11). Booster recovery has three modes for Peregrine launches, and each is unlocked by research:
+- RTLS (return to launch site), unlocked by Booster Landing: -20% payload, and the booster is back at the pad at once.
+- Droneship, unlocked by Droneship Recovery: full payload, but it needs a free droneship, which is out at sea and busy for 4 days, and the booster reaches its hangar 2 days later.
+- Expend (the only mode at the start): the booster is thrown away for +15% payload. The hull is lost and needs no refit, and a new one has to be built for the next flight ($3M and 30 t of aluminum for a Peregrine 9).
 
 2.2 Broadband Constellation Network (Passive Income)
 Orbital Shells: Earth orbit is split into 4 distinct latitude/altitude shells (LEO Equatorial, LEO Polar, MEO, GEO).
@@ -176,7 +176,7 @@ A transit lane along the bottom shows flights that are between bodies, with thei
 2.7 Contracts vs. Building the Base
 The central tension of the game: the same Skyship capacity can carry a paying customer's payload or the company's own base modules. Customer contracts fund the base, and every flight spent on the base is a flight not earning money. Base modules are delivered to a chosen landing site on the Moon map, and the base is built up there following the dependencies in 2.4. Mars follows the same pattern after the Mars Transfer tech.
 
-Reputation: every successful flight builds the company's reputation. At 40 flights new contracts arrive every 2 days and the board holds 10, and at 120 flights they arrive daily and the board holds 12. A bigger fleet, more pads and more hangars only pay off when there is more work, and this is how the work grows.
+Reputation: every successful flight builds the company's reputation. New contracts arrive every 6 days and the board holds 8; at 40 flights every 3 days and 10; at 120 flights every 2 days and 12. A bigger fleet, more pads and more hangars only pay off when there is more work, and this is how the work grows.
 
 2.8 Lunar Base Construction (Phase 4a)
 Choosing the site: the first module ship the player launches to a Moon landing site founds the base there. Every later module ship must land at that same site. Sites differ in terrain and in the contracts and propellant economics around them.
@@ -218,7 +218,7 @@ The base stockpile now also holds ice (up to 300 t) and lunar methalox (up to 60
 Ships built on the Moon: the Fabricator can build a Skyship hull from stockpiled iron, silica and oxygen (300 t, 150 t and 50 t) plus $35M of imported engines, in 30 days. The hull appears in the fleet marked as based at the Moon. A Moon-based hull can only fly from the Moon, and an Earth hull can never fly from there.
 
 Mars: the Mars Transfer Vehicle tech (needs Lunar Ice Mining and the Habitat tech) unlocks Mars orbit, Jezero Crater and Utopia Planitia, and Mars cargo contracts. Mars contracts are large (30 to 100 t) and pay roughly four times what lunar cargo pays per tonne, but the cash only arrives when the flight does, about 6 months later. Mars hulls are single use because there is no fuel at Mars yet.
-Launch windows: the planets line up for about 60 days every 780 days (the first window opens on day 420). Outside a window no Mars flight can launch, so the player has to plan ahead. Mars contracts last 200 days to give time to prepare.
+Launch windows: Mars flights can only launch in the real windows listed in 2.11, about 30 days every 26 months (the first opens on 25 Nov 2011). Outside a window no Mars flight can launch, so the player has to plan ahead. Mars contracts last 200 days to give time to prepare.
 Two routes to Mars:
 - Direct from Earth: any Earth Skyship with a catch tower. It burns depot propellant (5 t per tonne of payload plus the usual launch fuel). It is risky: +12% risk on ascent and 15% risk of being lost on arrival. 180 days.
 - From the Moon: a Moon-built Skyship leaves the base. It burns the base's lunar methalox (450 t plus 4 t per tonne of payload) and needs no Earth pad, tanker or depot. The arrival risk is 6%. 175 days. It needs the whole chain: a base at Shackleton, ice miners, refineries and a Fabricator.
@@ -255,12 +255,52 @@ Factory sites: each site with a factory has its own production lines and queue. 
 
 Why this matters: fuel, pads, hangars and factories all become real capacity limits and real investments. The growth path is rent, then buy, then expand: more hulls need more hangars, more hangars need more pads, and a bigger fleet needs cheaper fuel from its own plants.
 
+2.11 The Calendar and the 2010 Start (Phase 6)
+The game now runs on a real calendar. Day 1 is 1 January 2010, and the top bar shows the date (for example "14 Mar 2012") next to the day count. The date is a clock for the player, not a lock on progress: the tech tree is still decided by research and cash, so a good player can be ahead of SpaceX and a slow one behind.
+
+Why 2010: it is the year the Falcon 9 first flew, and at that point nobody has landed a booster. The player starts where a young launch company really starts.
+- Seed funding: the company starts with $60M from its founding round, one leased pad at Cape Canaveral, one rented hangar, one Peregrine 9 and no Skylink satellites. There is no passive income yet, only the $0.12M per day of overhead, so the first contracts matter.
+- Expendable boosters: with no landing tech, a Peregrine 9 booster is thrown away on every flight. Each launch therefore costs a new hull ($3M and 8 days in the factory, plus 30 t of aluminum), on top of fuel, upper stage and operations. A full manifest still turns a profit, but only a thin one, and a half-empty rocket loses money.
+- Reuse is the first big research goal. Booster Landing ($30M) lets the booster return to the pad (RTLS) and be flown again. Rapid Reflight (Fast Turnaround Cores) now needs it, and Droneship Recovery ($40M) adds ocean landings at full payload. The Peregrine Heavy needs Rapid Reflight, so it is also a reuse-era vehicle. Skylink Gen-1 stays a cheap early unlock that builds passive income.
+- Pace: contract offers and the flight rate are tuned to about twice the real SpaceX record for the matching stage of growth (see 2.7). The real company flew 26 launches in 2020, 61 in 2022 and 165 in 2025.
+
+Real Mars launch windows: windows follow the real Earth to Mars transfer opportunities, with real dates for the ones that have already happened.
+| Window opens | Closes | Flown by |
+| 25 Nov 2011 | 18 Dec 2011 | Mars Science Laboratory |
+| 18 Nov 2013 | 7 Dec 2013 | MAVEN and Mangalyaan |
+| 4 Mar 2016 | 25 Mar 2016 | ExoMars TGO |
+| 5 May 2018 | 8 Jun 2018 | InSight |
+| 17 Jul 2020 | 15 Aug 2020 | Perseverance, Tianwen-1, Hope |
+After 2020 the windows are predicted from the 779.94-day synodic period (late 2022, late 2024, late 2026, early 2029 and so on), each lasting about 30 days. Real windows are short, so a Mars mission must be planned months ahead. Mars contracts still last 200 days.
+
+Saves from before this change keep their day count (which becomes a date from 2010) and are given the landing techs they already had access to.
+
+2.12 Prototype Test Flights and Aluminum (Phase 6)
+Some research cannot be finished in a lab. A tech marked "needs a test flight" is funded in two steps, and the second one is a dice roll.
+1. Fund the research (the usual cost). The tech moves to "testing".
+2. Build a test article in a factory. It is an item in the production queue with its own cost, build time and metal, and it counts toward the same lines as hulls.
+3. Fly the test from a free pad on a site the company can launch from. The test costs operations money and uses the pad. It succeeds or fails on a roll. On success the tech unlocks. On failure the test article is lost, the pad is closed for repairs (14 days, as for any failed launch) and the team tries again with a new article.
+Every failure teaches something: each failed attempt adds 12% to the odds of the next one (up to 90%), so persistence always pays, but it costs time and cash.
+
+| Test | Tech | Base odds | Test article |
+| Landing test | Booster Landing | 50% | $3M, 6 days, 20 t aluminum |
+| Ocean landing test | Droneship Recovery | 55% | $4M, 8 days, 25 t aluminum |
+| Heavy static fire and flight | Peregrine Heavy | 60% | $9M, 14 days, 60 t aluminum |
+| Hull pressure test flight | Stainless Hull | 50% | $14M, 12 days, 120 t steel |
+| Engine test flight | Harrier V3 | 45% | $18M, 14 days, 100 t steel |
+| Heat shield re-entry test | Heat Shield Tiles | 50% | $16M, 12 days, 100 t steel |
+| Orbital transfer demo | Orbital Tanker | 60% | $22M, 14 days, 150 t steel |
+The Operational Skyship keeps its own gate: 3 successful Behemoth flights.
+
+Aluminum: Peregrine rockets are built from aluminum-lithium alloy, where the Behemoth and Skyship use stainless steel. Aluminum is a fourth commodity ($0.035M per tonne, three times the price of steel and with a wider price swing). A Peregrine 9 hull uses 30 t, a Heavy 150 t, and aluminum test articles 20 to 60 t, so a company that burns a hull on every flight, as the player does at the start, is a real buyer of aluminum. Each site has an aluminum yard next to its steel yard, with its own capacity (150 t at the start) that bulk buys and expansion work on, and a shortage at build time is bought at spot plus the rush premium.
+
 3. Technology Tree
                       [ PEREGRINE ERA ]
                               │
                ┌──────────────┴──────────────┐
                ▼                             ▼
-    [ Fast Turnaround Cores ]      [ Skylink Gen-1 Satellites ]
+    [ Booster Landing ] -> [ Rapid Reflight ]      [ Skylink Gen-1 Satellites ]
+    [ Droneship Recovery ]
                │                             │
                └──────────────┬──────────────┘
                               │
@@ -306,4 +346,5 @@ Audio Direction: Synthesized Web Audio soundtrack featuring ambient synth-wave m
 6. Implementation Status
 Built: Earth operations, contract board with reputation, manifest stacking, Skylink constellation and revenue, R&D tree, LEO depot, save/load, fleet, factory queue per site, destinations, Earth/Moon/Mars map with flight trails, Moon base (module ships, base view, ducts, burial drones, smelters, local fabrication), launch sites, hangars, droneships, recovery modes, fuel market and plants.
 This phase (4b): ice miners and refineries, lunar methalox, Moon-built Skyships, the Mars Transfer tech, Mars contracts and launch windows, direct and Moon-based Mars routes, arrival risk.
+Phase 6a: the 2010 start with seed funding, expendable boosters and landing research, the calendar and real Mars windows, prototype test flights with dice-roll research, and aluminum for Peregrine hulls.
 Next: Mars bases and Mars fuel, return flights, Web Audio.

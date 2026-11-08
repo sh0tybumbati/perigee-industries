@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as sim from '../src/sim.js';
+const reuse = (s) => { s.tech.add('landing'); s.tech.add('droneship'); s.recovery = 'rtls'; return s; };
 import { DEPOT_CAP, TANKER_LOAD, PAD_TURN, ROCKETS } from '../src/data.js';
 
 const cape = (s) => s.sites.cape;
 
 const ALL = ['fastCores', 'gen1', 'heavyCores', 'hull', 'raptor', 'tiles', 'skyship', 'tanker'];
 const rich = (...tech) => {
-  const s = sim.createState();
+  const s = reuse(sim.createState());
   for (const t of tech) s.tech.add(t);
   s.cash = 1000;
   cape(s).pads.forEach((p) => { p.tower = true; }); // so catch vehicles can fly in tests
@@ -126,7 +127,7 @@ test('factory: parallel lines, upfront cost, 50% refund only before work starts'
   const start = s.cash;
   sim.queueBuild(s, 'peregrine9');
   sim.queueBuild(s, 'peregrine9');
-  assert.equal(s.cash, start - 24);
+  assert.equal(s.cash, start - 2 * ROCKETS.peregrine9.buildCost);
   idle(s, 9);
   assert.equal(sim.fleetOf(s, 'peregrine9').length, 2, 'first rolls out after 8 days');
   assert.equal(cape(s).queue.length, 1);
@@ -140,7 +141,7 @@ test('factory: parallel lines, upfront cost, 50% refund only before work starts'
   const waiting = cape(s).queue.find((q) => q.daysLeft === q.total);
   const cash = s.cash;
   assert.equal(sim.cancelBuild(s, 'cape', waiting.id), true);
-  assert.equal(s.cash, cash + 6);
+  assert.equal(s.cash, cash + ROCKETS.peregrine9.buildCost / 2);
 });
 
 test('locked vehicles cannot be built and the depot is a one-off', () => {
@@ -278,10 +279,10 @@ test('mars destinations are locked until the tech exists', () => {
 });
 
 test('investors rescue a company with no hulls left', () => {
-  const s = sim.createState();
+  const s = reuse(sim.createState());
   s.fleet = [];
   s.cash = 0;
   sim.tick(s);
-  assert.ok(s.cash >= 12 + 5);
+  assert.ok(s.cash >= ROCKETS.peregrine9.buildCost + 5);
   assert.match(s.log.at(-1), /emergency funding/);
 });
