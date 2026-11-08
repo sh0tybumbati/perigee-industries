@@ -2,6 +2,7 @@
 // They live outside the container that the scene rebuilds on every state change, so they survive re-renders.
 import Phaser from 'phaser';
 import { COL, FONT, hex } from './ui/ui.js';
+import { W } from './layout.js';
 import * as audio from './audio.js';
 
 const DEPTH = 500;
@@ -141,7 +142,7 @@ export class FX {
     const s = this.scene;
     audio.failure();
     s.cameras.main.shake(520, 0.012);
-    const flash = s.add.rectangle(0, 0, 1280, 720, 0xff3b30, 0.4).setOrigin(0).setDepth(DEPTH + 3);
+    const flash = s.add.rectangle(0, 0, W, 720, 0xff3b30, 0.4).setOrigin(0).setDepth(DEPTH + 3);
     s.tweens.add({ targets: flash, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
     for (let i = 0; i < 30; i++) {
       const a = Math.random() * Math.PI * 2;

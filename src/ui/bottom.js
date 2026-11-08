@@ -2,9 +2,12 @@
 import { DESTINATIONS, DEPOT_CAP, TANKER_LOAD, BOILOFF_PER_DAY, BODIES } from '../data.js';
 import * as sim from '../sim.js';
 import { COL, FONT, hex } from './ui.js';
+import { EXTRA } from '../layout.js';
 
 const ROLE_COLOR = { payload: COL.accent, tanker: COL.warn, depot: COL.violet };
-const LANE = { y: 566, earth: 52, moon: 230, mars: 650, x0: 10 };
+// The lane spans the map's width, which grows on wide screens.
+const WIDE = (690 + EXTRA) / 690;
+const LANE = { y: 566, earth: 52, moon: Math.round(230 * WIDE), mars: Math.round(650 * WIDE), x0: 10 };
 
 // Persistent drawing so in-transit flights glide between daily ticks.
 export class Lane {
@@ -84,7 +87,7 @@ export function renderFlights(ui, s) {
 }
 
 export function renderDepotAndLog(ui, s) {
-  const X = 724;
+  const X = 724 + EXTRA;
   ui.heading(X, 538, 'LEO PROPELLANT DEPOT');
   if (!s.tech.has('tanker')) {
     ui.label(X, 558, 'Locked. Research Orbital Tanker.', { size: 13, color: COL.dimText });

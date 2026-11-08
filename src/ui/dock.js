@@ -9,6 +9,7 @@ import * as sim from '../sim.js';
 import * as B from '../base.js';
 import { COL, hex } from './ui.js';
 import { drawRocket } from './art.js';
+import { EXTRA } from '../layout.js';
 
 function icon(ui, x, y, w, h, type) {
   const g = ui.scene.add.graphics();
@@ -150,7 +151,7 @@ function renderReceipt(ui, s) {
   const rows = c.items.length + 1;
   const hasHull = r.role === 'payload' && sim.recoveryOf(s) === 'expend';
   const h = 30 + rows * 14 + (r.role === 'payload' ? 34 : 6) + (hasHull ? 14 : 0);
-  const x = 462;
+  const x = 462 + EXTRA;
   const w = 232;
   const y = 522 - h - 4;
   const g = ui.scene.add.graphics();

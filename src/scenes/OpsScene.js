@@ -9,11 +9,12 @@ import { renderMission, renderFleet, renderFactory, renderSites, renderTech, ren
 import { Lane, renderFlights, renderDepotAndLog } from '../ui/bottom.js';
 import { FX } from '../fx.js';
 import { renderSiteScene } from '../ui/art.js';
+import { W, EXTRA } from '../layout.js';
 import * as audio from '../audio.js';
 
 const SAVE_KEY = 'perigee-industries-save';
-const MAP = { x: 10, y: 90, w: 690, h: 432 };
-const DOCK = { x: 722, y: 98, w: 536 };
+const MAP = { x: 10, y: 90, w: 690 + EXTRA, h: 432 };
+const DOCK = { x: 722 + EXTRA, y: 98, w: 536 };
 const TABS = [['mission', 'Mission'], ['fleet', 'Fleet'], ['factory', 'Factory'], ['sites', 'Sites'], ['base', 'Base'], ['tech', 'R&D'], ['skylink', 'Skylink']];
 const TICK_MS = 2400;
 
@@ -60,7 +61,7 @@ export class OpsScene extends Phaser.Scene {
     sim.setEventSink((e) => this.onEvent(e));
     this.input.on('pointerdown', () => audio.unlock());
     this.setupKeys();
-    this.cameras.main.setBounds(0, 0, 1280, 720);
+    this.cameras.main.setBounds(0, 0, W, 720);
     this.ui = this.add.container(0, 0);
     this.hint = this.add.text(MAP.x + 10, MAP.y + MAP.h - 20, '', { fontFamily: FONT, fontSize: 12, color: hex(COL.accent), stroke: '#05070d', strokeThickness: 3 });
     this.uiHelper = new UI(this, this.ui, (fn) => this.act(fn), (t) => this.hint.setText(t));
@@ -76,19 +77,19 @@ export class OpsScene extends Phaser.Scene {
     const g = this.add.graphics();
     for (let i = 0; i < 160; i++) {
       g.fillStyle(0xffffff, Phaser.Math.FloatBetween(0.1, 0.6));
-      g.fillRect(Phaser.Math.Between(0, 1280), Phaser.Math.Between(0, 720), 1.5, 1.5);
+      g.fillRect(Phaser.Math.Between(0, W), Phaser.Math.Between(0, 720), 1.5, 1.5);
     }
   }
 
   drawFrame() {
     const g = this.add.graphics();
-    const panels = [[10, 58, 690, 466], [710, 58, 560, 466], [10, 530, 690, 180], [710, 530, 560, 180]];
+    const panels = [[10, 58, 690 + EXTRA, 466], [710 + EXTRA, 58, 560, 466], [10, 530, 690 + EXTRA, 180], [710 + EXTRA, 530, 560, 180]];
     for (const [x, y, w, h] of panels) {
       g.fillStyle(COL.panel, 0.92).fillRect(x, y, w, h);
       g.lineStyle(1, COL.line).strokeRect(x + 0.5, y + 0.5, w, h);
     }
-    g.fillStyle(COL.panel, 0.95).fillRect(0, 0, 1280, 50);
-    g.lineStyle(1, COL.line).lineBetween(0, 50, 1280, 50);
+    g.fillStyle(COL.panel, 0.95).fillRect(0, 0, W, 50);
+    g.lineStyle(1, COL.line).lineBetween(0, 50, W, 50);
   }
 
   // ---- save / load ------------------------------------------------------
@@ -424,7 +425,7 @@ export class OpsScene extends Phaser.Scene {
       size: 11, bold: true, color: runway === Infinity ? hex(COL.good) : runway < 20 ? hex(COL.bad) : runway < 60 ? hex(COL.warn) : COL.dimText,
     });
     [[0, 'Pause'], [1, '1x'], [3, '3x'], [8, '8x']].forEach(([v, name], i) => {
-      ui.button(846 + i * 50, 10, 46, 30, name, () => this.setSpeed(v), {
+      ui.button(846 + EXTRA + i * 50, 10, 46, 30, name, () => this.setSpeed(v), {
         fill: this.speed === v ? COL.btnOn : COL.btn, stroke: this.speed === v ? COL.good : COL.accent, size: 12,
         hint: 'Space pauses, 1 2 3 pick the speed.',
       });
@@ -433,13 +434,13 @@ export class OpsScene extends Phaser.Scene {
     const small = (x, w, label, cb, on, hint, off = false) => ui.button(x, 10, w, 30, label, cb, {
       size: 10, fill: on ? COL.btnOn : off ? 0x3a2030 : COL.btn, stroke: on ? COL.good : off ? COL.bad : COL.accent, hint,
     });
-    small(1048, 32, st.mute ? 'Mute' : 'Snd', () => audio.setSetting('mute', !st.mute), false, 'Sound on or off (M).', st.mute);
-    small(1084, 30, 'AP', () => audio.setSetting('autoPause', !st.autoPause), st.autoPause, `Auto-pause on important events: ${st.autoPause ? 'on' : 'off'} (P).`);
-    small(1118, 34, 'Tips', () => { this.helpMode = !this.helpMode; this.hint.setText(this.helpMode ? 'Tips mode: tap anything to read about it' : ''); }, this.helpMode, 'Tips mode: tapping a button shows what it does instead of pressing it.');
-    small(1156, 30, 'Fit', () => this.resetZoom(), false, 'Back to the full view. Pinch with two fingers to zoom.');
-    small(1190, 34, 'Full', () => (this.scale.isFullscreen ? this.scale.stopFullscreen() : this.scale.startFullscreen()), false, 'Fullscreen.');
+    small(1048 + EXTRA, 32, st.mute ? 'Mute' : 'Snd', () => audio.setSetting('mute', !st.mute), false, 'Sound on or off (M).', st.mute);
+    small(1084 + EXTRA, 30, 'AP', () => audio.setSetting('autoPause', !st.autoPause), st.autoPause, `Auto-pause on important events: ${st.autoPause ? 'on' : 'off'} (P).`);
+    small(1118 + EXTRA, 34, 'Tips', () => { this.helpMode = !this.helpMode; this.hint.setText(this.helpMode ? 'Tips mode: tap anything to read about it' : ''); }, this.helpMode, 'Tips mode: tapping a button shows what it does instead of pressing it.');
+    small(1156 + EXTRA, 30, 'Fit', () => this.resetZoom(), false, 'Back to the full view. Pinch with two fingers to zoom.');
+    small(1190 + EXTRA, 34, 'Full', () => (this.scale.isFullscreen ? this.scale.stopFullscreen() : this.scale.startFullscreen()), false, 'Fullscreen.');
     const sure = this.confirmNew;
-    ui.button(1228, 10, 46, 30, sure ? 'Erase?' : 'New', () => {
+    ui.button(1228 + EXTRA, 10, 46, 30, sure ? 'Erase?' : 'New', () => {
       if (sure) return this.newGame();
       this.confirmNew = true;
       this.time.delayedCall(3000, () => { this.confirmNew = false; this.render(); });
@@ -490,7 +491,7 @@ export class OpsScene extends Phaser.Scene {
     TABS.forEach(([id, name], i) => {
       const on = this.tab === id;
       const nudge = step?.tab === id && !on; // the tutorial wants this tab
-      ui.button(720 + i * 78, 63, 74, 24, name, () => { this.tab = id; }, {
+      ui.button(720 + EXTRA + i * 78, 63, 74, 24, name, () => { this.tab = id; }, {
         size: 11, fill: on ? COL.btnOn : nudge ? 0x5a4a12 : COL.btn, stroke: on ? COL.good : nudge ? 0xffd166 : COL.accent,
       });
     });
