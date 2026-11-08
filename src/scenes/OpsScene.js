@@ -9,7 +9,9 @@ import { renderMission, renderFleet, renderFactory, renderSites, renderTech, ren
 import { Lane, renderFlights, renderDepotAndLog } from '../ui/bottom.js';
 import { FX } from '../fx.js';
 import { renderSiteScene } from '../ui/art.js';
-import { W, EXTRA } from '../layout.js';
+import { W, H, EXTRA, PHONE } from '../layout.js';
+
+const STATUS_SHIFT = 190; // on a phone the bottom strip is a panel over the lower half of the screen
 import * as audio from '../audio.js';
 
 const SAVE_KEY = 'perigee-industries-save';
@@ -58,15 +60,20 @@ export class OpsScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-Z', () => this.act(() => this.undoBase()));
     this.input.keyboard?.on('keydown-R', () => this.act(() => { if (this.baseMode.kind === 'place') this.baseMode.rot ^= 1; }));
     this.input.keyboard?.on('keydown-ESC', () => this.act(() => { this.baseMode = { kind: 'idle', rot: 0 }; }));
-    this.lane = new Lane(this);
+    // The bottom strip: always on screen on desktop and tablet, a toggled panel on a phone.
+    this.statusLayer = this.add.container(0, -STATUS_SHIFT).setDepth(300).setVisible(!PHONE);
+    if (PHONE) { this.statusLayer.setVisible(false); this.buildStatusPanel(); }
+    this.lane = new Lane(this, PHONE ? this.statusLayer : null);
     this.fx = new FX(this, MAP);
+    this.fx.pinPos = (id) => (this.baseView === 'closed' && this.map.bodyId === 'earth' ? this.map.pinPos(id) : null);
     sim.setEventSink((e) => this.onEvent(e));
     this.input.on('pointerdown', () => audio.unlock());
     this.setupKeys();
-    this.cameras.main.setBounds(0, 0, W, 720);
+    this.cameras.main.setBounds(0, 0, W, H);
     this.ui = this.add.container(0, 0);
     this.hint = this.add.text(MAP.x + 10, MAP.y + MAP.h - 20, '', { fontFamily: FONT, fontSize: 12, color: hex(COL.accent), stroke: '#05070d', strokeThickness: 3 });
     this.uiHelper = new UI(this, this.ui, (fn) => this.act(fn), (t) => this.hint.setText(t));
+    this.statusUi = PHONE ? new UI(this, this.statusDyn, (fn) => this.act(fn), (t) => this.hint.setText(t)) : null;
     this.map.setBody(DESTINATIONS[this.s.dest].body);
     this.map.focus(this.s.dest);
     this.lastDest = this.s.dest;
@@ -79,13 +86,14 @@ export class OpsScene extends Phaser.Scene {
     const g = this.add.graphics();
     for (let i = 0; i < 160; i++) {
       g.fillStyle(0xffffff, Phaser.Math.FloatBetween(0.1, 0.6));
-      g.fillRect(Phaser.Math.Between(0, W), Phaser.Math.Between(0, 720), 1.5, 1.5);
+      g.fillRect(Phaser.Math.Between(0, W), Phaser.Math.Between(0, H), 1.5, 1.5);
     }
   }
 
   drawFrame() {
     const g = this.add.graphics();
-    const panels = [[10, 58, 690 + EXTRA, 466], [710 + EXTRA, 58, 560, 466], [10, 530, 690 + EXTRA, 180], [710 + EXTRA, 530, 560, 180]];
+    const panels = [[10, 58, 690 + EXTRA, 466], [710 + EXTRA, 58, 560, 466]];
+    if (!PHONE) panels.push([10, 530, 690 + EXTRA, 180], [710 + EXTRA, 530, 560, 180]);
     for (const [x, y, w, h] of panels) {
       g.fillStyle(COL.panel, 0.92).fillRect(x, y, w, h);
       g.lineStyle(1, COL.line).strokeRect(x + 0.5, y + 0.5, w, h);
@@ -165,6 +173,9 @@ export class OpsScene extends Phaser.Scene {
       }
     } else if (e.type === 'milestone') {
       this.fx.banner(e.title, e.text, e.date);
+    } else if (e.type === 'dock') {
+      // a ship refuels after its ascent, so that scene waits for the launch animation
+      this.fx.dock(e.mode, e.t, e.left, e.mode === 'refuel' ? 1900 : 0);
     } else if (e.type === 'test') {
       if (e.success) audio.success();
       else { audio.failure(); this.cameras.main.shake(420, 0.01); }
@@ -401,10 +412,28 @@ export class OpsScene extends Phaser.Scene {
     const ctx = { mode: this.baseMode, sub: this.baseSub, view: this.baseView, base: this.activeBase(), body: this.baseBody, factorySite: this.factorySite, siteView: this.siteView };
     if (this.tab === 'base') renderBase(ui, s, x, y, w, actions, ctx);
     else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink })[this.tab](ui, s, x, y, w, actions, ctx);
-    renderFlights(ui, s);
-    renderDepotAndLog(ui, s);
+    if (PHONE) this.renderStatus(s);
+    else { renderFlights(ui, s); renderDepotAndLog(ui, s); }
     if (this.tab === 'sites' || this.tab === 'factory') renderSiteScene(ui, s, this.tab === 'sites' ? (this.siteView && s.sites[this.siteView] ? this.siteView : s.site) : this.factorySite);
     if (step) this.renderCoach(ui, step);
+  }
+
+  // ---- phone: the status panel -----------------------------------------------------------
+  buildStatusPanel() {
+    const g = this.add.graphics();
+    g.fillStyle(COL.panel, 0.98).fillRect(10, 530, 690 + EXTRA, 180).fillRect(710 + EXTRA, 530, 560, 180);
+    g.lineStyle(2, COL.accent).strokeRect(10.5, 530.5, 690 + EXTRA, 180).strokeRect(710.5 + EXTRA, 530.5, 560, 180);
+    const block = this.add.zone(0, 530, W, 190).setOrigin(0).setInteractive(); // taps on the panel stay on the panel
+    this.statusDyn = this.add.container(0, 0);
+    this.statusLayer.add([g, block, this.statusDyn]);
+  }
+
+  renderStatus(s) {
+    this.statusDyn.removeAll(true);
+    this.statusLayer.setVisible(!!this.statusOpen);
+    if (!this.statusOpen) return;
+    renderFlights(this.statusUi, s);
+    renderDepotAndLog(this.statusUi, s);
   }
 
   // The tutorial card, over the map's top-left corner.
@@ -425,16 +454,19 @@ export class OpsScene extends Phaser.Scene {
   renderTopBar(s, ui) {
     const net = sim.dailyRevenue(s) - sim.OVERHEAD_PER_DAY;
     const runway = sim.runwayDays(s);
-    ui.label(20, 13, 'PERIGEE INDUSTRIES', { size: 20, bold: true, color: hex(COL.accent) });
-    ui.label(262, 15, `${sim.dateOf(s.day).text}  ·  Day ${s.day}`, { size: 15 });
-    ui.label(470, 15, `Cash $${s.cash.toFixed(1)}M`, { size: 16, color: hex(COL.good) });
-    this.sparkline(596, 12, 80, 26, s.cashHistory);
-    ui.label(686, 9, `Net ${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}M/day`, { size: 15 });
-    ui.label(686, 29, runway === Infinity ? 'Profitable' : `Runway ${runway} days`, {
+    const date = sim.dateOf(s.day).text;
+    const rx = 846 + EXTRA - (PHONE ? 40 : 0); // where the right-hand buttons start
+    ui.label(20, PHONE ? 15 : 13, 'PERIGEE INDUSTRIES', { size: PHONE ? 17 : 20, bold: true, color: hex(COL.accent) });
+    ui.label(PHONE ? 225 : 262, 15, PHONE ? date : `${date}  ·  Day ${s.day}`, { size: 15 });
+    ui.label(PHONE ? 335 : 470, 15, `Cash $${s.cash.toFixed(1)}M`, { size: 16, color: hex(COL.good) });
+    if (!PHONE) this.sparkline(596, 12, 80, 26, s.cashHistory);
+    const nx = PHONE ? 475 : 686;
+    ui.label(nx, 9, `Net ${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}M/day`, { size: 15 });
+    ui.label(nx, 29, runway === Infinity ? 'Profitable' : `Runway ${runway} days`, {
       size: 11, bold: true, color: runway === Infinity ? hex(COL.good) : runway < 20 ? hex(COL.bad) : runway < 60 ? hex(COL.warn) : COL.dimText,
     });
     [[0, 'Pause'], [1, '1x'], [3, '3x'], [8, '8x']].forEach(([v, name], i) => {
-      ui.button(846 + EXTRA + i * 50, 10, 46, 30, name, () => this.setSpeed(v), {
+      ui.button(rx + i * 50, 10, 46, 30, name, () => this.setSpeed(v), {
         fill: this.speed === v ? COL.btnOn : COL.btn, stroke: this.speed === v ? COL.good : COL.accent, size: 12,
         hint: 'Space pauses, 1 2 3 pick the speed.',
       });
@@ -443,13 +475,18 @@ export class OpsScene extends Phaser.Scene {
     const small = (x, w, label, cb, on, hint, off = false) => ui.button(x, 10, w, 30, label, cb, {
       size: 10, fill: on ? COL.btnOn : off ? 0x3a2030 : COL.btn, stroke: on ? COL.good : off ? COL.bad : COL.accent, hint,
     });
-    small(1048 + EXTRA, 32, st.mute ? 'Mute' : 'Snd', () => audio.setSetting('mute', !st.mute), false, 'Sound on or off (M).', st.mute);
-    small(1084 + EXTRA, 30, 'AP', () => audio.setSetting('autoPause', !st.autoPause), st.autoPause, `Auto-pause on important events: ${st.autoPause ? 'on' : 'off'} (P).`);
-    small(1118 + EXTRA, 34, 'Tips', () => { this.helpMode = !this.helpMode; this.hint.setText(this.helpMode ? 'Tips mode: tap anything to read about it' : ''); }, this.helpMode, 'Tips mode: tapping a button shows what it does instead of pressing it.');
-    small(1156 + EXTRA, 30, 'Fit', () => this.resetZoom(), false, 'Back to the full view. Pinch with two fingers to zoom.');
-    small(1190 + EXTRA, 34, 'Full', () => (this.scale.isFullscreen ? this.scale.stopFullscreen() : this.scale.startFullscreen()), false, 'Fullscreen.');
+    small(rx + 202, 32, st.mute ? 'Mute' : 'Snd', () => audio.setSetting('mute', !st.mute), false, 'Sound on or off (M).', st.mute);
+    small(rx + 238, 30, 'AP', () => audio.setSetting('autoPause', !st.autoPause), st.autoPause, `Auto-pause on important events: ${st.autoPause ? 'on' : 'off'} (P).`);
+    small(rx + 272, 34, 'Tips', () => { this.helpMode = !this.helpMode; this.hint.setText(this.helpMode ? 'Tips mode: tap anything to read about it' : ''); }, this.helpMode, 'Tips mode: tapping a button shows what it does instead of pressing it.');
+    small(rx + 310, 30, 'Fit', () => this.resetZoom(), false, 'Back to the full view. Pinch with two fingers to zoom.');
+    small(rx + 344, 34, 'Full', () => (this.scale.isFullscreen ? this.scale.stopFullscreen() : this.scale.startFullscreen()), false, 'Fullscreen.');
+    let nxt = rx + 382;
+    if (PHONE) {
+      small(nxt, 34, 'Log', () => { this.statusOpen = !this.statusOpen; }, !!this.statusOpen, 'Transit lane, flights, depot and mission log.');
+      nxt += 38;
+    }
     const sure = this.confirmNew;
-    ui.button(1228 + EXTRA, 10, 46, 30, sure ? 'Erase?' : 'New', () => {
+    ui.button(nxt, 10, 46, 30, sure ? 'Erase?' : 'New', () => {
       if (sure) return this.newGame();
       this.confirmNew = true;
       this.time.delayedCall(3000, () => { this.confirmNew = false; this.render(); });

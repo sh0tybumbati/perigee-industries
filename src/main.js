@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import { OpsScene } from './scenes/OpsScene.js';
-import { W, widthFor } from './layout.js';
+import { W, H, sizeFor } from './layout.js';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   width: W,
-  height: 720,
+  height: H,
   backgroundColor: '#05070d',
   input: { activePointers: 3 }, // two fingers for pinch-zoom, plus one spare
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
@@ -23,5 +23,5 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) navigator.serviceWorke
 let resizeTimer = 0;
 addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (Math.abs(widthFor(innerWidth, innerHeight) - W) > 30) location.reload(); }, 400);
+  resizeTimer = setTimeout(() => { const n = sizeFor(innerWidth, innerHeight); if (n.H !== H || Math.abs(n.W - W) > 30) location.reload(); }, 400);
 });

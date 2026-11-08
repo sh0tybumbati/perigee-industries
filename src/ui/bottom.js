@@ -11,13 +11,15 @@ const LANE = { y: 566, earth: 52, moon: Math.round(230 * WIDE), mars: Math.round
 
 // Persistent drawing so in-transit flights glide between daily ticks.
 export class Lane {
-  constructor(scene) {
+  constructor(scene, layer = null) {
     this.scene = scene;
     this.g = scene.add.graphics();
+    layer?.add(this.g);
     this.texts = [];
     const stat = (x, name, size, color) => {
       this.g.fillStyle(color, 1);
-      scene.add.text(LANE.x0 + x, LANE.y + size + 8, name, { fontFamily: FONT, fontSize: 11, color: COL.dimText }).setOrigin(0.5, 0);
+      const t = scene.add.text(LANE.x0 + x, LANE.y + size + 8, name, { fontFamily: FONT, fontSize: 11, color: COL.dimText }).setOrigin(0.5, 0);
+      layer?.add(t);
     };
     stat(LANE.earth, BODIES.earth.name, 9, 0x3a78c4);
     stat(LANE.moon, BODIES.moon.name, 6, 0xb5b5b5);

@@ -931,7 +931,11 @@ export function launch(s) {
   };
   if (r.role === 'module') {
     trip.module = r.module;
-    if (!failed) s.depot.prop -= modulePropNeed(s);
+    if (!failed) {
+      const used = modulePropNeed(s);
+      s.depot.prop -= used;
+      if (used) emit({ type: 'dock', mode: 'refuel', t: used, left: s.depot.prop });
+    }
   }
   if (r.role === 'payload') {
     const t = manifestTotals(s);
@@ -941,7 +945,10 @@ export function launch(s) {
     s.contracts = s.contracts.filter((c) => !s.manifest.includes(c.id));
     s.manifest = [];
     s.sats = 0;
-    if (!failed && need) s.depot.prop -= need;
+    if (!failed && need) {
+      s.depot.prop -= need;
+      emit({ type: 'dock', mode: 'refuel', t: need, left: s.depot.prop });
+    }
   }
 
   const from = origin === 'moon' ? 'the Moon base' : origin === 'mars' ? 'the Mars base' : SITES[s.site].short;
@@ -1030,6 +1037,7 @@ function arrive(s, trip) {
   } else if (trip.role === 'tanker') {
     s.depot.prop = Math.min(DEPOT_CAP, s.depot.prop + TANKER_LOAD);
     note(s, `${trip.serial} delivered ${TANKER_LOAD} t. Depot: ${Math.round(s.depot.prop)}/${DEPOT_CAP} t.`);
+    emit({ type: 'dock', mode: 'deliver', t: TANKER_LOAD, left: s.depot.prop });
   } else {
     s.depot = { built: true, prop: 0 };
     note(s, `${trip.serial} is on station: LEO depot online. Fly tanker runs to fill it.`);

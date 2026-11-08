@@ -135,6 +135,12 @@ export class MapLayer {
   }
 
   // Dolly in to a landing site over `ms`, then call done. progress(p) reports 0..1 for fades.
+  // Screen position of a destination pin (an orbit's marker), or null when it is not showing.
+  pinPos(id) {
+    const p = this.pins[id];
+    return p?.dot.visible ? { x: p.dot.x, y: p.dot.y } : null;
+  }
+
   // Screen position of a launch-site pin, or null when it is not showing (other body, or zoomed in).
   sitePos(id) {
     const p = this.sitePins[id];

@@ -7,6 +7,9 @@ export const COL = {
   row: 0x101a2e, rowOn: 0x14385a, btn: 0x12304a, btnOn: 0x1d6a4a, btnHover: 0x1d4a70,
 };
 import * as audio from '../audio.js';
+import { PHONE } from '../layout.js';
+
+const fs = (size) => Math.max(size ?? 14, PHONE ? 11 : 0); // phones get no text under 11 px
 
 export const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 export const FONT = 'system-ui, sans-serif';
@@ -21,7 +24,7 @@ export class UI {
 
   label(x, y, str, o = {}) {
     const t = this.scene.add.text(x, y, str, {
-      fontFamily: FONT, fontSize: o.size ?? 14, color: o.color ?? COL.text, fontStyle: o.bold ? 'bold' : 'normal',
+      fontFamily: FONT, fontSize: fs(o.size), color: o.color ?? COL.text, fontStyle: o.bold ? 'bold' : 'normal',
       wordWrap: o.wrap ? { width: o.wrap } : undefined,
     });
     if (o.right) t.setOrigin(1, 0);
@@ -55,7 +58,7 @@ export class UI {
     const r = this.scene.add.rectangle(x, y, w, h, enabled ? base : 0x141b2b).setOrigin(0)
       .setStrokeStyle(1, enabled ? (o.stroke ?? COL.accent) : 0x2a3550);
     const t = this.scene.add.text(x + w / 2, y + h / 2, label, {
-      fontFamily: FONT, fontSize: o.size ?? 14, fontStyle: 'bold', color: enabled ? '#eaf6ff' : '#566380',
+      fontFamily: FONT, fontSize: fs(o.size), fontStyle: 'bold', color: enabled ? '#eaf6ff' : '#566380',
     }).setOrigin(0.5);
     if (enabled) {
       r.setInteractive({ useHandCursor: true })

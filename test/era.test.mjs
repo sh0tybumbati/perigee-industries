@@ -187,3 +187,21 @@ test('the tutorial follows what the player does, and old saves skip it', () => {
   sim.skipTutorial(skip);
   assert.equal(sim.tutorialStep(skip), null);
 });
+
+test('a tanker arriving, and a ship leaving the depot, send docking events', () => {
+  const s = sim.createState();
+  for (const t of ['skyship', 'tanker', 'habitat', 'landing']) s.tech.add(t);
+  s.cash = 5000;
+  s.sites.cape.pads.forEach((p) => { p.tower = true; });
+  s.depot = { built: true, prop: 100 };
+  s.fleet.push({ id: 801, type: 'skyshipTanker', serial: 'TNK-01', flights: 0, returnDay: 0, readyDay: 0, site: 'cape' });
+  const seen = [];
+  sim.setEventSink((e) => { if (e.type === 'dock') seen.push(e); });
+  try {
+    sim.setRocket(s, 'skyshipTanker');
+    withMock(0.999, () => sim.launch(s));
+    idle(s, 3);
+    assert.deepEqual(seen.map((e) => [e.mode, e.t]), [['deliver', 100]]);
+    assert.ok(seen[0].left > 150);
+  } finally { sim.setEventSink(null); }
+});

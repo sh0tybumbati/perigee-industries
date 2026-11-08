@@ -2,7 +2,7 @@
 // They live outside the container that the scene rebuilds on every state change, so they survive re-renders.
 import Phaser from 'phaser';
 import { COL, FONT, hex } from './ui/ui.js';
-import { W } from './layout.js';
+import { W, H } from './layout.js';
 import * as audio from './audio.js';
 
 const DEPTH = 500;
@@ -87,6 +87,64 @@ export class FX {
     this.scene.tweens.add({ targets: t, y: y + (up ? 26 : 30), alpha: 0, duration: 1400, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
   }
 
+  // ---- depot docking (GDD 2.18) --------------------------------------------------------------
+  // A tanker brings propellant to the LEO depot ('deliver'), or a Moon or Mars ship takes it ('refuel').
+  // It plays at the LEO pin on the Earth map, and is a toast anywhere else. The rules do not depend on it.
+  dock(mode, t, left, delay = 0) {
+    const s = this.scene;
+    s.time.delayedCall(delay, () => {
+      const p = this.pinPos?.('leo');
+      const verb = mode === 'deliver' ? `Tanker docked: +${Math.round(t)} t` : `Ship refueled at the depot: -${Math.round(t)} t`;
+      if (!p || this.docking) { this.toast(`${verb} (depot ${Math.round(left)} t)`, 'info'); return; }
+      this.docking = true;
+      audio.dock();
+      const wx = p.x + 4;
+      const wy = p.y - 16;
+      const g = s.add.graphics({ x: wx, y: wy }).setDepth(DEPTH).setScale(1.6); // drawn around (0, 0), then enlarged
+      const px = 0;
+      const py = 0;
+      const label = this.text(wx, wy - 40, '', 14, hex(mode === 'deliver' ? COL.good : COL.warn), { stroke: 3 }).setAlpha(0);
+      const state = { u: 0 };
+      const ship = (x, y, a, alpha) => {
+        g.fillStyle(0xeef3fb, alpha).fillRoundedRect(x - 15, y - 4, 30, 8, 3);
+        g.fillStyle(mode === 'deliver' ? COL.warn : 0xb9c4d4, alpha).fillRect(x - 3, y - 4, 6, 8);
+        g.fillStyle(0xffb347, alpha * a).fillTriangle(x - 15, y - 3, x - 15, y + 3, x - 15 - 12 * a, y);
+      };
+      s.tweens.add({
+        targets: state, u: 1, duration: 2600, ease: 'Linear',
+        onUpdate: () => {
+          const u = state.u;
+          g.clear();
+          // the depot: a violet tank with a ring, always there
+          g.fillStyle(COL.violet, 1).fillRoundedRect(px - 14, py - 5, 28, 10, 4);
+          g.lineStyle(2, 0xdcc8ff).strokeEllipse(px, py, 10, 16);
+          // the visitor
+          const dockX = px + 34;
+          let x;
+          let a = 0;
+          if (u < 0.35) { const k = Phaser.Math.Easing.Cubic.Out(u / 0.35); x = dockX + 120 * (1 - k); a = 1 - k; }
+          else if (u < 0.78) x = dockX;
+          else { const k = Phaser.Math.Easing.Cubic.In((u - 0.78) / 0.22); x = dockX + 130 * k; a = k; }
+          ship(x, py, a, u > 0.9 ? 1 - (u - 0.9) * 10 : 1);
+          // contact flash, then the propellant dots
+          if (u > 0.35 && u < 0.45) g.fillStyle(0xffffff, 1 - (u - 0.35) * 10).fillCircle(px + 17, py, 10);
+          if (u > 0.4 && u < 0.72) {
+            for (let i = 0; i < 7; i++) {
+              const f = (((u - 0.4) * 5 + i / 7) % 1);
+              const from = mode === 'deliver' ? dockX - 15 : px + 14;
+              const to = mode === 'deliver' ? px + 14 : dockX - 15;
+              g.fillStyle(COL.accent, 0.95).fillCircle(from + (to - from) * f, py + Math.sin(f * 9 + i) * 2, 2.4);
+            }
+          }
+          if (u > 0.4) {
+            label.setText(`${mode === 'deliver' ? '+' : '-'}${Math.round(t)} t   depot ${Math.round(left)} t`).setAlpha(Math.min(1, (u - 0.4) * 6) * (u > 0.88 ? 1 - (u - 0.88) * 8 : 1)).setY(wy - 40 - (u - 0.4) * 14);
+          }
+        },
+        onComplete: () => { g.destroy(); label.destroy(); this.docking = false; },
+      });
+    });
+  }
+
   // ---- launch sequence ----------------------------------------------------------
   // Counts down, calls launchFn at zero (which returns the sim result), then plays the outcome.
   launch(origin, launchFn, done) {
@@ -142,7 +200,7 @@ export class FX {
     const s = this.scene;
     audio.failure();
     s.cameras.main.shake(520, 0.012);
-    const flash = s.add.rectangle(0, 0, W, 720, 0xff3b30, 0.4).setOrigin(0).setDepth(DEPTH + 3);
+    const flash = s.add.rectangle(0, 0, W, H, 0xff3b30, 0.4).setOrigin(0).setDepth(DEPTH + 3);
     s.tweens.add({ targets: flash, alpha: 0, duration: 700, onComplete: () => flash.destroy() });
     for (let i = 0; i < 30; i++) {
       const a = Math.random() * Math.PI * 2;

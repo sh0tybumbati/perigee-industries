@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 1.0 (Pre-Alpha Spec: Mars bases, Mars fuel and return flights)
+Version: 1.1 (Pre-Alpha Spec: phone layout and depot docking)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -369,6 +369,17 @@ Mars experience: every successful arrival at Mars lowers the risks for the next 
 
 Milestones: first module on Mars, Mars base founded, first Mars methalox, first return flight home.
 
+2.18 Phone Layout and Depot Docking (Phase 11)
+Phone layout: on a short landscape screen (a phone, under about 560 pixels of height) the layout changes so that everything is larger.
+- The bottom strip (transit lane, depot bar, flights in transit and mission log) is hidden, which shortens the canvas from 720 to 530 pixels and enlarges everything by about a third. A Status button in the top bar opens the strip as a panel over the lower half of the screen, and a second tap closes it.
+- The top bar drops the sparkline and the day count to make room, and the smallest text and buttons are made a little bigger.
+- Tablets and desktops keep the full layout.
+
+Depot docking: refueling is shown as a short scene on the map at the LEO pin.
+- A tanker arriving: the tanker drifts in from the side, docks with the depot (a flash and a clunk), and propellant dots stream across while "+100 t" floats up and the depot's total is shown.
+- A Moon or Mars flight: after the ascent, the ship meets the depot and takes its propellant: the dots flow the other way and "-400 t" floats up with what is left.
+- The scene is cosmetic. The depot rules do not change. It plays on the Earth map, and when another body is on screen it plays as a toast only.
+
 3. Technology Tree
                       [ PEREGRINE ERA ]
                               │
@@ -426,4 +437,5 @@ Phase 7: launch sequence, floating cash, sparkline and runway, launch receipt, m
 Phase 8: customer regions, payload shipping time, site letters and automatic launch-site choice.
 Phase 9: touch and phone support, GitHub Pages hosting, tutorial, fleet art, site scenes and base undo.
 Phase 10: Mars bases, dust storms, Mars methalox, Mars-based Skyships and return flights.
-Next: Mars economy tuning with a Mars-flying bot, crew rotation and larger bases.
+Phase 11: phone layout (hidden status strip, shorter canvas) and the depot docking scene.
+Next: crew rotation, larger bases and a base hint for unpowered habitats.

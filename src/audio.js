@@ -74,6 +74,7 @@ export const success = () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i *
 export const failure = () => { noise(0, 1.2, { gain: 0.6, from: 2400, to: 80 }); tone(180, 0.1, 0.9, { type: 'sawtooth', gain: 0.16, to: 45 }); };
 export const coin = () => { tone(988, 0, 0.08, { type: 'square', gain: 0.06 }); tone(1319, 0.07, 0.18, { type: 'square', gain: 0.06 }); };
 export const fanfare = () => [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.11, 0.5, { type: 'triangle', gain: 0.13 }));
+export const dock = () => { noise(0, 0.25, { gain: 0.35, from: 600, to: 90 }); tone(196, 0.02, 0.18, { type: 'triangle', gain: 0.14 }); tone(392, 0.35, 0.5, { type: 'sine', gain: 0.06, to: 520 }); };
 export const warn = () => { tone(440, 0, 0.12, { type: 'triangle', gain: 0.1 }); tone(330, 0.13, 0.2, { type: 'triangle', gain: 0.1 }); };
 
 // A slow, quiet pad: two detuned saws through a low-pass filter whose cutoff drifts.
