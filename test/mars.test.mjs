@@ -75,6 +75,7 @@ test('a direct Mars flight needs a Skyship, an open window, a depot and propella
   s.depot.prop = 300;
   assert.equal(sim.launchBlocker(s), null);
   s.day = MARS_WINDOWS[0][0] - 220;
+  s.contracts.forEach((c) => { c.acceptedDay = 0; }); // the clock was wound back for this check
   assert.match(sim.launchBlocker(s), /window opens in 220 days/);
   s.day = MARS_WINDOWS[0][0] + 5;
   sim.setRocket(s, 'peregrine9');

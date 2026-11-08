@@ -82,8 +82,8 @@ export function renderMission(ui, s, X, Y, W, actions) {
     ui.label(X, Y + 146, 'From the Moon base', { size: 12, bold: true, color: hex(COL.accent) });
     ui.label(X + 142, Y + 147, `${Math.round(s.base?.stock.methalox ?? 0)} t methalox · ${sim.fleetOf(s, 'skyship').filter((x) => x.site === 'moon').length} hull(s)`, { size: 11, color: COL.dimText });
   } else {
-    ui.label(X, Y + 146, `From ${SITES[s.site].short}`, { size: 12, bold: true, color: hex(tenureColor[site.status]) });
-    ui.label(X + 118, Y + 147, `${site.status}  ·  ${Math.round(site.stock[sim.fuelNeed(s).type])} t ${sim.fuelNeed(s).type}`, { size: 11, color: COL.dimText });
+    ui.label(X, Y + 146, `From ${SITES[s.site].letter} · ${SITES[s.site].short}`, { size: 12, bold: true, color: hex(tenureColor[site.status]) });
+    ui.label(X + 150, Y + 147, `${Math.round(site.stock[sim.fuelNeed(s).type])} t ${sim.fuelNeed(s).type}`, { size: 11, color: COL.dimText });
   }
   if (marsPick) {
     [['direct', 'Direct'], ['moon', 'From Moon']].forEach(([id, name], i) => {
@@ -125,11 +125,55 @@ export function renderMission(ui, s, X, Y, W, actions) {
     renderContractsAndManifest(ui, s, X, Y + 172, W, actions);
   }
 
+  renderReceipt(ui, s);
   const blocker = sim.launchBlocker(s);
   const total = sim.launchCost(s);
   ui.button(X, Y + 384, W, 38, blocker ? `LAUNCH  (${blocker})` : `LAUNCH to ${ed.name}  ($${total}M)`, () => actions.launch(), {
     enabled: !blocker, fill: 0x7a2a1d, stroke: COL.bad, size: blocker ? 12 : 15, hint: costHint(s),
   });
+}
+
+// The itemized launch cost as a receipt on the map (GDD 2.13).
+function renderReceipt(ui, s) {
+  const r = sim.rocketDef(s);
+  const t = sim.manifestTotals(s);
+  if (r.role === 'payload' && !t.payout && !s.sats) return;
+  const c = sim.launchCosts(s);
+  const rows = c.items.length + 1;
+  const hasHull = r.role === 'payload' && sim.recoveryOf(s) === 'expend';
+  const h = 30 + rows * 14 + (r.role === 'payload' ? 34 : 6) + (hasHull ? 14 : 0);
+  const x = 462;
+  const w = 232;
+  const y = 522 - h - 4;
+  const g = ui.scene.add.graphics();
+  g.fillStyle(0x0b1220, 0.88).fillRect(x, y, w, h);
+  g.lineStyle(1, COL.line).strokeRect(x + 0.5, y + 0.5, w, h);
+  g.lineStyle(2, COL.warn).lineBetween(x, y, x + w, y);
+  ui.container.add(g);
+  ui.label(x + 8, y + 5, 'LAUNCH RECEIPT', { size: 11, color: hex(COL.warn), bold: true });
+  let ly = y + 22;
+  c.items.forEach((i) => {
+    ui.label(x + 8, ly, i.label.startsWith('Propellant') ? 'Propellant bought' : i.label, { size: 11, color: COL.dimText });
+    ui.label(x + w - 8, ly, `$${i.amt}M`, { size: 11, right: true });
+    ly += 14;
+  });
+  if (!c.items.length) { ui.label(x + 8, ly, 'Fuel already in the tanks', { size: 11, color: COL.dimText }); ly += 14; }
+  ui.label(x + 8, ly + 2, 'Total now', { size: 12, bold: true });
+  ui.label(x + w - 8, ly + 2, `$${c.total}M`, { size: 12, bold: true, right: true, color: hex(COL.bad) });
+  ly += 18;
+  if (hasHull) {
+    const b = sim.buildCostAt(s.rocket, s.site);
+    ui.label(x + 8, ly, 'Booster lost: next hull', { size: 11, color: COL.dimText });
+    ui.label(x + w - 8, ly, `~$${b.cost}M`, { size: 11, right: true, color: COL.dimText });
+    ly += 14;
+  }
+  if (r.role === 'payload') {
+    ui.label(x + 8, ly, 'Payout on arrival', { size: 11, color: COL.dimText });
+    ui.label(x + w - 8, ly, `+$${t.payout}M`, { size: 11, right: true, color: hex(COL.good) });
+    const net = t.payout - c.total;
+    ui.label(x + 8, ly + 15, 'Estimated profit', { size: 12, bold: true });
+    ui.label(x + w - 8, ly + 15, `${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(1)}M`, { size: 12, bold: true, right: true, color: hex(net >= 0 ? COL.good : COL.bad) });
+  }
 }
 
 function renderContractsAndManifest(ui, s, X, Y, W, actions) {
@@ -140,15 +184,29 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
     const on = s.manifest.includes(c.id);
     const match = c.dest === s.dest;
     const d = DESTINATIONS[c.dest];
+    const best = sim.bestSiteFor(s, c);
+    const region = REGIONS.find((r) => r.id === c.region);
+    const ship = SITE_IDS.filter((id) => s.sites[id].status !== 'locked').map((id) => `${SITES[id].letter} ${sim.shipDays(c, id)}d`).join(', ');
     ui.row(X, y, W, 23, {
       on, onClick: () => actions.toggleContract(c.id),
-      hint: `${c.customer} → ${d.name}. Expires day ${c.expires}.${c.prop ? ` Burns ${c.prop} t of depot propellant.` : ''}`,
+      hint: `${c.customer}${region ? ` (${region.name})` : ''} → ${d.name}. Expires day ${c.expires}.${region ? ` Shipping: ${ship}.` : ''}${c.prop ? ` Burns ${c.prop} t of depot propellant.` : ''}`,
     });
     const dim = match ? COL.text : COL.dimText;
     ui.label(X + 8, y + 4, c.customer, { size: 12, bold: true, color: dim });
     ui.label(X + 160, y + 4, d.name, { size: 12, color: c.prop ? hex(COL.accent) : dim });
-    ui.label(X + 330, y + 4, `${c.mass} t`, { size: 12, color: dim });
-    ui.label(X + 385, y + 4, `${c.volume} m³`, { size: 12, color: dim });
+    ui.label(X + 300, y + 4, `${c.mass} t`, { size: 12, color: dim });
+    ui.label(X + 345, y + 4, `${c.volume} m³`, { size: 12, color: dim });
+    if (best) {
+      const wait = Math.max(0, best.day - s.day);
+      const col = wait === 0 ? COL.good : wait <= 3 ? COL.warn : COL.dim;
+      const gb = ui.scene.add.graphics();
+      gb.fillStyle(0x0b1220).fillRoundedRect(X + 405, y + 3, 17, 17, 3).lineStyle(1, col).strokeRoundedRect(X + 405, y + 3, 17, 17, 3);
+      ui.container.add(gb);
+      ui.label(X + 413.5, y + 5, SITES[best.id].letter, { size: 12, bold: true, color: hex(col), center: true });
+      ui.label(X + 428, y + 5, wait === 0 ? 'now' : `${wait}d`, { size: 11, color: hex(col) });
+    } else {
+      ui.label(X + 405, y + 5, 'no site', { size: 11, color: hex(COL.bad) });
+    }
     ui.label(X + W - 8, y + 3, `$${c.payout}M`, { size: 13, bold: true, color: hex(COL.good), right: true });
   });
   if (!s.contracts.length) ui.label(X, Y + 22, 'No contracts on the board. New ones arrive every few days.', { size: 12, color: COL.dimText });
@@ -411,6 +469,16 @@ export function renderTech(ui, s, X, Y, W, actions, ctx) {
   });
 }
 
+function renderTimeline(ui, s, X, Y) {
+  const list = Object.values(s.milestones ?? {}).sort((a, b) => b.day - a.day).slice(0, 4);
+  ui.heading(X, Y, 'COMPANY TIMELINE');
+  if (!list.length) ui.label(X, Y + 18, 'Nothing yet. Fly something.', { size: 12, color: COL.dimText });
+  list.forEach((m, i) => {
+    ui.label(X, Y + 18 + i * 17, sim.dateOf(m.day).text, { size: 12, color: COL.dimText });
+    ui.label(X + 100, Y + 18 + i * 17, m.title, { size: 12, bold: i === 0, color: i === 0 ? hex(0xffd166) : COL.text });
+  });
+}
+
 export function renderSkylink(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, 'SKYLINK COVERAGE  ·  click to set the target region for the next satellite batch');
   REGIONS.forEach((r, i) => {
@@ -426,6 +494,7 @@ export function renderSkylink(ui, s, X, Y, W, actions) {
   const total = sim.dailyRevenue(s);
   ui.label(X, Y + 22 + 6 * 40 + 8, `Total: $${total.toFixed(2)}M/day  ·  overhead $${sim.OVERHEAD_PER_DAY}M/day`, { size: 14, bold: true, color: hex(COL.good) });
   ui.label(X, Y + 22 + 6 * 40 + 32, 'Satellites decay over 5 years. Keep launching batches to LEO or Polar LEO to hold coverage.', { size: 12, color: COL.dimText, wrap: W });
+  renderTimeline(ui, s, X, Y + 22 + 6 * 40 + 62);
 }
 
 // ---- Moon base --------------------------------------------------------------------------------------

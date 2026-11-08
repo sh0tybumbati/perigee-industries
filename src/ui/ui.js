@@ -6,6 +6,8 @@ export const COL = {
   warn: 0xffb84d, bad: 0xff5d6c, violet: 0xb68cff, dim: 0x6b7a99, text: '#d7e2f5', dimText: '#7d8cab',
   row: 0x101a2e, rowOn: 0x14385a, btn: 0x12304a, btnOn: 0x1d6a4a, btnHover: 0x1d4a70,
 };
+import * as audio from '../audio.js';
+
 export const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 export const FONT = 'system-ui, sans-serif';
 
@@ -48,7 +50,7 @@ export class UI {
     }).setOrigin(0.5);
     if (enabled) {
       r.setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.act(cb))
+        .on('pointerdown', () => { audio.unlock(); audio.click(); this.act(cb); })
         .on('pointerover', () => r.setFillStyle(COL.btnHover))
         .on('pointerout', () => r.setFillStyle(base));
     }

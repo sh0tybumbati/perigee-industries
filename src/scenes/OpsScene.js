@@ -7,6 +7,8 @@ import { BaseLayer } from '../map/BaseLayer.js';
 import { COL, FONT, UI, hex } from '../ui/ui.js';
 import { renderMission, renderFleet, renderFactory, renderSites, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
 import { Lane, renderFlights, renderDepotAndLog } from '../ui/bottom.js';
+import { FX } from '../fx.js';
+import * as audio from '../audio.js';
 
 const SAVE_KEY = 'perigee-industries-save';
 const MAP = { x: 10, y: 90, w: 690, h: 432 };
@@ -25,6 +27,7 @@ export class OpsScene extends Phaser.Scene {
     this.factorySite = 'cape';
     this.siteView = null;
     this.baseMode = { kind: 'idle', rot: 0 };
+    this.lastSpeed = 1; // restored by Space after a pause
   }
 
   create() {
@@ -48,6 +51,10 @@ export class OpsScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-R', () => this.act(() => { if (this.baseMode.kind === 'place') this.baseMode.rot ^= 1; }));
     this.input.keyboard?.on('keydown-ESC', () => this.act(() => { this.baseMode = { kind: 'idle', rot: 0 }; }));
     this.lane = new Lane(this);
+    this.fx = new FX(this, MAP);
+    sim.setEventSink((e) => this.onEvent(e));
+    this.input.on('pointerdown', () => audio.unlock());
+    this.setupKeys();
     this.ui = this.add.container(0, 0);
     this.hint = this.add.text(MAP.x + 10, MAP.y + MAP.h - 20, '', { fontFamily: FONT, fontSize: 12, color: hex(COL.accent), stroke: '#05070d', strokeThickness: 3 });
     this.uiHelper = new UI(this, this.ui, (fn) => this.act(fn), (t) => this.hint.setText(t));
@@ -99,6 +106,7 @@ export class OpsScene extends Phaser.Scene {
   newGame() {
     try { localStorage.removeItem(SAVE_KEY); } catch { /* nothing to clear */ }
     this.s = sim.createState();
+    this.lastCash = undefined;
     this.confirmNew = false;
     this.saveGame();
     this.map.lastTripId = 0;
@@ -114,11 +122,45 @@ export class OpsScene extends Phaser.Scene {
     this.lastTickAt = this.time.now;
     this.tickEvent = this.time.addEvent({
       delay: TICK_MS / this.speed, loop: true,
-      callback: () => { sim.tick(this.s); this.lastTickAt = this.time.now; this.saveGame(); this.render(); },
+      callback: () => { if (this.fx.busy) return; sim.tick(this.s); this.lastTickAt = this.time.now; this.saveGame(); this.render(); },
     });
   }
 
-  setSpeed(v) { this.speed = v; this.scheduleTick(); }
+  setSpeed(v) { if (v) this.lastSpeed = v; this.speed = v; this.scheduleTick(); }
+
+  // ---- game feel (GDD 2.13) -----------------------------------------------------
+  setupKeys() {
+    const k = this.input.keyboard;
+    if (!k) return;
+    k.addCapture('SPACE');
+    k.on('keydown-SPACE', () => { this.setSpeed(this.speed ? 0 : this.lastSpeed); this.render(); });
+    [['ONE', 1], ['TWO', 3], ['THREE', 8]].forEach(([key, v]) => k.on(`keydown-${key}`, () => { this.setSpeed(v); this.render(); }));
+    k.on('keydown-M', () => { audio.unlock(); audio.setSetting('mute', !audio.getSettings().mute); this.render(); });
+    k.on('keydown-P', () => this.toggleAutoPause());
+  }
+
+  toggleAutoPause() {
+    audio.setSetting('autoPause', !audio.getSettings().autoPause);
+    this.fx.toast(`Auto-pause ${audio.getSettings().autoPause ? 'on' : 'off'}`);
+    this.render();
+  }
+
+  // Listens to the simulation: toasts, banners, sounds and auto-pause.
+  onEvent(e) {
+    if (e.type === 'note') {
+      if (e.kind !== 'info') this.fx.toast(e.msg, e.kind);
+      if (e.kind === 'warn') audio.warn();
+      if (e.pause && audio.getSettings().autoPause && this.speed) {
+        this.setSpeed(0);
+        this.fx.toast('Paused: press Space to resume');
+      }
+    } else if (e.type === 'milestone') {
+      this.fx.banner(e.title, e.text, e.date);
+    } else if (e.type === 'test') {
+      if (e.success) audio.success();
+      else { audio.failure(); this.cameras.main.shake(420, 0.01); }
+    }
+  }
 
   dayFrac() {
     if (!this.speed) return 0;
@@ -247,7 +289,7 @@ export class OpsScene extends Phaser.Scene {
       cancelBuild: (siteId, id) => sim.cancelBuild(s, siteId, id),
       buyTech: (id) => sim.buyTech(s, id),
       queueTest: (id, siteId) => sim.queueTest(s, id, siteId),
-      flyTest: (id) => { const r = sim.flyTest(s, id); if (r.ok && !r.success) this.cameras.main.shake(300, 0.006); },
+      flyTest: (id) => sim.flyTest(s, id),
       setMarsRoute: (route) => sim.setMarsRoute(s, route),
       viewSite: (id) => { this.siteView = id; if (s.sites[id].status !== 'locked') sim.setSite(s, id); },
       setSite: (id) => sim.setSite(s, id),
@@ -276,8 +318,15 @@ export class OpsScene extends Phaser.Scene {
       sellSurplus: () => { const got = B.sellSurplus(s); sim.note(s, `Sold lunar materials for $${got}M.`); },
       queueLocal: (type) => B.queueLocalBuild(s, type, (m) => sim.note(s, m)),
       launch: () => {
-        const res = sim.launch(s);
-        if (res.ok && res.failed) this.cameras.main.shake(300, 0.006);
+        if (this.fx.busy || sim.launchBlocker(s)) return;
+        const origin = this.map.sitePos(s.site) ?? { x: MAP.x + MAP.w / 2 + 40, y: MAP.y + MAP.h - 60 };
+        this.fx.launch(origin, () => {
+          const res = sim.launch(this.s);
+          this.syncMap();
+          this.saveGame();
+          this.time.delayedCall(0, () => this.render());
+          return res;
+        });
       },
     };
   }
@@ -288,6 +337,11 @@ export class OpsScene extends Phaser.Scene {
     const ui = this.uiHelper;
     this.ui.removeAll(true);
     this.hint.setText(''); // hovered widgets are rebuilt below, so their pointerout never fires
+    if (this.lastCash !== undefined) {
+      const d = s.cash - this.lastCash;
+      if (Math.abs(d) >= 0.5) { this.fx.floatCash(d, 505, 38); if (d >= 1) audio.coin(); }
+    }
+    this.lastCash = s.cash;
     this.renderTopBar(s, ui);
     this.renderMapTabs(s, ui);
     this.renderDockTabs(ui);
@@ -302,14 +356,28 @@ export class OpsScene extends Phaser.Scene {
 
   renderTopBar(s, ui) {
     const net = sim.dailyRevenue(s) - sim.OVERHEAD_PER_DAY;
+    const runway = sim.runwayDays(s);
     ui.label(20, 13, 'PERIGEE INDUSTRIES', { size: 20, bold: true, color: hex(COL.accent) });
-    ui.label(275, 15, `${sim.dateOf(s.day).text}  ·  Day ${s.day}`, { size: 16 });
-    ui.label(520, 15, `Cash $${s.cash.toFixed(1)}M`, { size: 16, color: hex(COL.good) });
-    ui.label(680, 15, `Net ${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}M/day`, { size: 16 });
+    ui.label(262, 15, `${sim.dateOf(s.day).text}  ·  Day ${s.day}`, { size: 15 });
+    ui.label(470, 15, `Cash $${s.cash.toFixed(1)}M`, { size: 16, color: hex(COL.good) });
+    this.sparkline(596, 12, 80, 26, s.cashHistory);
+    ui.label(686, 9, `Net ${net >= 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}M/day`, { size: 15 });
+    ui.label(686, 29, runway === Infinity ? 'Profitable' : `Runway ${runway} days`, {
+      size: 11, bold: true, color: runway === Infinity ? hex(COL.good) : runway < 20 ? hex(COL.bad) : runway < 60 ? hex(COL.warn) : COL.dimText,
+    });
     [[0, 'Pause'], [1, '1x'], [3, '3x'], [8, '8x']].forEach(([v, name], i) => {
-      ui.button(880 + i * 66, 10, 60, 30, name, () => this.setSpeed(v), {
-        fill: this.speed === v ? COL.btnOn : COL.btn, stroke: this.speed === v ? COL.good : COL.accent, size: 13,
+      ui.button(846 + i * 54, 10, 50, 30, name, () => this.setSpeed(v), {
+        fill: this.speed === v ? COL.btnOn : COL.btn, stroke: this.speed === v ? COL.good : COL.accent, size: 12,
+        hint: 'Space pauses, 1 2 3 pick the speed.',
       });
+    });
+    const st = audio.getSettings();
+    ui.button(1064, 10, 34, 30, st.mute ? 'Mute' : 'Snd', () => { audio.setSetting('mute', !st.mute); }, {
+      size: 10, fill: st.mute ? 0x3a2030 : COL.btn, stroke: st.mute ? COL.bad : COL.accent, hint: 'Sound on or off (M).',
+    });
+    ui.button(1102, 10, 42, 30, 'AP', () => audio.setSetting('autoPause', !st.autoPause), {
+      size: 12, fill: st.autoPause ? COL.btnOn : COL.btn, stroke: st.autoPause ? COL.good : COL.accent,
+      hint: `Auto-pause on important events: ${st.autoPause ? 'on' : 'off'} (P).`,
     });
     const sure = this.confirmNew;
     ui.button(1150, 10, 120, 30, sure ? 'Erase save?' : 'New game', () => {
@@ -317,6 +385,27 @@ export class OpsScene extends Phaser.Scene {
       this.confirmNew = true;
       this.time.delayedCall(3000, () => { this.confirmNew = false; this.render(); });
     }, { size: 13, fill: sure ? 0x7a2a1d : COL.btn, stroke: sure ? COL.bad : COL.accent });
+  }
+
+  // A tiny line chart of the last 90 days of cash.
+  sparkline(x, y, w, h, data) {
+    const g = this.add.graphics();
+    g.fillStyle(0x0f1830, 0.8).fillRect(x, y, w, h);
+    g.lineStyle(1, COL.line).strokeRect(x + 0.5, y + 0.5, w, h);
+    if (data && data.length > 1) {
+      const lo = Math.min(...data);
+      const hi = Math.max(...data);
+      const span = Math.max(1, hi - lo);
+      g.lineStyle(1.5, data[data.length - 1] >= data[0] ? COL.good : COL.bad);
+      g.beginPath();
+      data.forEach((v, i) => {
+        const px = x + 2 + (i / (data.length - 1)) * (w - 4);
+        const py = y + h - 3 - ((v - lo) / span) * (h - 6);
+        if (i) g.lineTo(px, py); else g.moveTo(px, py);
+      });
+      g.strokePath();
+    }
+    this.ui.add(g);
   }
 
   renderMapTabs(s, ui) {

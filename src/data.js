@@ -58,19 +58,28 @@ export const ROCKETS = {
 // price: $M to lease or buy the site. noDests/allowDests: orbits the site can reach.
 export const SITES = {
   cape: {
-    name: 'Cape Canaveral', short: 'Cape', lat: 28.5, lon: -80.6, pads: ['Pad 39A', 'Pad 39B', 'SLC-40'], factory: true,
+    name: 'Cape Canaveral', short: 'Cape', letter: 'C', lat: 28.5, lon: -80.6, pads: ['Pad 39A', 'Pad 39B', 'SLC-40'], factory: true,
     price: { buy: 60 }, start: 'leased', noDests: ['polar', 'sso'], blurb: 'Home site. No polar launches (overflight rules).',
   },
   vandenberg: {
-    name: 'Vandenberg', short: 'Vandenberg', lat: 34.7, lon: -120.6, pads: ['SLC-4E', 'SLC-6'], factory: false,
+    name: 'Vandenberg', short: 'Vandenberg', letter: 'V', lat: 34.7, lon: -120.6, pads: ['SLC-4E', 'SLC-6'], factory: false,
     price: { lease: 15, buy: 85 }, allowDests: ['leo', 'polar', 'sso'], blurb: 'The only polar and sun-synchronous launches.',
   },
   boca: {
-    name: 'Boca Chica (Starbase)', short: 'Boca Chica', lat: 26.0, lon: -97.2, pads: ['Orbital Pad A', 'Orbital Pad B'], factory: true, towers: true,
+    name: 'Boca Chica (Starbase)', short: 'Boca Chica', letter: 'B', lat: 26.0, lon: -97.2, pads: ['Orbital Pad A', 'Orbital Pad B'], factory: true, towers: true,
     price: { buy: 120 }, noDests: ['polar', 'sso'], catchDiscount: 0.85, blurb: 'Pads come with catch towers. Catch vehicles build 15% cheaper and faster.',
   },
 };
 export const SITE_IDS = Object.keys(SITES);
+// Days for a customer's payload to reach a launch site (GDD 2.14).
+export const SHIP_DAYS = {
+  na: { cape: 2, vandenberg: 2, boca: 2 },
+  eu: { cape: 6, vandenberg: 7, boca: 6 },
+  apac: { cape: 9, vandenberg: 6, boca: 9 },
+  sa: { cape: 5, vandenberg: 6, boca: 4 },
+  af: { cape: 8, vandenberg: 9, boca: 8 },
+  mar: { cape: 3, vandenberg: 3, boca: 3 },
+};
 export const LEASE_FEE = 0.15; // $M per launch from a leased site
 export const BAY_FEE = 0.08; // $M per refit in a rented hangar
 export const BAY_RENT_DEPOSIT = 3; // $M to rent another hangar at a leased site

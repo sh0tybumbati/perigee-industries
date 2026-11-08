@@ -133,6 +133,12 @@ export class MapLayer {
   }
 
   // Dolly in to a landing site over `ms`, then call done. progress(p) reports 0..1 for fades.
+  // Screen position of a launch-site pin, or null when it is not showing (other body, or zoomed in).
+  sitePos(id) {
+    const p = this.sitePins[id];
+    return p?.dot.visible ? { x: p.dot.x, y: p.dot.y } : null;
+  }
+
   zoomIn(destId, done, progress) {
     const d = DESTINATIONS[destId];
     this.globe.faceTo(d.lat, d.lon);
@@ -382,7 +388,7 @@ export class MapLayer {
         pin.hit.setPosition(x, y);
         pin.hit.input.enabled = show;
         const flip = sp.x < 70;
-        pin.label.setVisible(show).setText(st === 'locked' ? `${SITES[id].short} (closed)` : SITES[id].short)
+        pin.label.setVisible(show).setText(st === 'locked' ? `${SITES[id].letter} ${SITES[id].short} (closed)` : `${SITES[id].letter} ${SITES[id].short}`)
           .setColor(sel ? hex(COL.good) : st === 'locked' ? '#7d8cab' : '#cfe6ff').setFontStyle(sel ? 'bold' : 'normal')
           .setOrigin(flip ? 0 : 1, 0.5).setPosition(x + (flip ? 10 : -10), y + 2);
         if (sel && show && this.pulse !== null) {

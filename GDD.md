@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 0.6 (Pre-Alpha Spec: 2010 start, calendar and real Mars windows)
+Version: 0.8 (Pre-Alpha Spec: customers, shipping and automatic launch sites)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -294,6 +294,46 @@ The Operational Skyship keeps its own gate: 3 successful Behemoth flights.
 
 Aluminum: Peregrine rockets are built from aluminum-lithium alloy, where the Behemoth and Skyship use stainless steel. Aluminum is a fourth commodity ($0.035M per tonne, three times the price of steel and with a wider price swing). A Peregrine 9 hull uses 30 t, a Heavy 150 t, and aluminum test articles 20 to 60 t, so a company that burns a hull on every flight, as the player does at the start, is a real buyer of aluminum. Each site has an aluminum yard next to its steel yard, with its own capacity (150 t at the start) that bulk buys and expansion work on, and a shortage at build time is bought at spot plus the rush premium.
 
+2.13 Game Feel and Interface Polish (Phase 7)
+The aim is a tycoon game that reacts to the player: things move, make noise and celebrate or hurt. Everything here is presentation and quality of life, and none of it changes the simulation rules.
+
+Launch sequence: pressing LAUNCH starts a short countdown (3, 2, 1) over the map with a beep for each step, and time holds while it runs. At zero the launch happens. A successful launch shows the rocket climbing from the launch-site pin with a smoke trail and plays an ignition rumble. A failed launch shows an explosion, a red screen flash, a bigger camera shake, an "ANOMALY" banner and a low failure sting. A test flight failure gets the same treatment, and a test flight success gets a chime.
+
+Cash that moves: any change of $0.5M or more floats out of the cash counter as "+$8.0M" in green or "-$6.7M" in red. A positive change plays a soft coin ping. Next to the cash figure there is a sparkline of the last 90 days of cash, and under the net income figure a runway line: "Runway 42 days" while the company is losing money (amber under 60 days, red under 20) or "Profitable" when net income is positive.
+
+Launch receipt: while the Mission tab is open, the launch costs are listed as a receipt on the map: every cost item, the total, the expected payout (which arrives on arrival) and the estimated profit. The hover hint stays for the button.
+
+Milestones: some events are recorded once as company milestones and shown as a banner at the top of the map with a fanfare: the first successful flight, the first reflown booster, every research completion (including test-flight successes), the first lost vehicle ("First anomaly"), 10, 50, 100 and 250 successful flights, the first cargo on the Moon and on Mars, founding the Moon base, deploying the LEO depot, owning a launch site, and having $100M, $500M and $1000M in cash. Each stores its date, and the Skylink tab shows the last four in a Company Timeline.
+
+Notifications: important log lines also appear as toasts at the top-left of the map (good news green, warnings amber, bad news red) for a few seconds, up to four at a time. The mission log stays as the history. Mars windows add two warnings: 30 days before a window opens and when it opens.
+
+Auto-pause: the game pauses itself when something needs a decision: a test article is ready for its flight, a Mars window is 30 days away or has opened, investors had to step in, or a flight is lost on arrival. A toast says why, and Space resumes at the previous speed. Auto-pause can be switched off.
+
+Sound: all sounds are synthesized with Web Audio (no files): a click on every button, countdown beeps, an ignition rumble, success and failure stings, a coin ping, a milestone fanfare and a quiet ambient pad. A mute button in the top bar and the M key silence everything, and the setting is remembered.
+
+Keyboard: Space pauses and resumes, 1, 2 and 3 pick 1x, 3x and 8x speed, M mutes, P toggles auto-pause, R and Esc keep their base-building roles.
+
+Later (not in this phase): fleet art, a Cape scene with pads and tanks, a tutorial, undo for base placement, save slots and a settings panel.
+
+2.14 Customers, Shipping and Automatic Launch-Site Choice (Phase 8)
+Contracts now come from somewhere. Each contract has a customer region (North America, Europe, Asia-Pacific, South America, Africa or Maritime & Air), and its payload has to be shipped to the launch site before it can fly.
+
+Shipping: when a contract is accepted (first loaded into the manifest) the customer starts shipping the payload. The days it takes depend on the region and the launch site:
+| Customer region | Cape (C) | Vandenberg (V) | Boca Chica (B) |
+| North America | 2 | 2 | 2 |
+| Europe | 6 | 7 | 6 |
+| Asia-Pacific | 9 | 6 | 9 |
+| South America | 5 | 6 | 4 |
+| Africa | 8 | 9 | 8 |
+| Maritime & Air | 3 | 3 | 3 |
+A launch is blocked until every payload in the manifest has arrived ("Payload for Orion Media arrives in 3 days"). Shipping time counts from the day the contract was first accepted, and changing the launch site recomputes the arrival for the new site. Contracts from before this change have no region and ship instantly. Moon-route Mars flights and tanker, depot and module launches are not affected.
+
+Site letters: every launch site has a letter code, used on the contract board and the map: C for Cape Canaveral, V for Vandenberg and B for Boca Chica.
+
+Automatic launch site: loading a contract chooses the best launch site for the whole manifest. A site is eligible when it is open to the company (leased or owned), it can reach the orbit (Vandenberg is the only polar and sun-synchronous site) and it has a pad the vehicle can use (a catch tower for Behemoth and Skyship). Eligible sites are ranked by the earliest day the launch could happen, which is the latest of the payloads' arrival day, the next free pad and today. Ties go to the lower cost (the lease fee and any propellant that would have to be bought at spot), and then to the current site. The Mission tab's launch site changes by itself, and picking a site by hand (map pin or site list) overrides it until the next contract is loaded.
+
+Contract board: each row has a site badge, for example [V] now or [C] 3d, showing the best site for that contract alone and how many days away its launch could be. Hovering shows the customer region and the shipping time to each open site. The map pins show their letters too.
+
 3. Technology Tree
                       [ PEREGRINE ERA ]
                               │
@@ -347,4 +387,6 @@ Audio Direction: Synthesized Web Audio soundtrack featuring ambient synth-wave m
 Built: Earth operations, contract board with reputation, manifest stacking, Skylink constellation and revenue, R&D tree, LEO depot, save/load, fleet, factory queue per site, destinations, Earth/Moon/Mars map with flight trails, Moon base (module ships, base view, ducts, burial drones, smelters, local fabrication), launch sites, hangars, droneships, recovery modes, fuel market and plants.
 This phase (4b): ice miners and refineries, lunar methalox, Moon-built Skyships, the Mars Transfer tech, Mars contracts and launch windows, direct and Moon-based Mars routes, arrival risk.
 Phase 6a: the 2010 start with seed funding, expendable boosters and landing research, the calendar and real Mars windows, prototype test flights with dice-roll research, and aluminum for Peregrine hulls.
-Next: Mars bases and Mars fuel, return flights, Web Audio.
+Phase 7: launch sequence, floating cash, sparkline and runway, launch receipt, milestones, toasts, auto-pause, synthesized sound and keyboard shortcuts.
+Phase 8: customer regions, payload shipping time, site letters and automatic launch-site choice.
+Next: Mars bases and Mars fuel, return flights, fleet art, tutorial.

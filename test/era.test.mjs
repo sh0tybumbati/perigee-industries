@@ -21,7 +21,8 @@ test('the company starts in January 2010 with an expendable booster and no reuse
 test('an expended booster is lost and the next flight needs a new hull', () => {
   const s = sim.createState();
   sim.setDest(s, 'leo');
-  sim.toggleContract(s, s.contracts.find((c) => c.dest === 'leo').id);
+  s.contracts.push({ id: 900, customer: 'X', dest: 'leo', mass: 5, volume: 10, payout: 3, expires: 99 });
+  sim.toggleContract(s, 900);
   const r = withMock(0.999, () => sim.launch(s));
   assert.ok(r.ok && !r.failed);
   assert.equal(sim.fleetOf(s, 'peregrine9').length, 0);
@@ -104,4 +105,58 @@ test('a test article in the queue does not count as a cargo hull for the investo
   s.cash = 0;
   sim.tick(s);
   assert.match(s.log.at(-1), /emergency funding/);
+});
+
+test('milestones are recorded once, with their date, and sent to a listener', () => {
+  const s = sim.createState();
+  const seen = [];
+  sim.setEventSink((e) => seen.push(e));
+  try {
+    sim.milestone(s, 'x', 'Something', 'text');
+    sim.milestone(s, 'x', 'Something', 'text');
+    assert.equal(seen.filter((e) => e.type === 'milestone').length, 1);
+    assert.deepEqual(s.milestones.x, { day: s.day, title: 'Something' });
+    s.cash = 500;
+    sim.buyTech(s, 'gen1');
+    assert.ok(s.milestones['tech:gen1'], 'research completion is a milestone');
+    sim.note(s, 'Hull SKY-01 LOST on ascent');
+    sim.note(s, 'Queued something');
+    assert.deepEqual(seen.filter((e) => e.type === 'note').slice(-2).map((e) => e.kind), ['bad', 'info']);
+  } finally { sim.setEventSink(null); }
+});
+
+test('a test article that is ready asks for an auto-pause', () => {
+  const s = sim.createState();
+  s.cash = 500;
+  sim.buyTech(s, 'landing');
+  sim.queueTest(s, 'landing');
+  const seen = [];
+  sim.setEventSink((e) => seen.push(e));
+  try { idle(s, 7); } finally { sim.setEventSink(null); }
+  assert.ok(seen.some((e) => e.type === 'note' && e.pause && /test flight/.test(e.msg)));
+});
+
+test('cash history keeps 90 days, and runway counts the days of overhead left', () => {
+  const s = sim.createState();
+  idle(s, 120);
+  assert.equal(s.cashHistory.length, 90);
+  s.cash = 50;
+  s.sats = 0;
+  assert.equal(sim.runwayDays(s), Math.floor((50 - 5) / (sim.OVERHEAD_PER_DAY - sim.dailyRevenue(s))));
+  s.constellation = { na: 1e9, eu: 1e9, apac: 1e9, sa: 1e9, af: 1e9, mar: 1e9 };
+  assert.equal(sim.runwayDays(s), Infinity);
+});
+
+test('the Mars window warns 30 days ahead and when it opens', () => {
+  const s = sim.createState();
+  s.tech.add('marsTransit');
+  s.cash = 5000;
+  const w = sim.marsWindow(1).opens;
+  s.day = w - 31;
+  const seen = [];
+  sim.setEventSink((e) => seen.push(e));
+  try { idle(s, 32); } finally { sim.setEventSink(null); }
+  const msgs = seen.filter((e) => e.type === 'note' && e.pause).map((e) => e.msg);
+  assert.ok(msgs.some((m) => /opens in 30 days/.test(m)), msgs.join('|'));
+  assert.ok(msgs.some((m) => /OPEN/.test(m)), msgs.join('|'));
 });

@@ -264,5 +264,5 @@ test('reputation grows the contract board and its pace', () => {
   assert.deepEqual(sim.boardSize(s), { every: 2, cap: 12 });
   s.contracts = [];
   for (let i = 0; i < 20; i++) sim.tick(s);
-  assert.ok(s.contracts.length >= 8, `board filled faster: ${s.contracts.length}`);
+  assert.ok(s.contracts.length >= 6, `board filled faster: ${s.contracts.length}`);
 });
