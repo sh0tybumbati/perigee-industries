@@ -68,6 +68,7 @@ export const SITES = {
   boca: {
     name: 'Boca Chica (Starbase)', short: 'Boca Chica', letter: 'B', lat: 26.0, lon: -97.2, pads: Array.from({ length: 8 }, (_, i) => `Orbital Pad ${String.fromCharCode(65 + i)}`), factory: true,
     bare: true, padCost: 40, bayCost: 60, maxBays: 8,
+    rd: { buildFactor: 0.5, costFactor: 0.75, padTurn: 1, failClosed: 5, learning: 1.5 },
     price: { buy: 220 }, noDests: ['polar', 'sso'], catchDiscount: 0.85, blurb: 'Bare land: build every pad, tower, hangar, tank and plant. Catch vehicles build 15% cheaper and faster.',
   },
   vermilion: {
@@ -226,6 +227,7 @@ export const PROTOS = {
 };
 export const ODDS_LEARNING = 0.12;
 export const ODDS_MAX = 0.9;
+export const RD_DEFAULT = { buildFactor: 1, costFactor: 1, padTurn: 2, failClosed: 14, learning: 1 }; // prototype work at an ordinary site
 
 // ---- Lunar base (GDD 2.8) ----------------------------------------------------
 // len: tiles along the tube. power: MW (positive makes power). need: crew to run it. cover: tonnes of regolith to bury it.

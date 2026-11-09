@@ -514,12 +514,12 @@ export function renderTech(ui, s, X, Y, W, actions, ctx) {
       const p = PROTOS[t.id];
       ui.label(X + 168, y + 6, `${Math.round(sim.testOdds(s, t.id) * 100)}% odds · ${tr.attempts} failed · ${tr.articles} ready`, { size: 10, color: hex(COL.warn) });
       const buildB = sim.testBuildBlocker(s, t.id, fid);
-      ui.button(X + W - 232, y + 2, 112, 21, `Build $${p.cost}M · ${p.days}d`, () => actions.queueTest(t.id, fid), {
+      ui.button(X + W - 232, y + 2, 112, 21, `Build $${sim.testBuildAt(t.id, fid).cost}M · ${sim.testBuildAt(t.id, fid).days}d`, () => actions.queueTest(t.id, fid), {
         size: 10, enabled: !buildB, hint: buildB ?? `${p.name}: ${p.t} t of ${p.metal}.`,
       });
       const flyB = sim.testFlightBlocker(s, t.id);
       ui.button(X + W - 116, y + 2, 112, 21, `Fly test $${p.ops}M`, () => actions.flyTest(t.id), {
-        size: 10, enabled: !flyB, fill: flyB ? COL.btn : COL.btnOn, stroke: flyB ? COL.accent : COL.warn, hint: flyB ?? 'Success or failure is a dice roll. A failure closes the pad for 14 days.',
+        size: 10, enabled: !flyB, fill: flyB ? COL.btn : COL.btnOn, stroke: flyB ? COL.accent : COL.warn, hint: flyB ?? `Success or failure is a dice roll. A failure closes the pad for ${sim.rdAt(s.site).failClosed} days.`,
       });
       return;
     }

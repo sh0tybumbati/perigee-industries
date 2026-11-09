@@ -8,7 +8,7 @@ import {
   PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND, DRONESHIP_FEE, DRONESHIP_COST, MAX_DRONESHIPS, DRONESHIP_CYCLE,
   DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
   RUSH_PREMIUM, START_CAPS, START_STOCK, PROP_MIX, TANK_STEP, PLANT_RATE, PLANT_COST, PLANT_MAX, PLANT_COST_FRAC, GAS_PLANT_DISCOUNT, WELL_COST, MAX_WELLS,
-  MARS_WINDOWS, MARS_ROUTES, MARS_DESTS, MARS_CONTRACT, START_DATE, PROTOS, ODDS_LEARNING, ODDS_MAX,
+  MARS_WINDOWS, MARS_ROUTES, MARS_DESTS, MARS_CONTRACT, START_DATE, PROTOS, ODDS_LEARNING, ODDS_MAX, RD_DEFAULT,
   MARS_SITES, MARS_LEARNING, MARS_RETURN, MARS_RETURN_WINDOWS, MARS_RETURN_CONTRACT, BASE_PARAMS,
 } from './data.js';
 import { createBase, tickBase } from './base.js';
@@ -1145,7 +1145,13 @@ function finishTech(s, id) {
 
 // ---- prototype test flights ------------------------------------------------------------------------
 
-export const testOdds = (s, id) => Math.min(ODDS_MAX, PROTOS[id].odds + ODDS_LEARNING * (s.trials[id]?.attempts ?? 0));
+export const rdAt = (siteId) => ({ ...RD_DEFAULT, ...(SITES[siteId]?.rd ?? {}) });
+export const testOdds = (s, id) => Math.min(ODDS_MAX, PROTOS[id].odds + ODDS_LEARNING * (s.trials[id]?.learn ?? s.trials[id]?.attempts ?? 0));
+// Cost ($M) and build days of a test article at a factory site.
+export const testBuildAt = (id, siteId) => {
+  const rd = rdAt(siteId);
+  return { cost: +(PROTOS[id].cost * rd.costFactor).toFixed(2), days: Math.max(1, Math.round(PROTOS[id].days * rd.buildFactor)) };
+};
 
 export function testBuildBlocker(s, id, siteId = 'cape') {
   const p = PROTOS[id];
@@ -1153,7 +1159,7 @@ export function testBuildBlocker(s, id, siteId = 'cape') {
   if (!s.trials[id]) return 'Fund the research first';
   if (!site || !site.lines) return 'No factory here';
   const short = Math.max(0, p.t - site.stock[p.metal]);
-  return canSpend(s, p.cost + short * spot(s, p.metal) * RUSH_PREMIUM) ? null : 'Not enough cash';
+  return canSpend(s, testBuildAt(id, siteId).cost + short * spot(s, p.metal) * RUSH_PREMIUM) ? null : 'Not enough cash';
 }
 
 export function queueTest(s, id, siteId = 'cape') {
@@ -1163,9 +1169,10 @@ export function queueTest(s, id, siteId = 'cape') {
   const short = Math.max(0, p.t - site.stock[p.metal]);
   const rush = short * spot(s, p.metal) * RUSH_PREMIUM;
   site.stock[p.metal] -= p.t - short;
-  s.cash -= p.cost + rush;
-  site.queue.push({ id: s.nextId++, kind: 'test', tech: id, type: null, daysLeft: p.days, total: p.days, cost: p.cost });
-  note(s, `Queued a ${p.name} at ${SITES[siteId].short} (-$${(p.cost + rush).toFixed(1)}M, ${p.days} days).`);
+  const at = testBuildAt(id, siteId);
+  s.cash -= at.cost + rush;
+  site.queue.push({ id: s.nextId++, kind: 'test', tech: id, type: null, daysLeft: at.days, total: at.days, cost: at.cost });
+  note(s, `Queued a ${p.name} at ${SITES[siteId].short} (-$${(at.cost + rush).toFixed(1)}M, ${at.days} days).`);
   return true;
 }
 
@@ -1185,19 +1192,21 @@ export function flyTest(s, id) {
   const name = TECH.find((x) => x.id === id).name;
   const pad = s.sites[s.site].pads[pickPad(s.sites[s.site], false, s.day)];
   const odds = testOdds(s, id);
+  const rd = rdAt(s.site);
   s.cash -= p.ops;
   trial.articles--;
   if (Math.random() < odds) {
-    pad.busyUntil = s.day + PAD_TURN;
+    pad.busyUntil = s.day + rd.padTurn;
     emit({ type: 'test', success: true });
     note(s, `${name} test flight SUCCEEDED (${Math.round(odds * 100)}% odds).`);
     finishTech(s, id);
     return { ok: true, success: true };
   }
   trial.attempts++;
-  pad.busyUntil = s.day + PAD_FAIL_CLOSED;
+  trial.learn = (trial.learn ?? trial.attempts - 1) + rd.learning;
+  pad.busyUntil = s.day + rd.failClosed;
   emit({ type: 'test', success: false });
-  note(s, `${name} test flight FAILED (${Math.round(odds * 100)}% odds). Pad closed ${PAD_FAIL_CLOSED} days. Next attempt: ${Math.round(testOdds(s, id) * 100)}%.`);
+  note(s, `${name} test flight FAILED (${Math.round(odds * 100)}% odds). Pad closed ${rd.failClosed} days. Next attempt: ${Math.round(testOdds(s, id) * 100)}%.`);
   return { ok: true, success: false };
 }
 

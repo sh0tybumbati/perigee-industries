@@ -335,3 +335,36 @@ test('gas wells at Vermilion Parish halve methalox production cost; plants work 
   assert.ok(sim.buildPlant(s, 'boca', 'methalox'), 'any owned site can build a plant');
   assert.equal(sim.buildWell(s, 'boca'), false);
 });
+
+test('Boca Chica is the prototype yard: cheaper, faster articles, quicker pad turns, softer failures, faster learning', () => {
+  const s = rich();
+  s.trials.landing = { articles: 0, attempts: 0 };
+  const cape0 = sim.testBuildAt('landing', 'cape');
+  const boca0 = sim.testBuildAt('landing', 'boca');
+  assert.equal(boca0.days, Math.round(cape0.days / 2));
+  assert.ok(boca0.cost < cape0.cost);
+  assert.ok(sim.acquireSite(s, 'boca', 'buy'));
+  assert.ok(sim.buyPad(s, 'boca'));
+  assert.ok(sim.buyLine(s, 'boca'));
+  assert.ok(sim.queueTest(s, 'landing', 'boca'));
+  assert.equal(s.sites.boca.queue[0].daysLeft, boca0.days);
+
+  const fly = (siteId, roll) => {
+    const t = rich();
+    if (siteId !== 'cape') { t.sites[siteId] = s.sites[siteId]; }
+    t.trials.landing = { articles: 1, attempts: 0 };
+    t.site = siteId;
+    t.day = 100;
+    t.sites[siteId].pads.forEach((p) => { p.busyUntil = 0; });
+    const r = withMock(roll, () => sim.flyTest(t, 'landing'));
+    return { t, pad: t.sites[siteId].pads[0], r };
+  };
+  const bocaFail = fly('boca', 0.999);
+  assert.equal(bocaFail.pad.busyUntil, 100 + 5, 'a failed test closes a Boca pad for 5 days');
+  assert.ok(Math.abs(sim.testOdds(bocaFail.t, 'landing') - (0.5 + 0.12 * 1.5)) < 1e-9, 'failures teach 50% more');
+  const bocaWin = fly('boca', 0);
+  assert.equal(bocaWin.pad.busyUntil, 101, 'a Boca pad turns around in one day');
+  const capeFail = fly('cape', 0.999);
+  assert.equal(capeFail.pad.busyUntil, 114);
+  assert.ok(Math.abs(sim.testOdds(capeFail.t, 'landing') - 0.62) < 1e-9);
+});
