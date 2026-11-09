@@ -2,7 +2,9 @@
 // usage: node tools/pacing-bot.mjs [runs] [days]
 import * as sim from '../src/sim.js';
 import { MARKETS, TECH, ROCKETS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, DESTINATIONS } from '../src/data.js';
+const GEN = !!process.env.GEN; // GEN=1: also research Gen-2/3, fly the best generation and license mobile markets
 const ORDER = ['landing','gen1','fastCores','heavyCores','hull','raptor','tiles','skyship','plants','tanker','habitat','isru'];
+if (GEN) ORDER.splice(ORDER.indexOf('heavyCores'), 0, 'gen2');
 const N = +process.argv[2] || 20, DAYS = +process.argv[3] || 2500;
 const out = [];
 const cargoTypes = ['skyship', 'behemoth', 'peregrineHeavy', 'peregrine9'];
@@ -48,6 +50,8 @@ for (let seed = 0; seed < N; seed++) {
     }
     // license another Skylink market only while the constellation has spare capacity, cheapest first
     for (const m of MARKETS.slice().sort((a, b) => a.license - b.license)) if (!sim.marketBlocker(s, m.id) && s.cash > m.license + 8 && sim.totalLoad(s) < 0.6 * sim.skylinkCapacity(s)) sim.applyLicense(s, m.id);
+    if (GEN && s.tech.has('gen2')) mark('gen2');
+    if (GEN && MARKETS.some(m => m.cell && s.markets?.[m.id]?.status === 'active')) mark('mobile1');
     // keep the tanks stocked while prices are good
     for (const f of ['kerolox', 'methalox', 'lox', 'steel', 'aluminum']) if (cape().stock[f] < cape().cap[f] * 0.4 && s.market[f] < 1.1) sim.buyCommodity(s, 'cape', f, 200);
     if (s.tech.has('tanker')) {
@@ -69,6 +73,7 @@ for (let seed = 0; seed < N; seed++) {
       for (const type of cargoTypes) {
         if (!sim.nextVehicle(s, type)) continue;
         sim.setRocket(s, type); s.manifest = []; s.sats = 0;
+        if (GEN) { s.satGen = 1; for (const g of [3, 2]) if (sim.satGenOk(s, g)) { s.satGen = g; break; } }
         s.recovery = !s.tech.has('landing') ? 'expend' : type === 'peregrineHeavy' && s.tech.has('droneship') && sim.freeDroneship(s) >= 0 ? 'drone' : 'rtls';
         const cap = sim.capacity(s);
         let bestPlan = null;
@@ -103,7 +108,7 @@ for (let seed = 0; seed < N; seed++) {
     if (s.tech.has('isru')) mark('allTech');
     for (const [k, v] of [['cash100', 100], ['cash275', 275], ['cash485', 485], ['cash1000', 1000]]) if (s.cash >= v) mark(k); // 275 ~ a minimal Vermilion build-out, 485 ~ Boca Chica
   }
-  out.push({ ...ms, lunar, lost, cash: Math.round(s.cash), launches, fleet: s.fleet.length, income: +s.income.toFixed(2), idle: idleDays });
+  out.push({ ...ms, rev: +sim.dailyRevenue(s).toFixed(2), mobRev: +MARKETS.filter(m => m.cell).reduce((a, m) => a + sim.marketRevenue(s, m), 0).toFixed(2), cap: sim.skylinkCapacity(s), load: +sim.totalLoad(s).toFixed(1), q: +sim.skylinkQuality(s).toFixed(2), lunar, lost, cash: Math.round(s.cash), launches, fleet: s.fleet.length, income: +s.income.toFixed(2), idle: idleDays });
 }
 const med = (k) => { const v = out.map(o => o[k]).filter(x => x != null).sort((a, b) => a - b); return v.length ? `${v[Math.floor(v.length / 2)]} (${v[0]}-${v[v.length - 1]}, n=${v.length})` : 'never'; };
-for (const k of ['landing','fastCores','heavyCores','behemoth','skyship','tanker','lunar1','allTech','cash100','cash275','cash485','cash1000','lunar','launches','lost','cash','income','fleet']) console.log(k.padEnd(11), med(k));
+for (const k of ['landing','fastCores','heavyCores','behemoth','skyship','tanker','lunar1','allTech','cash100','cash275','cash485','cash1000','gen2','mobile1','rev','mobRev','cap','load','q','lunar','launches','lost','cash','income','fleet']) console.log(k.padEnd(11), med(k));
