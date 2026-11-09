@@ -301,6 +301,9 @@ test('Vermilion Parish: bare land with room for dozens of pads, no factory, chea
   assert.equal(s.sites.vermilion.status, 'locked');
   assert.equal(sim.siteBlocker(s, 'vermilion', 'lease'), 'Not available');
   s.cash = 1000;
+  assert.equal(sim.siteBlocker(s, 'vermilion', 'buy'), 'Buy Boca Chica first');
+  assert.equal(sim.acquireSite(s, 'vermilion', 'buy'), false);
+  assert.ok(sim.acquireSite(s, 'boca', 'buy'));
   assert.ok(sim.acquireSite(s, 'vermilion', 'buy'));
   const v = s.sites.vermilion;
   assert.equal(v.pads.length + v.bays.length + v.cap.methalox + v.lines, 0, 'nothing comes with the land');
@@ -315,6 +318,7 @@ test('gas wells at Vermilion Parish halve methalox production cost; plants work 
   const run = (wells) => {
     const s = rich('plants');
     s.sites.vermilion = JSON.parse(JSON.stringify(s.sites.vermilion));
+    assert.ok(sim.acquireSite(s, 'boca', 'buy'));
     assert.ok(sim.acquireSite(s, 'vermilion', 'buy'));
     assert.ok(sim.expandTank(s, 'vermilion', 'methalox'));
     assert.ok(sim.buildPlant(s, 'vermilion', 'methalox'));

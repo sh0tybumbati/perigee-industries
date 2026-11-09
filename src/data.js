@@ -72,7 +72,7 @@ export const SITES = {
   },
   vermilion: {
     name: 'Vermilion Parish', short: 'Vermilion', letter: 'L', lat: 29.6, lon: -92.3, pads: Array.from({ length: 24 }, (_, i) => `Gulf Pad ${i + 1}`), factory: false,
-    bare: true, padCost: 25, bayCost: 50, maxBays: 12, gas: true,
+    bare: true, padCost: 25, bayCost: 50, maxBays: 12, gas: true, requires: 'boca',
     price: { buy: 100 }, noDests: ['polar', 'sso'], blurb: 'Bare Louisiana land with room for dozens of pads and a natural gas supply (cheap methalox). No factory.',
   },
 };

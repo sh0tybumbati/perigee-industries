@@ -234,7 +234,7 @@ Rent first, buy later: the company starts by leasing Pad 39A and a rented hangar
 | Cape Canaveral | Home site: LEO, GTO, lunar | 3 | Starts leased, buy for $60M | No polar or sun-synchronous launches (overflight rules) |
 | Vandenberg | The only polar and sun-synchronous launches | 2 | Lease for $15M, buy for $85M | LEO family only, and no factory |
 | Boca Chica (Starbase) | Super-heavy site | up to 8 | Buy for $220M | Bare land: the purchase includes no pads, hangars, tanks, plants, towers or factory line. Everything is built out from nothing (see below). Catch vehicles (Behemoth, Skyship) cost 15% less and build 15% faster here |
-| Vermilion Parish (L) | Gulf Coast greenfield | up to 24 | Buy for $100M | Louisiana. Bare land with room for dozens of pads, no factory. Sits on natural gas deposits that must be extracted: gas wells ($20M each, up to 3) feed its methalox plants, which then make methane at half the usual production cost |
+| Vermilion Parish (L) | Gulf Coast greenfield | up to 24 | Buy for $100M, only after you own Boca Chica | Starbase proves the catch-tower design first, then the company expands to Louisiana. Louisiana. Bare land with room for dozens of pads, no factory. Sits on natural gas deposits that must be extracted: gas wells ($20M each, up to 3) feed its methalox plants, which then make methane at half the usual production cost |
 
 Greenfield sites (Boca Chica and Vermilion Parish): buying only gets the land. The site starts with no pads, no hangars, zero tank capacity, no plants and no factory line. Costs to build out:
 | Item | Boca Chica | Vermilion Parish |

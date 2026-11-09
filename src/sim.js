@@ -524,6 +524,8 @@ export function siteBlocker(s, id, mode) {
   const site = s.sites[id];
   const price = SITES[id].price[mode];
   if (price === undefined) return 'Not available';
+  const req = SITES[id].requires;
+  if (req && site.status === 'locked' && s.sites[req].status !== 'owned') return `Buy ${SITES[req].short} first`;
   if (mode === 'lease' && site.status !== 'locked') return 'Already open';
   if (mode === 'buy' && site.status === 'owned') return 'Already owned';
   if (!canSpend(s, price)) return 'Not enough cash';

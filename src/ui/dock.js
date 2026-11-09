@@ -385,6 +385,7 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
     ui.label(X + 10, y + 4, d.name, { size: 13, bold: true, color: st.status === 'locked' ? COL.dimText : COL.text });
     ui.label(X + 230, y + 5, tenureLabel[st.status], { size: 11, bold: true, color: hex(tenureColor[st.status]) });
     ui.label(X + 300, y + 5, st.status === 'locked' ? '' : `${st.pads.length} pad${st.pads.length === 1 ? '' : 's'} · ${st.bays.length} hangar${st.bays.length === 1 ? '' : 's'}`, { size: 11, color: COL.dimText });
+    if (st.status === 'locked' && d.requires && s.sites[d.requires].status !== 'owned') ui.label(X + 300, y + 5, `Requires ${SITES[d.requires].short}`, { size: 11, bold: true, color: hex(COL.warn) });
     if (id === s.site) ui.label(X + W - 10, y + 5, 'LAUNCH SITE', { size: 11, bold: true, right: true, color: hex(COL.good) });
   });
 
