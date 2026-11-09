@@ -233,8 +233,8 @@ Rent first, buy later: the company starts by leasing Pad 39A and a rented hangar
 | Site | Role | Pads | Acquire | Notes |
 | Cape Canaveral | Home site: LEO, GTO, lunar | 3 | Starts leased, buy for $60M | No polar or sun-synchronous launches (overflight rules) |
 | Vandenberg | The only polar and sun-synchronous launches | 2 | Lease for $15M, buy for $85M | LEO family only, and no factory |
-| Boca Chica (Starbase) | Super-heavy site | 2 | Buy for $120M | Pads come with catch towers. Catch vehicles (Behemoth, Skyship) cost 15% less and build 15% faster here |
-| Vermilion Parish (L) | Gulf Coast catch site | 2 | Buy for $80M | Louisiana. Pads come with catch towers, so it can launch Behemoth and Skyship, but it has no factory and no build discount. Cheaper to open than Boca Chica; payloads from South America and Africa arrive a little sooner than at Cape. No polar or sun-synchronous launches |
+| Boca Chica (Starbase) | Super-heavy site | 2 | Buy for $220M | Pads come with catch towers. Catch vehicles (Behemoth, Skyship) cost 15% less and build 15% faster here |
+| Vermilion Parish (L) | Gulf Coast catch site | 2 | Buy for $100M | Louisiana. Pads come with catch towers, so it can launch Behemoth and Skyship, but it has no factory and no build discount. Payloads from South America and Africa arrive a little sooner than at Cape. No polar or sun-synchronous launches |
 
 Leased site limits: 1 pad, up to 2 rented hangars, no towers, no plants, no extra factory lines.
 Owned site options: more pads ($25M and $40M for the 2nd and 3rd), up to 3 owned hangars ($15M each), catch towers ($40M per pad), tank expansion, propellant plants and factory lines.

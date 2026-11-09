@@ -67,11 +67,11 @@ export const SITES = {
   },
   boca: {
     name: 'Boca Chica (Starbase)', short: 'Boca Chica', letter: 'B', lat: 26.0, lon: -97.2, pads: ['Orbital Pad A', 'Orbital Pad B'], factory: true, towers: true,
-    price: { buy: 120 }, noDests: ['polar', 'sso'], catchDiscount: 0.85, blurb: 'Pads come with catch towers. Catch vehicles build 15% cheaper and faster.',
+    price: { buy: 220 }, noDests: ['polar', 'sso'], catchDiscount: 0.85, blurb: 'Pads come with catch towers. Catch vehicles build 15% cheaper and faster.',
   },
   vermilion: {
     name: 'Vermilion Parish', short: 'Vermilion', letter: 'L', lat: 29.6, lon: -92.3, pads: ['Gulf Pad 1', 'Gulf Pad 2'], factory: false, towers: true,
-    price: { buy: 80 }, noDests: ['polar', 'sso'], blurb: 'Louisiana Gulf Coast. Pads come with catch towers, but there is no factory.',
+    price: { buy: 100 }, noDests: ['polar', 'sso'], blurb: 'Louisiana Gulf Coast. Pads come with catch towers, but there is no factory.',
   },
 };
 export const SITE_IDS = Object.keys(SITES);
