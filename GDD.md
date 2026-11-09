@@ -430,12 +430,12 @@ Old saves keep their satellites as Gen-1 (save version 10).
 2.21 Goals and Endgame (Phase 14)
 Until now the game has no aim: every system adds income and nothing says what the income is for. This phase adds a ladder of goals, a final win and an ending screen. There is still no way to lose (investors fund a new hull if the company is stuck, see 2.5), so goals are about direction, not pressure.
 
-Objectives: the goals are grouped into seven chapters. Exactly one chapter is current, and its unfinished objectives are listed with progress ("Skylink subscribers 31k / 50k"). Objectives can be finished in any order within a chapter, and a later chapter's objective that is already true counts the moment its chapter opens. Each objective is a pure test of the game state, so the game never needs extra bookkeeping to tell whether it is done.
+Objectives: the goals are grouped into seven chapters. Exactly one chapter is current, and its unfinished objectives are listed with progress ("Skylink subscribers 31k / 50k"). Objectives can be finished in any order within a chapter. Only the current chapter's objectives are ticked, so a later chapter's objective that is already true counts the moment its chapter opens. Each objective is a pure test of the game state, so the game never needs extra bookkeeping to tell whether it is done.
 
 | Chapter | Objectives (all must be done) |
 | 1. Orbit | First successful flight; 10 successful flights; first booster landing; first reflown booster |
 | 2. Pay the Bills | Research Skylink Gen-1; first licensed market; net income positive for 30 days in a row; 50k Skylink subscribers |
-| 3. Own the Pads | Buy Cape Canaveral; own two sites; fly from three different pads in one year |
+| 3. Own the Pads | Buy Cape Canaveral; own two launch sites; run three pads (pads at owned sites, counted together) |
 | 4. Super-Heavy | Operational Skyship; LEO depot online; buy Boca Chica; 50 flights with a catch-tower vehicle |
 | 5. The Moon | First cargo on the Moon; Moon base founded; a habitat with crew on a powered base; lunar methalox in the stockpile |
 | 6. The Red Planet | First delivery to Mars; Mars base founded; first flight home from Mars |
@@ -443,15 +443,15 @@ Objectives: the goals are grouped into seven chapters. Exactly one chapter is cu
 
 The colony conditions (chapter 7) are all true at once on the Mars base: at least three habitats with crew (18 people), every habitat powered, an Ice Miner and a Refinery both running (so the base makes its own methalox), and a Mars-based Skyship that has already flown home. If any condition fails the 180-day counter resets, and the Goals panel names the condition that broke it. Dust storms make this a real test, since drones, miners and refineries slow down in one.
 
-Rewards: finishing a chapter pays an investor grant, sized to about 5% of what that era costs so that it speeds the game up slightly and never decides it: Orbit $5M, Pay the Bills $10M, Own the Pads $25M, Super-Heavy $60M, The Moon $120M, The Red Planet $250M. Each objective also fires the usual milestone banner and goes in the mission log with its date.
+Rewards: finishing a chapter pays an investor grant, sized to about 5% of what that era costs so that it speeds the game up slightly and never decides it: Orbit $5M, Pay the Bills $10M, Own the Pads $25M, Super-Heavy $60M, The Moon $120M, The Red Planet $250M. Each finished objective shows a toast and goes in the mission log with its date. Finishing a chapter shows the milestone banner and pays the grant.
 
-Victory: when the 180 days are held, the game pauses on an ending screen with the company's record: date reached and years taken, flights flown and lost, total satellites launched, peak Skylink subscribers, cash and the Moon and Mars base crew. The best (earliest) finish is kept in the browser and shown on the next ending screen. Play can then continue as a sandbox, and the goal strip changes to a running tally.
+Victory: when the 180 days are held, the game pauses on an ending screen with the company's record: date reached and years taken, flights flown and lost, total satellites launched, peak Skylink subscribers, cash and the Moon and Mars base crew. The best (earliest) finish is kept in the browser and shown on the next ending screen. Play can then continue as a sandbox, and the goal strip reads "Colony won".
 
 Screen: a one-line goal strip sits at the bottom of the map panel and shows the current objective with its progress. Pressing it opens the Goals panel over the map, with all seven chapters, finished ones ticked with the day they were done, and the current chapter expanded. The strip is hidden while the tutorial coach is on screen.
 
 Saves: goals are stored as { id: day } in the save (version 11). Loading an older save marks every objective that is already true as done, dated to the day of loading, so nobody has to repeat what they have achieved.
 
-Balance check: the pacing bot reports the day each chapter completes. The target is chapter 7 completing in game year 14 to 16 for a bot that plays the whole tech tree, with chapters 1 to 3 inside the first four years.
+Balance check: the pacing bot reports the day each chapter completes (GOALS=1 lists every objective). It cannot yet judge chapters 3 to 7, because it never buys a second site, builds a base or flies to Mars, so those need a human or a smarter bot. First bot results: Orbit by about day 260, and Pay the Bills somewhere between day 700 and 3500, with the 50k subscriber objective the slow one. The target for a human is chapters 1 to 3 inside the first four years and the colony win in game year 14 to 16.
 
 3. Technology Tree
 Costs are in $M. "Flight" means the tech needs a prototype test flight (2.12). Prerequisites are as built.
@@ -511,5 +511,5 @@ Phase 11: phone layout (hidden status strip, shorter canvas), view buttons and t
 Phase 12: Skylink as one global constellation, licensed markets, capacity versus subscribers and service plans (2.19). Also in this stretch: the Boca Chica prototype yard and Vermilion Parish (2.10), and separate RP-1, methane and LOX tanks.
 Phase 13: satellite generations Gen-1/2/3 and mobile carrier markets (2.20). Save version 10.
 Playtest numbers (pacing bot, 10 runs, medians; day 1 is 1 Jan 2010): Booster Landing day 131, Rapid Reflight 629, Behemoth 1642, Operational Skyship 1970, first lunar flight 2291. About 52 launches a year, about 9 lost vehicles in 2500 days. With the Gen-2 path (GEN=1) the first mobile market only opens near day 2731.
-Phase 14: goals and an endgame (2.21), designed and not yet built. Save version 11.
+Phase 14: goals and an endgame (2.21): seven chapters, a goal strip and Goals panel, the 180-day colony win and an ending screen. Save version 11.
 Next (design in progress): a launch-cadence and Direct-to-Cell gating retune, and crew (a capsule, crew contracts and base crew rotation).
