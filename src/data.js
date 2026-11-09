@@ -113,8 +113,9 @@ export const RECOVERY_MODES = {
 
 // Commodities: base price in $M per tonne. Spot prices drift (see MARKET_*).
 export const COMMODITIES = {
-  kerolox: { name: 'Kerolox (RP-1/LOX)', price: 0.008 },
-  methalox: { name: 'Methalox (CH4/LOX)', price: 0.004 },
+  kerolox: { name: 'RP-1 (kerosene)', price: 0.0246 },
+  methalox: { name: 'Methane (CH4)', price: 0.0129 },
+  lox: { name: 'Liquid oxygen', price: 0.0015 },
   steel: { name: 'Stainless steel', price: 0.012 },
   aluminum: { name: 'Aluminum-lithium', price: 0.035, vol: 0.2 },
 };
@@ -122,10 +123,12 @@ export const MARKET_MIN = 0.6;
 export const MARKET_MAX = 1.8;
 export const BULK_DISCOUNT = 0.9; // buying into tanks beats spot by 10%
 export const RUSH_PREMIUM = 1.1; // shortages at launch or build time cost 10% over spot
-export const START_CAPS = { kerolox: 200, methalox: 400, steel: 400, aluminum: 150 };
-export const START_STOCK = { kerolox: 100, methalox: 200, steel: 150, aluminum: 100 };
-export const TANK_STEP = { kerolox: { t: 200, cost: 6 }, methalox: { t: 500, cost: 8 }, steel: { t: 400, cost: 4 }, aluminum: { t: 100, cost: 3 } };
-export const PLANT_RATE = 40; // t per day per level
+// A vehicle's propellant (its fuel type) is split into the fuel itself and oxygen from the shared LOX tank.
+export const PROP_MIX = { kerolox: 0.28, methalox: 0.22 }; // fuel share by mass
+export const START_CAPS = { kerolox: 60, methalox: 110, lox: 500, steel: 400, aluminum: 150 };
+export const START_STOCK = { kerolox: 28, methalox: 44, lox: 230, steel: 150, aluminum: 100 };
+export const TANK_STEP = { kerolox: { t: 56, cost: 2 }, methalox: { t: 110, cost: 3 }, lox: { t: 200, cost: 3 }, steel: { t: 400, cost: 4 }, aluminum: { t: 100, cost: 3 } };
+export const PLANT_RATE = { kerolox: 11, methalox: 9, lox: 30 }; // t per day per level
 export const PLANT_COST = 25; // $M per level
 export const GAS_PLANT_DISCOUNT = 0.5; // production cost multiplier for a methalox plant level backed by a gas well
 export const WELL_COST = 20; // $M per gas well

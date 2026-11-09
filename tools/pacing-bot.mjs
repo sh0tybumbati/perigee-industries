@@ -47,7 +47,7 @@ for (let seed = 0; seed < N; seed++) {
       if (s.tech.has('plants') && cape().plants.methalox < 2 && s.cash > 200 && s.tech.has('skyship')) sim.buildPlant(s, 'cape', 'methalox');
     }
     // keep the tanks stocked while prices are good
-    for (const f of ['kerolox', 'methalox', 'steel', 'aluminum']) if (cape().stock[f] < cape().cap[f] * 0.4 && s.market[f] < 1.1) sim.buyCommodity(s, 'cape', f, 200);
+    for (const f of ['kerolox', 'methalox', 'lox', 'steel', 'aluminum']) if (cape().stock[f] < cape().cap[f] * 0.4 && s.market[f] < 1.1) sim.buyCommodity(s, 'cape', f, 200);
     if (s.tech.has('tanker')) {
       if (!s.depot.built && count('skyshipDepot') < 1 && !s.trips.some(t => t.role === 'depot' && t.status === 'enroute')) sim.queueBuild(s, 'skyshipDepot');
       if (count('skyshipTanker') < 2 && sim.canSpend(s, 60)) sim.queueBuild(s, 'skyshipTanker');

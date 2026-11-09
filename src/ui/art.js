@@ -92,11 +92,11 @@ export function renderSiteScene(ui, s, siteId) {
   });
 
   // tank farm
-  ['kerolox', 'methalox', 'steel', 'aluminum'].forEach((f, i) => {
+  ['kerolox', 'methalox', 'lox', 'steel', 'aluminum'].forEach((f, i) => {
     const tx = x + 204 + i * 11;
-    const frac = Math.min(1, st.stock[f] / st.cap[f]);
+    const frac = Math.min(1, st.cap[f] ? st.stock[f] / st.cap[f] : 0);
     g.fillStyle(0x16203a).fillRect(tx, gy - 44, 8, 44);
-    g.fillStyle({ kerolox: 0xffb347, methalox: 0x4fd1ff, steel: 0xb9c4d4, aluminum: 0xdfe6f2 }[f]).fillRect(tx, gy - 44 * frac, 8, 44 * frac);
+    g.fillStyle({ kerolox: 0xffb347, methalox: 0x4fd1ff, lox: 0x9fe8ff, steel: 0xb9c4d4, aluminum: 0xdfe6f2 }[f]).fillRect(tx, gy - 44 * frac, 8, 44 * frac);
     g.lineStyle(1, COL.line).strokeRect(tx + 0.5, gy - 44 + 0.5, 8, 44);
   });
 }

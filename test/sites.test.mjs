@@ -152,30 +152,50 @@ test('upper stages are expended on Peregrine launches only', () => {
 test('launches burn propellant from the tanks; shortages are bought at spot plus the rush premium', () => {
   const s = rich();
   load(s);
-  const start = cape(s).stock.kerolox;
+  const start = { ...cape(s).stock };
   const costs = sim.launchCosts(s);
   assert.equal(costs.fuel.short, 0);
   win(() => sim.launch(s));
-  assert.equal(cape(s).stock.kerolox, start - 50);
+  assert.ok(Math.abs(cape(s).stock.kerolox - (start.kerolox - 14)) < 1e-9, '28% of 50 t is RP-1');
+  assert.ok(Math.abs(cape(s).stock.lox - (start.lox - 36)) < 1e-9, '72% is liquid oxygen');
 
   const t = rich();
   load(t);
-  cape(t).stock.kerolox = 20;
+  cape(t).stock.kerolox = 4;
   const c = sim.launchCosts(t);
   const bought = c.items.find((i) => i.label.startsWith('Propellant bought'));
-  assert.equal(c.fuel.short, 30);
-  assert.equal(bought.amt, +(30 * sim.spot(t, 'kerolox') * RUSH_PREMIUM).toFixed(2));
+  assert.ok(Math.abs(c.fuel.short - 10) < 1e-9, 'only the missing RP-1 is bought');
+  assert.equal(bought.amt, +(10 * sim.spot(t, 'kerolox') * RUSH_PREMIUM).toFixed(2));
   win(() => sim.launch(t));
   assert.equal(cape(t).stock.kerolox, 0);
 });
 
+test('methane and RP-1 launches share one oxygen tank', () => {
+  const s = rich();
+  const lox0 = cape(s).stock.lox;
+  const parts = (type, t) => Object.fromEntries(sim.propParts(type, t).map((p) => [p.type, p.t]));
+  assert.ok(Math.abs(parts('kerolox', 100).lox - 72) < 1e-9);
+  assert.ok(Math.abs(parts('methalox', 100).lox - 78) < 1e-9);
+  assert.equal(Object.keys(parts('methalox', 100)).join(), 'methalox,lox');
+  assert.ok(lox0 > 0);
+  const old = JSON.parse(sim.serialize(s));
+  old.v = 7;
+  old.sites.cape.stock = { kerolox: 100, methalox: 200, steel: 1, aluminum: 1 };
+  old.sites.cape.cap = { kerolox: 200, methalox: 400, steel: 400, aluminum: 150 };
+  delete old.sites.cape.plants.lox;
+  const back = sim.deserialize(JSON.stringify(old));
+  assert.ok(Math.abs(back.sites.cape.stock.lox - (72 + 156)) < 1e-9, 'old blended tanks convert to LOX');
+  assert.ok(Math.abs(back.sites.cape.stock.methalox - 44) < 1e-9);
+  assert.equal(back.sites.cape.plants.lox, 0);
+});
+
 test('bulk purchases get the discount and stop at tank capacity', () => {
   const s = rich();
-  cape(s).stock.methalox = 380;
+  cape(s).stock.methalox = 100;
   const cash = s.cash;
   const got = sim.buyCommodity(s, 'cape', 'methalox', 100);
-  assert.equal(got, 20, 'only 20 t of room');
-  assert.ok(Math.abs(cash - s.cash - 20 * sim.spot(s, 'methalox') * BULK_DISCOUNT) < 1e-9);
+  assert.equal(got, 10, 'only 10 t of room');
+  assert.ok(Math.abs(cash - s.cash - 10 * sim.spot(s, 'methalox') * BULK_DISCOUNT) < 1e-9);
   assert.match(sim.buyBlocker(s, 'cape', 'methalox'), /full/);
 });
 
@@ -198,8 +218,8 @@ test('plants need the tech and an owned site, then fill the tanks cheaply', () =
   cape(s).stock.methalox = 0;
   const cash = s.cash;
   withMock(0.5, () => sim.tick(s));
-  assert.equal(cape(s).stock.methalox, PLANT_RATE);
-  const cost = PLANT_RATE * COMMODITIES.methalox.price * PLANT_COST_FRAC;
+  assert.equal(cape(s).stock.methalox, PLANT_RATE.methalox);
+  const cost = PLANT_RATE.methalox * COMMODITIES.methalox.price * PLANT_COST_FRAC;
   assert.ok(s.cash <= cash - cost + 0.2, 'production cost is paid');
 });
 

@@ -248,6 +248,8 @@ Two ways to make fuel: propellant plants (research Propellant Plants) synthesize
 
 A reusable vehicle needs a megahangar for its refit at its launch site, so a greenfield site cannot launch reusable hulls until one is built. The auto site choice skips sites with no suitable pad. With dozens of pads, the Sites tab shows a summary and one build button instead of a row per pad.
 
+Propellant is stored as separate tanks: RP-1 (kerosene, for Peregrine), methane (CH4, for Starship-class hulls) and liquid oxygen (LOX), which both share. A launch draws its fuel and its oxygen from their tanks in the real mass ratios: kerolox is 28% RP-1 and 72% LOX, methalox is 22% methane and 78% LOX. A Peregrine 9 launch (50 t) burns 14 t of RP-1 and 36 t of LOX. Shortages of either tank are bought at spot plus the rush premium. Base prices per tonne: RP-1 $0.0246M, methane $0.0129M, LOX $0.0015M, so LOX is cheap but you need a lot of it, and a single oxygen tank (and an air-separation plant) serves every vehicle. Plants exist for all three (RP-1 11 t/day per level, methane 9, LOX 30). Gas wells at Vermilion Parish cheapen methane only. Moon and Mars bases still make methalox directly from ice. Old saves convert their blended tanks into the three tanks at these ratios.
+
 Leased site limits: 1 pad, up to 2 rented hangars, no towers, no plants, no extra factory lines.
 Owned site options: more pads ($25M and $40M for the 2nd and 3rd), up to 3 owned hangars ($15M each), catch towers ($40M per pad), tank expansion, propellant plants and factory lines.
 

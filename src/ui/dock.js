@@ -101,7 +101,7 @@ export function renderMission(ui, s, X, Y, W, actions) {
     ui.label(X + 142, Y + 147, `${Math.round(s.base?.stock.methalox ?? 0)} t methalox · ${hullsAt('moon')} hull(s)`, { size: 11, color: COL.dimText });
   } else {
     ui.label(X, Y + 146, `From ${SITES[s.site].letter} · ${SITES[s.site].short}`, { size: 12, bold: true, color: hex(tenureColor[site.status]) });
-    ui.label(X + 150, Y + 147, `${Math.round(site.stock[sim.fuelNeed(s).type])} t ${sim.fuelNeed(s).type}`, { size: 11, color: COL.dimText });
+    ui.label(X + 150, Y + 147, sim.propParts(sim.fuelNeed(s).type, 1).map((p) => `${Math.round(site.stock[p.type])} t ${p.type === 'lox' ? 'LOX' : p.type === 'kerolox' ? 'RP-1' : 'CH4'}`).join(' · '), { size: 11, color: COL.dimText });
   }
   if (originPick) {
     [['earth', 'From Earth'], ['mars', 'From Mars']].forEach(([id, name], i) => {
@@ -402,7 +402,7 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
   }
   if (st.status === 'locked') {
     ui.label(X, y0 + 26, d.blurb, { size: 12, color: COL.dimText, wrap: W });
-    ui.label(X, y0 + 50, d.allowDests ? 'Reaches: LEO family only.' : `Cannot reach: ${(d.noDests ?? []).map((x) => DESTINATIONS[x].name).join(', ')}.`, { size: 12, color: COL.dimText, wrap: W });
+    ui.label(X, y0 + 56, d.allowDests ? 'Reaches: LEO family only.' : `Cannot reach: ${(d.noDests ?? []).map((x) => DESTINATIONS[x].name).join(', ')}.`, { size: 12, color: COL.dimText, wrap: W });
     return;
   }
   if (st.status === 'leased') {
@@ -461,33 +461,33 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
   }
 
   // Gas wells (natural gas sites)
-  let wy = hy + 26;
+  let wy = hy + 25;
   if (d.gas) {
     ui.label(X, wy, `GAS WELLS  ${st.wells ?? 0}/${MAX_WELLS}  ·  feed methalox plants (RP-1 gets nothing)`, { size: 12, bold: true, color: hex(COL.accent) });
     if (owned) ui.button(X + W - 170, wy - 3, 170, 22, `Drill well  $${WELL_COST}M`, () => actions.buildWell(view), { size: 11, enabled: !sim.wellBlocker(s, view) });
-    wy += 26;
+    wy += 25;
   }
 
   // Fuel and materials
   const fy = wy;
   ui.heading(X, fy, 'TANKS AND MATERIALS  ·  spot price drifts, bulk buys are 10% cheaper');
   Object.keys(COMMODITIES).forEach((type, i) => {
-    const y = fy + 16 + i * 34;
+    const y = fy + 16 + i * 30;
     const m = s.market[type];
-    const isFuel = type === 'kerolox' || type === 'methalox';
-    ui.row(X, y, W, 32);
+    const isFuel = type === 'kerolox' || type === 'methalox' || type === 'lox';
+    ui.row(X, y, W, 28);
     ui.label(X + 8, y + 1, COMMODITIES[type].name, { size: 11, bold: true });
-    ui.bar(X + 190, y + 7, 140, 8, st.cap[type] ? st.stock[type] / st.cap[type] : 0, st.stock[type] < st.cap[type] * 0.2 ? COL.warn : COL.accent);
-    ui.label(X + 338, y + 3, `${Math.round(st.stock[type])} / ${st.cap[type]} t`, { size: 11 });
-    ui.label(X + W - 8, y + 3, `$${sim.spot(s, type).toFixed(3)}M/t`, { size: 11, bold: true, right: true, color: hex(m > 1.15 ? COL.bad : m < 0.9 ? COL.good : COL.dim) });
-    ui.button(X + 8, y + 16, 86, 15, 'Buy 100 t', () => actions.buyCommodity(view, type, 100), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
-    ui.button(X + 100, y + 16, 86, 15, 'Fill tank', () => actions.buyCommodity(view, type, 99999), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
-    ui.button(X + 192, y + 16, 138, 15, `Tank +${TANK_STEP[type].t} t  $${TANK_STEP[type].cost}M`, () => actions.expandTank(view, type), { size: 10, enabled: !sim.tankBlocker(s, view, type) });
+    ui.bar(X + 190, y + 5, 140, 8, st.cap[type] ? st.stock[type] / st.cap[type] : 0, st.stock[type] < st.cap[type] * 0.2 ? COL.warn : COL.accent);
+    ui.label(X + 338, y + 1, `${Math.round(st.stock[type])} / ${st.cap[type]} t`, { size: 11 });
+    ui.label(X + W - 8, y + 1, `$${sim.spot(s, type).toFixed(4)}M/t`, { size: 11, bold: true, right: true, color: hex(m > 1.15 ? COL.bad : m < 0.9 ? COL.good : COL.dim) });
+    ui.button(X + 8, y + 14, 86, 14, 'Buy 100 t', () => actions.buyCommodity(view, type, 100), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
+    ui.button(X + 100, y + 14, 86, 14, 'Fill tank', () => actions.buyCommodity(view, type, 99999), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
+    ui.button(X + 192, y + 14, 138, 14, `Tank +${TANK_STEP[type].t} t  $${TANK_STEP[type].cost}M`, () => actions.expandTank(view, type), { size: 10, enabled: !sim.tankBlocker(s, view, type) });
     if (isFuel) {
       const lvl = st.plants[type];
       const b = sim.plantBlocker(s, view, type);
-      ui.button(X + 336, y + 16, W - 344, 15, lvl >= PLANT_MAX ? `Plant L${lvl}: ${lvl * PLANT_RATE} t/day` : `Plant L${lvl + 1}  $${PLANT_COST}M${lvl ? `  (now ${lvl * PLANT_RATE} t/day)` : ''}`, () => actions.buildPlant(view, type), {
-        size: 10, enabled: !b, hint: b ?? `A plant makes ${PLANT_RATE} t per day per level at about 30% of the base price${SITES[view].gas && type === 'methalox' ? ', 15% for levels fed by a gas well' : ''}.`,
+      ui.button(X + 336, y + 14, W - 344, 14, lvl >= PLANT_MAX ? `Plant L${lvl}: ${lvl * PLANT_RATE[type]} t/day` : `Plant L${lvl + 1}  $${PLANT_COST}M${lvl ? `  (now ${lvl * PLANT_RATE[type]} t/day)` : ''}`, () => actions.buildPlant(view, type), {
+        size: 10, enabled: !b, hint: b ?? `A plant makes ${PLANT_RATE[type]} t per day per level at about 30% of the base price${SITES[view].gas && type === 'methalox' ? ', 15% for levels fed by a gas well' : ''}.`,
       });
     }
   });

@@ -7,7 +7,7 @@ import {
   SITES, SITE_IDS, LEASE_FEE, BAY_FEE, BAY_RENT_DEPOSIT, BAY_BUY_COST, MAX_BAYS, PAD_COSTS, TOWER_COST, PAD_TURN,
   PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND, DRONESHIP_FEE, DRONESHIP_COST, MAX_DRONESHIPS, DRONESHIP_CYCLE,
   DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
-  RUSH_PREMIUM, START_CAPS, START_STOCK, TANK_STEP, PLANT_RATE, PLANT_COST, PLANT_MAX, PLANT_COST_FRAC, GAS_PLANT_DISCOUNT, WELL_COST, MAX_WELLS,
+  RUSH_PREMIUM, START_CAPS, START_STOCK, PROP_MIX, TANK_STEP, PLANT_RATE, PLANT_COST, PLANT_MAX, PLANT_COST_FRAC, GAS_PLANT_DISCOUNT, WELL_COST, MAX_WELLS,
   MARS_WINDOWS, MARS_ROUTES, MARS_DESTS, MARS_CONTRACT, START_DATE, PROTOS, ODDS_LEARNING, ODDS_MAX,
   MARS_SITES, MARS_LEARNING, MARS_RETURN, MARS_RETURN_WINDOWS, MARS_RETURN_CONTRACT, BASE_PARAMS,
 } from './data.js';
@@ -16,7 +16,7 @@ import { createBase, tickBase } from './base.js';
 export { OVERHEAD_PER_DAY };
 export const SAT_BATCH = 6;
 export const REVENUE_SCALE = 0.3;
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 const MAX_TRIPS = 80;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -41,9 +41,9 @@ function makeSite(id, status) {
     status,
     pads: active && !bare ? [newPad(d, 0)] : [],
     bays: active && !bare ? [{ tenure: status === 'owned' ? 'owned' : 'rented', freeAt: 0 }] : [],
-    stock: id === 'cape' ? { ...START_STOCK } : { kerolox: 0, methalox: 0, steel: 0, aluminum: 0 },
-    cap: bare ? { kerolox: 0, methalox: 0, steel: 0, aluminum: 0 } : { ...START_CAPS },
-    plants: { kerolox: 0, methalox: 0 },
+    stock: id === 'cape' ? { ...START_STOCK } : { kerolox: 0, methalox: 0, lox: 0, steel: 0, aluminum: 0 },
+    cap: bare ? { kerolox: 0, methalox: 0, lox: 0, steel: 0, aluminum: 0 } : { ...START_CAPS },
+    plants: { kerolox: 0, methalox: 0, lox: 0 },
     wells: 0,
     lines: active && d.factory && !bare ? 1 : 0,
     queue: [],
@@ -60,7 +60,7 @@ export function createState() {
     sites: Object.fromEntries(SITE_IDS.map((id) => [id, makeSite(id, SITES[id].start ?? 'locked')])),
     site: 'cape', // selected launch site
     droneships: [{ busyUntil: 0 }],
-    market: { kerolox: 1, methalox: 1, steel: 1, aluminum: 1 }, // spot price multipliers
+    market: { kerolox: 1, methalox: 1, lox: 1, steel: 1, aluminum: 1 }, // spot price multipliers
     trips: [], // flight records, active and past
     flightCounts: {}, // successful flights per vehicle type
     contracts: [],
@@ -149,6 +149,19 @@ export function deserialize(json) {
       o.v = 6;
     }
     if (o.v === 6) o.v = 7; // v7 adds the Mars base
+    if (o.v === 7) { // v8 splits the blended tanks into RP-1, methane and one shared LOX tank
+      for (const site of Object.values(o.sites ?? {})) {
+        for (const k of ['stock', 'cap']) {
+          const b = site?.[k];
+          if (!b) continue;
+          const k1 = b.kerolox ?? 0, m1 = b.methalox ?? 0;
+          b.lox = k1 * (1 - PROP_MIX.kerolox) + m1 * (1 - PROP_MIX.methalox);
+          b.kerolox = k1 * PROP_MIX.kerolox;
+          b.methalox = m1 * PROP_MIX.methalox;
+        }
+      }
+      o.v = 8;
+    }
     if (o.v !== SAVE_VERSION) return null;
     const base = createState();
     const s = { ...base, ...o, tech: new Set(Array.isArray(o.tech) ? o.tech : []) };
@@ -165,7 +178,7 @@ export function deserialize(json) {
     s.marsBase = restore(o.marsBase, 'mars');
     if (!['earth', 'mars'].includes(s.origin)) s.origin = 'earth';
     s.sites = Object.fromEntries(SITE_IDS.map((id) => [id, o.sites?.[id]
-      ? { ...makeSite(id, 'locked'), ...o.sites[id], stock: { ...base.sites[id].stock, ...o.sites[id].stock }, cap: { ...base.sites[id].cap, ...o.sites[id].cap } }
+      ? { ...makeSite(id, 'locked'), ...o.sites[id], plants: { ...base.sites[id].plants, ...o.sites[id].plants }, stock: { ...base.sites[id].stock, ...o.sites[id].stock }, cap: { ...base.sites[id].cap, ...o.sites[id].cap } }
       : base.sites[id]]));
     s.trials = o.trials && typeof o.trials === 'object' ? { ...o.trials } : {};
     s.tutorial = Number.isInteger(o.tutorial) ? o.tutorial : TUTORIAL.length; // saves from before the tutorial skip it
@@ -414,8 +427,7 @@ export function siteRanking(s, contracts, dest, { catchPad = false, fuel = null 
     const pads = site.pads.filter((p) => !catchPad || p.tower);
     if (!pads.length) continue;
     const ready = Math.max(s.day, Math.min(...pads.map((p) => p.busyUntil)), ...contracts.map((c) => contractReady(s, c, id)));
-    const short = fuel ? Math.max(0, fuel.t - site.stock[fuel.type]) : 0;
-    const cost = (site.status === 'leased' ? LEASE_FEE : 0) + (fuel ? short * spot(s, fuel.type) * RUSH_PREMIUM : 0);
+    const cost = (site.status === 'leased' ? LEASE_FEE : 0) + (fuel ? propBuy(s, site, fuel).cash : 0);
     out.push({ id, day: ready, cost });
   }
   return out.sort((a, b) => a.day - b.day || a.cost - b.cost || (b.id === s.site) - (a.id === s.site));
@@ -690,10 +702,10 @@ function tickMarket(s) {
 function tickPlants(s) {
   for (const site of Object.values(s.sites)) {
     if (site.status !== 'owned') continue;
-    for (const fuel of ['kerolox', 'methalox']) {
+    for (const fuel of ['kerolox', 'methalox', 'lox']) {
       const level = site.plants[fuel];
       if (!level) continue;
-      const make = Math.min(level * PLANT_RATE, site.cap[fuel] - site.stock[fuel]);
+      const make = Math.min(level * PLANT_RATE[fuel], site.cap[fuel] - site.stock[fuel]);
       const cheap = fuel === 'methalox' ? Math.min(level, site.wells ?? 0) : 0; // levels fed by gas wells
       const cost = make * COMMODITIES[fuel].price * PLANT_COST_FRAC * (1 - (cheap / level) * (1 - GAS_PLANT_DISCOUNT));
       if (make > 0 && s.cash >= cost) { site.stock[fuel] += make; s.cash -= cost; }
@@ -808,6 +820,14 @@ export const dailyRevenue = (s) => REGIONS.reduce((sum, r) => sum + regionRevenu
 // Purchases must leave enough cash to fly the cheapest launch, or the game could soft-lock.
 export const canSpend = (s, amount) => s.cash - amount >= CASH_FLOOR;
 
+// A propellant need split into its tanks, with what is short at the site and what buying that costs.
+export const propParts = (type, t) => [{ type, t: t * PROP_MIX[type] }, { type: 'lox', t: t * (1 - PROP_MIX[type]) }];
+function propBuy(s, site, need) {
+  const parts = propParts(need.type, need.t).map((p) => ({ ...p, short: Math.max(0, p.t - (site?.stock[p.type] ?? 0)) }));
+  const short = parts.reduce((n, p) => n + p.short, 0);
+  return { parts, short, cash: parts.reduce((n, p) => n + p.short * spot(s, p.type) * RUSH_PREMIUM, 0) };
+}
+
 export const fuelNeed = (s) => {
   const r = rocketDef(s);
   return { type: r.fuel.type, t: r.fuel.t + (r.role === 'tanker' ? TANKER_LOAD : 0) };
@@ -825,9 +845,9 @@ export function launchCosts(s) {
   const items = [];
   const add = (label, amt) => { if (amt > 0.0005) items.push({ label, amt: +amt.toFixed(2) }); };
   const need = fuelNeed(s);
-  const have = site?.stock[need.type] ?? 0;
-  const short = Math.max(0, need.t - have);
-  add(`Propellant bought (${Math.ceil(short)} t at spot)`, short * spot(s, need.type) * RUSH_PREMIUM);
+  const buy = propBuy(s, site, need);
+  const short = buy.short;
+  add(`Propellant bought (${Math.ceil(short)} t at spot)`, buy.cash);
   if (!r.catch) add('Expended upper stage', r.stage);
   if (rec !== 'expend') add('Refurbishment parts', r.refurb);
   add('Operations', r.ops);
@@ -836,7 +856,7 @@ export function launchCosts(s) {
   if (rec === 'drone') add('Droneship', DRONESHIP_FEE);
   if (r.role === 'payload') add('Skylink satellites', s.sats * SAT_COST);
   const total = +items.reduce((n, i) => n + i.amt, 0).toFixed(2);
-  return { items, total, fuel: { ...need, fromTanks: Math.min(need.t, have), short } };
+  return { items, total, fuel: { ...need, parts: buy.parts, fromTanks: need.t - short, short } };
 }
 
 export const launchCost = (s) => launchCosts(s).total;
@@ -942,7 +962,7 @@ export function launch(s) {
   const cost = costs.total;
   // Propellant leaves the tanks whatever happens on ascent.
   if (moon) baseOn(s, origin).stock.methalox -= costs.fuel.t;
-  else site.stock[costs.fuel.type] -= costs.fuel.fromTanks;
+  else for (const p of costs.fuel.parts) site.stock[p.type] -= p.t - p.short;
   s.cash -= cost;
   s.totalLaunches++;
   const failed = Math.random() < failChance(s, v);
