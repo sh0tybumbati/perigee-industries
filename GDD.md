@@ -1,5 +1,5 @@
 Game Design Document (GDD): Perigee Industries
-Version: 1.1 (Pre-Alpha Spec: phone layout and depot docking)
+Version: 1.2 (Pre-Alpha Spec: documentation brought in line with the build at save v10, satellite generations and mobile markets)
 
 Genre: Space Logistics & Base-Building Tycoon Sim
 
@@ -11,7 +11,7 @@ Engine & Tech: Phaser 3 (UI, 2D layers) + Three.js (3D planet maps) / HTML5 Canv
 1.1 Core Concept
 Perigee Industries is a heavy-lift logistics and off-world base-building management game. Players start as an early commercial space launch firm operating small workhorse rockets, managing launch schedules, taking customer satellite contracts, and building a low-Earth orbit (LEO) broadband constellation for passive income.
 
-As revenue scales, players fund heavy-lift R&D to unlock fully reusable super-heavy launch vehicles, establish orbital fuel depots, and execute high-tonnage cargo drops to construct a self-sustaining lunar base.
+As revenue scales, players fund heavy-lift R&D to unlock fully reusable super-heavy launch vehicles, establish orbital fuel depots, and execute high-tonnage cargo drops to construct a self-sustaining lunar base, and then a base on Mars.
 
 1.2 Core Gameplay Loop
 [ Early Commercial Launches & Skylink Deployment ]
@@ -58,25 +58,11 @@ In January 2010 nobody has landed a booster yet, so the company starts with expe
 - Droneship, unlocked by Droneship Recovery: full payload, but it needs a free droneship, which is out at sea and busy for 4 days, and the booster reaches its hangar 2 days later.
 - Expend (the only mode at the start): the booster is thrown away for +15% payload. The hull is lost and needs no refit, and a new one has to be built for the next flight ($3M and 30 t of aluminum for a Peregrine 9).
 
-2.2 Broadband Constellation Network (Passive Income) (the regional model below is replaced by section 2.19)
-Orbital Shells: Earth orbit is split into 4 distinct latitude/altitude shells (LEO Equatorial, LEO Polar, MEO, GEO).
+2.2 Broadband Constellation Network (Passive Income)
+The constellation is one global pool of satellites that serves every market the company is licensed in. The full rules are in 2.19 (markets, licences, capacity, service plans) and 2.20 (satellite generations and mobile service). The original six-region model (regional coverage percentages and per-region income) no longer exists.
 
-Deployment Cadence: Peregrine 9 carries up to 24 satellites per launch; Skyship carries up to 60 Gen-2 satellites.
+Satellites decay over a 5 to 7 year life depending on generation, so replenishment launches are needed to keep capacity. A Peregrine 9 carries 24 satellites; how much each one adds depends on the generation (Gen-1 0.3k subscribers, Gen-2 Mini 1.2k, Gen-3 5k, and Gen-3 flies only on a Skyship).
 
-Regional Market Grid: Earth is divided into 6 market regions (North America, Europe, Asia-Pacific, South America, Africa, Maritime/Aviation).
-
-Bandwidth & Churn: Satellites slowly decay over a 5-year operational lifecycle. Players must maintain satellite replenishment launches to prevent regional service blackouts and revenue loss.
-
-+-----------------------------------------------------------------------+
-|                       SKYLINK COVERAGE MATRIX                        |
-+-------------------+-+-------------------+-----------------------------+
-| Region            | | Coverage (%)      | Daily Passive Revenue       |
-+-------------------+-+-------------------+-----------------------------+
-| North America     | | [██████████] 100% | $450,000 / day              |
-| Europe            | | [████████░░]  80% | $310,000 / day              |
-| Asia-Pacific      | | [██████░░░░]  60% | $220,000 / day              |
-| Maritime & Air    | | [████░░░░░░]  40% | $140,000 / day              |
-+-------------------+-+-------------------+-----------------------------+
 2.3 Orbital Logistics & Refueling
 To send a 150-ton payload to the Lunar surface, a single Skyship launch does not retain enough fuel after LEO insertion.
 
@@ -138,7 +124,7 @@ The factory has production lines (start with 1, up to 4; each extra line is a ca
 | Skyship (Cargo) | $60M | 24 days | Rated 40 flights, tower catch |
 | Skyship Tanker | $50M | 20 days | Carries 100 t of propellant to the LEO depot |
 | Skyship Depot | $75M | 30 days | Single use: it stays in LEO and becomes the depot |
-| Habitat / Reactor / ISRU Skyship | TBD | TBD | Moon-base phase (see 2.4); shown locked in the factory |
+| Module ships (Habitat, Reactor, Drone Bay, Smelter, Fabricator, Ice Miner, Refinery) | see 2.8 and 2.9 | see 2.8 and 2.9 | Skyship hulls that become base modules; they unlock with the base techs |
 
 Soft-lock protection: if the company has no hulls, nothing queued and not enough cash to build a Peregrine 9, investors fund one. Purchases must leave a small cash floor.
 
@@ -155,7 +141,7 @@ Destination Table
 | Shackleton Crater | Moon | Site (south pole) | 5 | 3 t | Skyship + depot propellant |
 | Mare Tranquillitatis | Moon | Site | 5 | 3 t | Skyship + depot propellant |
 | Oceanus Procellarum | Moon | Site | 5 | 3 t | Skyship + depot propellant |
-| Mars orbit, Jezero Crater, Utopia Planitia | Mars | Orbit / Sites | about 180 | TBD | Mars Transfer tech (planned, shown locked) |
+| Mars orbit, Jezero Crater, Utopia Planitia | Mars | Orbit / Sites | about 180 | 5 t (direct route) | Mars Transfer Vehicle tech (see 2.9 and 2.17) |
 
 Planning Flow
 1. Select a destination by clicking its orbit ring or landing-site pin on the Earth, Moon or Mars map.
@@ -217,7 +203,7 @@ The base stockpile now also holds ice (up to 300 t) and lunar methalox (up to 60
 
 Ships built on the Moon: the Fabricator can build a Skyship hull from stockpiled iron, silica and oxygen (300 t, 150 t and 50 t) plus $35M of imported engines, in 30 days. The hull appears in the fleet marked as based at the Moon. A Moon-based hull can only fly from the Moon, and an Earth hull can never fly from there.
 
-Mars: the Mars Transfer Vehicle tech (needs Lunar Ice Mining and the Habitat tech) unlocks Mars orbit, Jezero Crater and Utopia Planitia, and Mars cargo contracts. Mars contracts are large (30 to 100 t) and pay roughly four times what lunar cargo pays per tonne, but the cash only arrives when the flight does, about 6 months later. Mars hulls are single use because there is no fuel at Mars yet.
+Mars: the Mars Transfer Vehicle tech (needs Lunar Ice Mining and the Habitat tech) unlocks Mars orbit, Jezero Crater and Utopia Planitia, and Mars cargo contracts. Mars contracts are large (30 to 100 t) and pay roughly four times what lunar cargo pays per tonne, but the cash only arrives when the flight does, about 6 months later. Mars hulls are single use until a Mars base exists; 2.17 adds Mars fuel, Mars-based hulls and return flights.
 Launch windows: Mars flights can only launch in the real windows listed in 2.11, about 30 days every 26 months (the first opens on 25 Nov 2011). Outside a window no Mars flight can launch, so the player has to plan ahead. Mars contracts last 200 days to give time to prepare.
 Two routes to Mars:
 - Direct from Earth: any Earth Skyship with a catch tower. It burns depot propellant (5 t per tonne of payload plus the usual launch fuel). It is risky: +12% risk on ascent and 15% risk of being lost on arrival. 180 days.
@@ -234,7 +220,7 @@ Rent first, buy later: the company starts by leasing Pad 39A and a rented hangar
 | Cape Canaveral | Home site: LEO, GTO, lunar | 3 | Starts leased, buy for $60M | No polar or sun-synchronous launches (overflight rules) |
 | Vandenberg | The only polar and sun-synchronous launches | 2 | Lease for $15M, buy for $85M | LEO family only, and no factory |
 | Boca Chica (Starbase) | Super-heavy site | up to 8 | Buy for $220M | Bare land: the purchase includes no pads, hangars, tanks, plants, towers or factory line. Everything is built out from nothing (see below). Catch vehicles (Behemoth, Skyship) cost 15% less and build 15% faster here |
-| Vermilion Parish (L) | Gulf Coast greenfield | up to 24 | Buy for $100M, only after you own Boca Chica | Starbase proves the catch-tower design first, then the company expands to Louisiana. Louisiana. Bare land with room for dozens of pads, no factory. Sits on natural gas deposits that must be extracted: gas wells ($20M each, up to 3) feed its methalox plants, which then make methane at half the usual production cost |
+| Vermilion Parish (L) | Gulf Coast greenfield | up to 24 | Buy for $100M, only after you own Boca Chica | Starbase proves the catch-tower design first, then the company expands to Louisiana. Bare land with room for dozens of pads, no factory. Sits on natural gas deposits that must be extracted: gas wells ($20M each, up to 3) feed its methalox plants, which then make methane at half the usual production cost |
 
 Greenfield sites (Boca Chica and Vermilion Parish): buying only gets the land. The site starts with no pads, no hangars, zero tank capacity, no plants and no factory line. Costs to build out:
 | Item | Boca Chica | Vermilion Parish |
@@ -329,7 +315,7 @@ Sound: all sounds are synthesized with Web Audio (no files): a click on every bu
 
 Keyboard: Space pauses and resumes, 1, 2 and 3 pick 1x, 3x and 8x speed, M mutes, P toggles auto-pause, R and Esc keep their base-building roles.
 
-Later (not in this phase): fleet art, a Cape scene with pads and tanks, a tutorial, undo for base placement, save slots and a settings panel.
+Later (not in this phase): save slots and a settings panel. (Fleet art, site scenes, the tutorial and base undo were built in 2.16.)
 
 2.14 Customers, Shipping and Automatic Launch-Site Choice (Phase 8)
 Contracts now come from somewhere. Each contract has a customer region (North America, Europe, Asia-Pacific, South America, Africa or Maritime & Air), and its payload has to be shipped to the launch site before it can fly.
@@ -442,31 +428,28 @@ Mobile service (direct-to-cell): a separate research, Direct-to-Cell ($80M, need
 Old saves keep their satellites as Gen-1 (save version 10).
 
 3. Technology Tree
-                      [ PEREGRINE ERA ]
-                              │
-               ┌──────────────┴──────────────┐
-               ▼                             ▼
-    [ Booster Landing ] -> [ Rapid Reflight ]      [ Skylink Gen-1 Satellites ]
-    [ Droneship Recovery ]
-               │                             │
-               └──────────────┬──────────────┘
-                              │
-                              ▼
-                  [ SUPER-HEAVY R&D ERA ]
-                              │
-               ┌──────────────┼──────────────┐
-               ▼              ▼              ▼
-     [ Stainless Hull ]  [ Harrier V3 ]  [ Heat Shield Tiles ]  ->  Behemoth Prototype
-                              (3 successful Behemoth flights qualify the Operational Skyship)
-               │              │              │
-               └──────────────┼──────────────┘
-                              │
-                              ▼
-                  [ LUNAR LOGISTICS ERA ]
-                              │
-      ┌───────────────────────┼───────────────────────┐
-      ▼                       ▼                       ▼
-[ Orbital Tanker ]    [ Moon Habitat Core ]   [ Lunar ISRU Mining ]
+Costs are in $M. "Flight" means the tech needs a prototype test flight (2.12). Prerequisites are as built.
+
+| Era | Tech | Cost | Needs | Notes |
+| Peregrine | Booster Landing | 30 | none | Flight test. RTLS recovery |
+| Peregrine | Droneship Recovery | 40 | Booster Landing | Flight test |
+| Peregrine | Rapid Reflight | 25 | Booster Landing | |
+| Peregrine | Propellant Plants | 70 | Rapid Reflight | Owned sites can build plants |
+| Peregrine | Skylink Gen-1 | 5 | none | Starts passive income |
+| Peregrine | Skylink Gen-2 | 60 | Rapid Reflight, Gen-1 | Gen-2 Mini satellites (2.20) |
+| Peregrine | Direct-to-Cell | 80 | Skylink Gen-2 | Mobile carrier markets (2.20) |
+| Peregrine | Peregrine Heavy | 60 | Rapid Reflight | Flight test |
+| Super-Heavy | Stainless Hull | 120 | Peregrine Heavy, Gen-1 | Flight test |
+| Super-Heavy | Harrier V3 | 150 | Peregrine Heavy, Gen-1 | Flight test |
+| Super-Heavy | Heat Shield Tiles | 140 | Peregrine Heavy, Gen-1 | Flight test |
+| Super-Heavy | Operational Skyship | 400 | Stainless Hull, Harrier V3, Heat Shield Tiles | Also needs 3 successful Behemoth flights. The three techs above unlock the Behemoth Prototype |
+| Super-Heavy | Skylink Gen-3 | 300 | Operational Skyship, Gen-2 | Gen-3 satellites (2.20) |
+| Lunar | Orbital Tanker | 600 | Operational Skyship | Flight test |
+| Lunar | Moon Habitat Core | 900 | Operational Skyship | |
+| Lunar | Lunar ISRU Mining | 1200 | Operational Skyship | |
+| Lunar | Lunar Ice Mining | 700 | Lunar ISRU Mining | |
+| Mars | Mars Transfer Vehicle | 2000 | Lunar Ice Mining, Moon Habitat Core | Mars orbit, sites, bases and routes (2.9, 2.17) |
+
 4. User Interface Architecture
 The primary screen is the map view, with a docked control panel and a bottom strip for transit and logs.
 
@@ -483,7 +466,7 @@ The primary screen is the map view, with a docked control panel and a bottom str
 +------------------------------------------------+-----------------------------------------+
 
 Map layers: the 3D planet model (Three.js, rendered to a texture inside Phaser), 2D pins and labels, and 2D dashed flight trails. Pins on the back of the planet are hidden.
-Dock tabs: Mission (planning and launch), Fleet (hulls and pads), Factory (queue and lines), R&D (tech tree), Skylink (regional coverage and satellite target).
+Dock tabs: Mission (planning and launch), Fleet (hulls and pads), Factory (queue and lines), Sites (launch sites, infrastructure and supply), R&D (tech tree), Skylink (constellation, service plan and markets) and, once a base exists, Base.
 Base view: once a base exists the Moon tab gains a Base button. It zooms the 3D Moon into the landing site and fades to a top-down grid of the base, where modules are drawn as tubes, ducts as ribbed hoses, buried modules under regolith and drones moving between pits and modules. A Base tab in the dock shows power, crew, stockpile, pending modules, drone focus and the Fabricator queue.
 5. Sound & Visual Style Guide
 Visual Style: Vector-based 2D flat isometric UI with clean line art, high-contrast HUD overlays, and subtle particle telemetry effects for launches.
@@ -498,5 +481,8 @@ Phase 7: launch sequence, floating cash, sparkline and runway, launch receipt, m
 Phase 8: customer regions, payload shipping time, site letters and automatic launch-site choice.
 Phase 9: touch and phone support, GitHub Pages hosting, tutorial, fleet art, site scenes and base undo.
 Phase 10: Mars bases, dust storms, Mars methalox, Mars-based Skyships and return flights.
-Phase 11: phone layout (hidden status strip, shorter canvas) and the depot docking scene.
-Next: crew rotation, larger bases and a base hint for unpowered habitats.
+Phase 11: phone layout (hidden status strip, shorter canvas), view buttons and the depot docking scene.
+Phase 12: Skylink as one global constellation, licensed markets, capacity versus subscribers and service plans (2.19). Also in this stretch: the Boca Chica prototype yard and Vermilion Parish (2.10), and separate RP-1, methane and LOX tanks.
+Phase 13: satellite generations Gen-1/2/3 and mobile carrier markets (2.20). Save version 10.
+Playtest numbers (pacing bot, 10 runs, medians; day 1 is 1 Jan 2010): Booster Landing day 131, Rapid Reflight 629, Behemoth 1642, Operational Skyship 1970, first lunar flight 2291. About 52 launches a year, about 9 lost vehicles in 2500 days. With the Gen-2 path (GEN=1) the first mobile market only opens near day 2316.
+Next (design in progress): goals and an endgame, a launch-cadence and Direct-to-Cell gating retune, and crew (a capsule, crew contracts and base crew rotation).
