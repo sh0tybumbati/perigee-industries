@@ -484,5 +484,5 @@ Phase 10: Mars bases, dust storms, Mars methalox, Mars-based Skyships and return
 Phase 11: phone layout (hidden status strip, shorter canvas), view buttons and the depot docking scene.
 Phase 12: Skylink as one global constellation, licensed markets, capacity versus subscribers and service plans (2.19). Also in this stretch: the Boca Chica prototype yard and Vermilion Parish (2.10), and separate RP-1, methane and LOX tanks.
 Phase 13: satellite generations Gen-1/2/3 and mobile carrier markets (2.20). Save version 10.
-Playtest numbers (pacing bot, 10 runs, medians; day 1 is 1 Jan 2010): Booster Landing day 131, Rapid Reflight 629, Behemoth 1642, Operational Skyship 1970, first lunar flight 2291. About 52 launches a year, about 9 lost vehicles in 2500 days. With the Gen-2 path (GEN=1) the first mobile market only opens near day 2316.
+Playtest numbers (pacing bot, 10 runs, medians; day 1 is 1 Jan 2010): Booster Landing day 131, Rapid Reflight 629, Behemoth 1642, Operational Skyship 1970, first lunar flight 2291. About 52 launches a year, about 9 lost vehicles in 2500 days. With the Gen-2 path (GEN=1) the first mobile market only opens near day 2731.
 Next (design in progress): goals and an endgame, a launch-cadence and Direct-to-Cell gating retune, and crew (a capsule, crew contracts and base crew rotation).
