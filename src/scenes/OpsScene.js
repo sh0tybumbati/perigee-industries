@@ -339,8 +339,8 @@ export class OpsScene extends Phaser.Scene {
         if (!sim.toggleContract(s, id)) this.hint.setText('One destination per launch: unload the others first.');
         this.lastDest = null;
       },
-      cycleRegion: () => { s.region = REGIONS[(REGIONS.findIndex((r) => r.id === s.region) + 1) % REGIONS.length].id; },
-      pickRegion: (id) => { s.region = id; },
+      setPlan: (id) => sim.setPlan(s, id),
+      applyLicense: (id) => sim.applyLicense(s, id),
       buyPad: () => sim.buyPad(s),
       buyLine: (id) => sim.buyLine(s, id),
       queueBuild: (id, siteId) => sim.queueBuild(s, id, siteId),

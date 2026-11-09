@@ -2,7 +2,7 @@
 import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
-  PLANT_COST, PLANT_MAX, WELL_COST, MAX_WELLS, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
+  PLANT_COST, PLANT_MAX, MARKETS, PLANS, WELL_COST, MAX_WELLS, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
   PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
@@ -263,9 +263,7 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
       size: 12, color: hex(s.depot.prop >= need && s.rocket === 'skyship' ? COL.good : COL.warn),
     });
   } else if (gen1 && satsOk) {
-    const region = REGIONS.find((x) => x.id === s.region);
-    ui.label(X, ry + 3, `Payout $${t.payout}M  ·  Skylink sats ${s.sats}`, { size: 12, color: hex(COL.good) });
-    ui.button(X + 250, ry, 170, 22, `To ${region.name}`, () => actions.cycleRegion(), { size: 11, hint: 'Click to change the target region.' });
+    ui.label(X, ry + 3, `Payout $${t.payout}M  ·  Skylink sats ${s.sats} (join the global constellation)`, { size: 12, color: hex(COL.good) });
     ui.button(X + 428, ry, 50, 22, `-${sim.SAT_BATCH}`, () => sim.adjustSats(s, -sim.SAT_BATCH), { enabled: s.sats > 0, size: 11 });
     ui.button(X + 486, ry, 50, 22, `+${sim.SAT_BATCH}`, () => sim.adjustSats(s, sim.SAT_BATCH), { enabled: s.sats < sim.rocketDef(s).sats, size: 11 });
   } else {
@@ -542,21 +540,44 @@ function renderTimeline(ui, s, X, Y) {
 }
 
 export function renderSkylink(ui, s, X, Y, W, actions) {
-  ui.heading(X, Y, 'SKYLINK COVERAGE  ·  click to set the target region for the next satellite batch');
-  REGIONS.forEach((r, i) => {
-    const y = Y + 22 + i * 40;
-    const cov = sim.coverage(s, r);
-    const sel = s.region === r.id;
-    ui.row(X, y, W, 36, { on: sel, onClick: () => actions.pickRegion(r.id) });
-    ui.label(X + 10, y + 9, r.name, { size: 14, bold: sel });
-    ui.bar(X + 190, y + 13, 180, 11, cov, cov < 0.3 ? COL.bad : cov < 0.7 ? COL.warn : COL.good);
-    ui.label(X + 382, y + 9, `${Math.round(cov * 100)}%`, { size: 13 });
-    ui.label(X + W - 10, y + 9, `$${sim.regionRevenue(s, r).toFixed(2)}M/day`, { size: 13, right: true, color: COL.dimText });
+  const cap = sim.skylinkCapacity(s);
+  const subs = sim.totalSubs(s);
+  const q = sim.skylinkQuality(s);
+  ui.heading(X, Y, 'SKYLINK  ·  one constellation, licensed markets');
+  ui.label(X, Y + 18, `${Math.round(s.constellation)} satellites`, { size: 13, bold: true });
+  ui.label(X + 130, Y + 19, `capacity ${cap.toFixed(1)}k  ·  subscribers ${subs.toFixed(1)}k`, { size: 12, color: COL.dimText });
+  ui.bar(X + 330, Y + 22, W - 330 - 70, 9, cap ? Math.min(1, subs / cap) : 0, q < 1 ? COL.bad : subs > cap * 0.85 ? COL.warn : COL.good);
+  ui.label(X + W, Y + 19, q < 1 ? `CONGESTED ${Math.round(q * 100)}%` : `${cap ? Math.round((subs / cap) * 100) : 0}% full`, { size: 11, bold: true, right: true, color: hex(q < 1 ? COL.bad : COL.dim) });
+
+  ui.label(X, Y + 42, 'Plan', { size: 12, color: COL.dimText });
+  Object.entries(PLANS).forEach(([id, p], i) => {
+    ui.button(X + 44 + i * 112, Y + 38, 106, 22, `${p.name}  x${p.price}`, () => actions.setPlan(id), {
+      size: 11, fill: s.plan === id ? COL.btnOn : COL.btn, stroke: s.plan === id ? COL.good : COL.accent, hint: p.hint,
+    });
   });
   const total = sim.dailyRevenue(s);
-  ui.label(X, Y + 22 + 6 * 40 + 8, `Total: $${total.toFixed(2)}M/day  ·  overhead $${sim.OVERHEAD_PER_DAY}M/day`, { size: 14, bold: true, color: hex(COL.good) });
-  ui.label(X, Y + 22 + 6 * 40 + 32, 'Satellites decay over 5 years. Keep launching batches to LEO or Polar LEO to hold coverage.', { size: 12, color: COL.dimText, wrap: W });
-  renderTimeline(ui, s, X, Y + 22 + 6 * 40 + 62);
+  ui.label(X + W, Y + 1, `$${total.toFixed(3)}M/day  ·  overhead $${sim.OVERHEAD_PER_DAY}M`, { size: 12, bold: true, right: true, color: hex(total >= sim.OVERHEAD_PER_DAY ? COL.good : COL.warn) });
+
+  const y0 = Y + 68;
+  MARKETS.forEach((m, i) => {
+    const y = y0 + i * 23;
+    const st = s.markets[m.id];
+    const blocker = sim.marketBlocker(s, m.id);
+    ui.row(X, y, W, 21, { fill: st.status === 'active' ? 0x123524 : COL.row, hint: `${m.name}: up to ${m.subs}k subscribers at $${m.arpu}/month. Licence $${m.license}M, approval ${m.lead} days, needs ${m.minSats} satellites.` });
+    ui.label(X + 8, y + 3, m.name, { size: 12, bold: true, color: st.status === 'locked' && s.constellation < m.minSats ? COL.dimText : COL.text });
+    if (st.status === 'active') {
+      ui.label(X + 190, y + 4, `${st.subs.toFixed(1)}k / ${sim.demandCeiling(s, m).toFixed(1)}k subs`, { size: 11 });
+      ui.label(X + W - 8, y + 4, `$${sim.marketRevenue(s, m).toFixed(3)}M/day`, { size: 11, bold: true, right: true, color: hex(COL.good) });
+    } else if (st.status === 'pending') {
+      ui.label(X + 190, y + 4, `approval in ${Math.max(0, st.readyDay - s.day)} days`, { size: 11, bold: true, color: hex(COL.warn) });
+    } else {
+      ui.label(X + 190, y + 4, s.constellation >= m.minSats ? 'ready to license' : `needs ${m.minSats} satellites`, { size: 11, color: s.constellation >= m.minSats ? COL.text : COL.dimText });
+      ui.button(X + W - 132, y + 1, 130, 19, `License  $${m.license}M · ${m.lead}d`, () => actions.applyLicense(m.id), { size: 10, enabled: !blocker, hint: blocker ?? `Pay $${m.license}M and wait ${m.lead} days for approval.` });
+    }
+  });
+  const ey = y0 + MARKETS.length * 23 + 4;
+  ui.label(X, ey, 'Satellites decay over 5 years, so capacity shrinks if launches stop. Congestion drives subscribers away: switch plan or launch more.', { size: 11, color: COL.dimText, wrap: W });
+  renderTimeline(ui, s, X, ey + 30);
 }
 
 // ---- Moon base --------------------------------------------------------------------------------------

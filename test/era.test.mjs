@@ -143,7 +143,8 @@ test('cash history keeps 90 days, and runway counts the days of overhead left', 
   s.cash = 50;
   s.sats = 0;
   assert.equal(sim.runwayDays(s), Math.floor((50 - 5) / (sim.OVERHEAD_PER_DAY - sim.dailyRevenue(s))));
-  s.constellation = { na: 1e9, eu: 1e9, apac: 1e9, sa: 1e9, af: 1e9, mar: 1e9 };
+  s.constellation = 1e9;
+  for (const st of Object.values(s.markets)) { st.status = 'active'; st.subs = 1000; }
   assert.equal(sim.runwayDays(s), Infinity);
 });
 

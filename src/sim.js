@@ -1,6 +1,6 @@
 // Pure game simulation: no Phaser or Three here, so it can be tested under plain node.
 import {
-  ROCKETS, SAT_MASS, SAT_VOLUME, SAT_LIFE_DAYS, SAT_COST, REGIONS, CUSTOMERS, TECH,
+  ROCKETS, SAT_MASS, SAT_VOLUME, SAT_LIFE_DAYS, SAT_COST, REGIONS, MARKETS, SAT_CAPACITY, SUB_GROWTH, CHURN, PLANS, CUSTOMERS, TECH,
   OVERHEAD_PER_DAY, CASH_FLOOR, BEHEMOTH_LEARNING, BEHEMOTH_MIN_RISK,
   DEPOT_CAP, TANKER_LOAD, BOILOFF_PER_DAY,
   DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, SHIP_DAYS,
@@ -15,8 +15,7 @@ import { createBase, tickBase } from './base.js';
 
 export { OVERHEAD_PER_DAY };
 export const SAT_BATCH = 6;
-export const REVENUE_SCALE = 0.3;
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 const MAX_TRIPS = 80;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -74,8 +73,9 @@ export function createState() {
     cashHistory: [60], // one sample per day, for the sparkline
     trials: {}, // techs funded and waiting on a test flight: { articles ready, attempts }
     marsRoute: 'direct', // direct (from Earth) | moon (a Moon-built Skyship leaves the base)
-    region: 'na',
-    constellation: Object.fromEntries(REGIONS.map((r) => [r.id, 0])),
+    constellation: 0, // active Skylink satellites, one global pool
+    markets: Object.fromEntries(MARKETS.map((m) => [m.id, { status: 'locked', readyDay: 0, subs: 0 }])),
+    plan: 'standard',
     depot: { built: false, prop: 0 },
     base: null, // the lunar base, founded by the first module ship to land
     marsBase: null, // the Mars base, founded the same way (GDD 2.17)
@@ -132,6 +132,18 @@ export function serialize(s) {
   return JSON.stringify({ v: SAVE_VERSION, ...s, tech: [...s.tech] });
 }
 
+// Old saves had a satellite count per region. Markets in the regions that had satellites come licensed.
+const LEGACY_REGION_MARKETS = { na: ['us', 'camx'], eu: ['eu', 'uk'], apac: ['jpkr', 'anz', 'in', 'sea'], sa: ['latam'], af: ['af'], mar: ['mar'] };
+function legacyMarkets(c) {
+  const out = new Set();
+  if (c && typeof c === 'object') for (const [r, n] of Object.entries(c)) if (n > 0) (LEGACY_REGION_MARKETS[r] ?? []).forEach((m) => out.add(m));
+  return out;
+}
+function adoptLegacySkylink(s, c) {
+  s.constellation = c && typeof c === 'object' ? Object.values(c).reduce((n, x) => n + (+x || 0), 0) : 0;
+  for (const m of legacyMarkets(c)) s.markets[m].status = 'active';
+}
+
 // Older saves are converted step by step. Returns null for missing, corrupt or unknown saves.
 export function deserialize(json) {
   try {
@@ -162,11 +174,19 @@ export function deserialize(json) {
       }
       o.v = 8;
     }
+    if (o.v === 8) { // v9 pools the regional constellation and adds licensed markets
+      const licensed = legacyMarkets(o.constellation);
+      o.constellation = typeof o.constellation === 'number' ? o.constellation : Object.values(o.constellation ?? {}).reduce((n, x) => n + (+x || 0), 0);
+      o.markets = Object.fromEntries(MARKETS.map((m) => [m.id, { status: licensed.has(m.id) ? 'active' : 'locked', readyDay: 0, subs: 0 }]));
+      o.v = 9;
+    }
     if (o.v !== SAVE_VERSION) return null;
     const base = createState();
     const s = { ...base, ...o, tech: new Set(Array.isArray(o.tech) ? o.tech : []) };
     delete s.v;
-    s.constellation = { ...base.constellation, ...o.constellation };
+    s.constellation = Math.max(0, +o.constellation || 0);
+    s.markets = Object.fromEntries(MARKETS.map((m) => [m.id, { ...base.markets[m.id], ...o.markets?.[m.id] }]));
+    if (!PLANS[s.plan]) s.plan = 'standard';
     s.depot = { ...base.depot, ...o.depot };
     s.flightCounts = { ...o.flightCounts };
     s.serials = { ...o.serials };
@@ -189,7 +209,6 @@ export function deserialize(json) {
     if (!DESTINATIONS[s.dest] || !destUnlocked(s, s.dest)) s.dest = 'leo';
     if (!s.sites[s.site] || s.sites[s.site].status === 'locked') s.site = 'cape';
     if (!['rtls', 'drone', 'expend'].includes(s.recovery)) s.recovery = 'rtls';
-    if (!REGIONS.some((r) => r.id === s.region)) s.region = 'na';
     if (!Number.isFinite(s.cash) || !Number.isFinite(s.day)) return null;
     return s;
   } catch {
@@ -203,8 +222,8 @@ function migrateV2(o) {
   s.fleet = [];
   s.serials = {};
   s.tech = new Set(Array.isArray(o.tech) ? o.tech : []);
-  for (const k of ['day', 'cash', 'income', 'totalLaunches', 'region', 'recovery']) if (o[k] !== undefined) s[k] = o[k];
-  s.constellation = { ...s.constellation, ...o.constellation };
+  for (const k of ['day', 'cash', 'income', 'totalLaunches', 'recovery']) if (o[k] !== undefined) s[k] = o[k];
+  adoptLegacySkylink(s, o.constellation);
   s.flightCounts = { ...o.flights };
   if (o.depot) s.depot = { built: !!o.depot.built, prop: o.depot.prop ?? 0 };
   for (const id of ['peregrine9', 'peregrineHeavy', 'behemoth', 'skyship']) {
@@ -213,7 +232,6 @@ function migrateV2(o) {
   }
   if (!s.fleet.length) addVehicle(s, 'peregrine9', 'cape');
   if (ROCKETS[o.rocket] && rocketUnlocked(s, o.rocket)) s.rocket = o.rocket;
-  if (!REGIONS.some((r) => r.id === s.region)) s.region = 'na';
   // Hand the v4 migration the pieces it expects.
   return { ...s, tech: [...s.tech], pads: [{ busyUntil: 0 }], lines: 1, queue: [], v: 4 };
 }
@@ -221,7 +239,7 @@ function migrateV2(o) {
 // v4 had a flat list of pads and one factory. They become Cape Canaveral, owned if the company had grown.
 function migrateV4(o) {
   const s = createState();
-  for (const k of ['day', 'cash', 'income', 'fleet', 'serials', 'trips', 'flightCounts', 'contracts', 'manifest', 'sats', 'rocket', 'dest', 'region', 'constellation', 'depot', 'base', 'log', 'totalLaunches', 'nextId']) {
+  for (const k of ['day', 'cash', 'income', 'fleet', 'serials', 'trips', 'flightCounts', 'contracts', 'manifest', 'sats', 'rocket', 'dest', 'constellation', 'markets', 'plan', 'depot', 'base', 'log', 'totalLaunches', 'nextId']) {
     if (o[k] !== undefined) s[k] = o[k];
   }
   if (['rtls', 'drone', 'expend'].includes(o.recovery)) s.recovery = o.recovery;
@@ -815,9 +833,73 @@ export function adjustSats(s, delta) {
 
 // ---- economy ---------------------------------------------------------------
 
-export const coverage = (s, r) => Math.min(1, s.constellation[r.id] / r.satsFull);
-export const regionRevenue = (s, r) => r.daily * REVENUE_SCALE * coverage(s, r);
-export const dailyRevenue = (s) => REGIONS.reduce((sum, r) => sum + regionRevenue(s, r), 0);
+// ---- Skylink: one constellation, licensed markets (GDD 2.19) --------------------------------------
+
+export const skylinkCapacity = (s) => s.constellation * SAT_CAPACITY; // thousands of subscribers
+export const totalSubs = (s) => MARKETS.reduce((n, m) => n + s.markets[m.id].subs, 0);
+export const demandCeiling = (s, m) => m.subs * PLANS[s.plan].demand;
+// Share of the network's quality that subscribers get: 1 until subscribers outgrow capacity.
+export function skylinkQuality(s) {
+  const subs = totalSubs(s);
+  const cap = skylinkCapacity(s);
+  return subs <= cap ? 1 : cap / subs;
+}
+export const marketRevenue = (s, m) => {
+  const st = s.markets[m.id];
+  return st.status === 'active' ? (st.subs * m.arpu * PLANS[s.plan].price) / 30 / 1000 * skylinkQuality(s) : 0; // $M per day
+};
+export const dailyRevenue = (s) => MARKETS.reduce((n, m) => n + marketRevenue(s, m), 0);
+
+export function marketBlocker(s, id) {
+  const m = MARKETS.find((x) => x.id === id);
+  const st = s.markets[id];
+  if (st.status === 'active') return 'Licensed';
+  if (st.status === 'pending') return 'Approval pending';
+  if (!s.tech.has('gen1')) return 'Research Skylink Gen-1';
+  if (s.constellation < m.minSats) return `Needs ${m.minSats} satellites in orbit`;
+  return canSpend(s, m.license) ? null : 'Not enough cash';
+}
+
+export function applyLicense(s, id) {
+  if (marketBlocker(s, id)) return false;
+  const m = MARKETS.find((x) => x.id === id);
+  s.cash -= m.license;
+  s.markets[id] = { status: 'pending', readyDay: s.day + m.lead, subs: 0 };
+  note(s, `Applied for a ${m.name} license (-$${m.license}M). Approval in ${m.lead} days.`);
+  return true;
+}
+
+export function setPlan(s, id) {
+  if (PLANS[id]) s.plan = id;
+}
+
+function tickSkylink(s) {
+  s.constellation *= 1 - 1 / SAT_LIFE_DAYS;
+  for (const m of MARKETS) {
+    const st = s.markets[m.id];
+    if (st.status === 'pending' && s.day >= st.readyDay) {
+      st.status = 'active';
+      note(s, `${m.name} license approved. Subscribers are signing up.`);
+      milestone(s, `market:${m.id}`, `${m.name} license`, 'Skylink can sell there.');
+    }
+  }
+  const q = skylinkQuality(s);
+  let room = skylinkCapacity(s) - totalSubs(s); // new subscribers only sign up while there is capacity
+  for (const m of MARKETS) {
+    const st = s.markets[m.id];
+    if (st.status !== 'active') continue;
+    const target = demandCeiling(s, m);
+    if (q < 1) st.subs *= 1 - CHURN * (1 - q); // congested: users leave
+    else if (st.subs < target) {
+      const add = Math.max(0, Math.min((target - st.subs) * SUB_GROWTH, room));
+      st.subs += add;
+      room -= add;
+    }
+    if (st.subs > target) st.subs += (target - st.subs) * 0.05;
+  }
+  const subs = totalSubs(s);
+  for (const n of [50, 100]) if (subs >= n) milestone(s, `subs${n}`, `${n}k Skylink subscribers`, 'The constellation pays the bills.');
+}
 
 // Purchases must leave enough cash to fly the cheapest launch, or the game could soft-lock.
 export const canSpend = (s, amount) => s.cash - amount >= CASH_FLOOR;
@@ -973,7 +1055,7 @@ export function launch(s) {
   const trip = {
     id: s.nextId++, serial: v.serial, type: s.rocket, role: r.role, dest: destId, site: moon ? null : s.site,
     origin, fromSite: moon ? baseOn(s, origin).site : undefined,
-    launchDay: s.day, arriveDay: s.day + (route ? route.days : d.days), status: 'enroute', payout: 0, sats: 0, region: s.region,
+    launchDay: s.day, arriveDay: s.day + (route ? route.days : d.days), status: 'enroute', payout: 0, sats: 0,
     landRisk: !route ? 0 : origin === 'mars' ? route.landRisk : origin === 'moon' ? marsRisks(s).moonLand : marsRisks(s).land,
   };
   if (r.role === 'module') {
@@ -1052,11 +1134,10 @@ function arrive(s, trip) {
   if (d.body === 'mars' && trip.origin !== 'mars') s.marsLandings = (s.marsLandings ?? 0) + 1;
   if (trip.role === 'payload') {
     s.cash += trip.payout;
-    const region = REGIONS.find((x) => x.id === trip.region);
-    if (trip.sats) s.constellation[region.id] += trip.sats;
+    if (trip.sats) s.constellation += trip.sats;
     const bits = [];
     if (trip.payout) bits.push(`+$${trip.payout}M`);
-    if (trip.sats) bits.push(`${trip.sats} Skylink sats to ${region.name}`);
+    if (trip.sats) bits.push(`${trip.sats} Skylink sats in orbit`);
     note(s, `${trip.serial} arrived at ${d.name}.${bits.length ? ` ${bits.join(', ')}.` : ''}`);
     milestone(s, 'firstFlight', 'First successful flight', `${trip.serial} delivered its payload to ${d.name}.`);
     if (d.body === 'moon') milestone(s, 'firstMoon', 'First cargo on the Moon', `${trip.serial} landed at ${d.name}.`);
@@ -1234,7 +1315,7 @@ export const skipTutorial = (s) => { s.tutorial = TUTORIAL.length; };
 
 export function tick(s) {
   s.day++;
-  for (const r of REGIONS) s.constellation[r.id] *= 1 - 1 / SAT_LIFE_DAYS;
+  tickSkylink(s);
   if (s.depot.built) s.depot.prop *= 1 - BOILOFF_PER_DAY;
   tickMarket(s);
 

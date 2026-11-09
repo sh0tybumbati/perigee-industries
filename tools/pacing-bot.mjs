@@ -1,7 +1,7 @@
 // Play-through bot: plays the whole tech tree headless and prints median days to milestones.
 // usage: node tools/pacing-bot.mjs [runs] [days]
 import * as sim from '../src/sim.js';
-import { REGIONS, TECH, ROCKETS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, DESTINATIONS } from '../src/data.js';
+import { MARKETS, TECH, ROCKETS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, DESTINATIONS } from '../src/data.js';
 const ORDER = ['landing','gen1','fastCores','heavyCores','hull','raptor','tiles','skyship','plants','tanker','habitat','isru'];
 const N = +process.argv[2] || 20, DAYS = +process.argv[3] || 2500;
 const out = [];
@@ -46,6 +46,8 @@ for (let seed = 0; seed < N; seed++) {
       if ((best === 'behemoth' || best === 'skyship') && s.cash > 80) cape().pads.forEach((p, i) => { if (!p.tower && s.cash > 80) sim.buildTower(s, 'cape', i); });
       if (s.tech.has('plants') && cape().plants.methalox < 2 && s.cash > 200 && s.tech.has('skyship')) sim.buildPlant(s, 'cape', 'methalox');
     }
+    // license another Skylink market only while the constellation has spare capacity, cheapest first
+    for (const m of MARKETS.slice().sort((a, b) => a.license - b.license)) if (!sim.marketBlocker(s, m.id) && s.cash > m.license + 8 && sim.totalSubs(s) < 0.6 * sim.skylinkCapacity(s)) sim.applyLicense(s, m.id);
     // keep the tanks stocked while prices are good
     for (const f of ['kerolox', 'methalox', 'lox', 'steel', 'aluminum']) if (cape().stock[f] < cape().cap[f] * 0.4 && s.market[f] < 1.1) sim.buyCommodity(s, 'cape', f, 200);
     if (s.tech.has('tanker')) {
@@ -79,16 +81,15 @@ for (let seed = 0; seed < N; seed++) {
           for (const c of cs) { s.manifest.push(c.id); const t = sim.manifestTotals(s); if (t.mass > cap.mass || t.volume > cap.volume || sim.tliNeed(s) > prop) s.manifest.pop(); else picked.push(c.id); }
           const pay = sim.manifestTotals(s).payout;
           if (SAT_DESTS.includes(dest) && s.tech.has('gen1')) {
-            s.region = REGIONS.slice().sort((a, b) => sim.coverage(s, a) - sim.coverage(s, b))[0].id;
             const keep = nextT ? nextT.cost + 12 : 15;
             for (let q = 0; q < 10; q++) { sim.adjustSats(s, 6); const t = sim.manifestTotals(s); if (t.mass > cap.mass || t.volume > cap.volume || sim.launchCost(s) + keep > s.cash) { sim.adjustSats(s, -6); break; } }
           }
           const score = pay + s.sats * 0.1;
-          if (score > 0 && (!bestPlan || score > bestPlan.score)) bestPlan = { score, dest, picked: [...picked], sats: s.sats, region: s.region };
+          if (score > 0 && (!bestPlan || score > bestPlan.score)) bestPlan = { score, dest, picked: [...picked], sats: s.sats };
           s.manifest = []; s.sats = 0;
         }
         if (!bestPlan || (type === 'behemoth' && bestPlan.score < 22)) continue;
-        sim.setDest(s, bestPlan.dest); s.manifest = [...bestPlan.picked]; s.region = bestPlan.region;
+        sim.setDest(s, bestPlan.dest); s.manifest = [...bestPlan.picked];
         if (bestPlan.sats) sim.adjustSats(s, bestPlan.sats);
         if (sim.launchBlocker(s)) { s.manifest = []; s.sats = 0; continue; }
         const isLunar = DESTINATIONS[bestPlan.dest].body === 'moon';

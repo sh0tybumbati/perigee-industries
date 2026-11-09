@@ -180,14 +180,39 @@ export const SAT_COST = 0.35; // $M each
 export const OVERHEAD_PER_DAY = 0.12; // $M payroll and facilities
 export const CASH_FLOOR = 5; // $M overhead never drains cash below this
 
+// Customer regions for contracts and shipping. Skylink sells in MARKETS, not regions.
 export const REGIONS = [
-  { id: 'na', name: 'North America', daily: 0.45, satsFull: 120 },
-  { id: 'eu', name: 'Europe', daily: 0.31, satsFull: 100 },
-  { id: 'apac', name: 'Asia-Pacific', daily: 0.22, satsFull: 140 },
-  { id: 'sa', name: 'South America', daily: 0.12, satsFull: 80 },
-  { id: 'af', name: 'Africa', daily: 0.09, satsFull: 90 },
-  { id: 'mar', name: 'Maritime & Air', daily: 0.14, satsFull: 110 },
+  { id: 'na', name: 'North America' },
+  { id: 'eu', name: 'Europe' },
+  { id: 'apac', name: 'Asia-Pacific' },
+  { id: 'sa', name: 'South America' },
+  { id: 'af', name: 'Africa' },
+  { id: 'mar', name: 'Maritime & Air' },
 ];
+
+// Skylink markets (GDD 2.19). minSats: constellation density to apply. license: $M. lead: days of approval.
+// subs: thousands of subscribers at saturation. arpu: $ per subscriber per month.
+export const MARKETS = [
+  { id: 'us', name: 'United States', minSats: 12, license: 3, lead: 10, subs: 36, arpu: 110 },
+  { id: 'camx', name: 'Canada & Mexico', minSats: 24, license: 4, lead: 20, subs: 8, arpu: 95 },
+  { id: 'mar', name: 'Maritime & Aviation', minSats: 60, license: 10, lead: 90, subs: 6, arpu: 300 },
+  { id: 'eu', name: 'European Union', minSats: 70, license: 25, lead: 120, subs: 26, arpu: 100 },
+  { id: 'uk', name: 'United Kingdom', minSats: 70, license: 8, lead: 60, subs: 7, arpu: 110 },
+  { id: 'anz', name: 'Australia & NZ', minSats: 80, license: 6, lead: 60, subs: 6, arpu: 105 },
+  { id: 'latam', name: 'Latin America', minSats: 80, license: 12, lead: 90, subs: 14, arpu: 60 },
+  { id: 'af', name: 'Africa', minSats: 90, license: 14, lead: 150, subs: 24, arpu: 30 },
+  { id: 'jpkr', name: 'Japan & Korea', minSats: 100, license: 15, lead: 120, subs: 14, arpu: 95 },
+  { id: 'in', name: 'India', minSats: 110, license: 20, lead: 240, subs: 12, arpu: 25 },
+  { id: 'sea', name: 'Southeast Asia', minSats: 120, license: 10, lead: 150, subs: 10, arpu: 40 },
+];
+export const SAT_CAPACITY = 0.3; // thousands of subscribers per satellite
+export const SUB_GROWTH = 0.05; // share of the gap to the demand ceiling closed per day
+export const CHURN = 0.03; // daily subscriber loss per point of congestion
+export const PLANS = {
+  budget: { name: 'Budget', price: 0.7, demand: 1.5, hint: 'Cheap: fills the network quickly, so only run it with spare capacity.' },
+  standard: { name: 'Standard', price: 1, demand: 1, hint: 'The balanced plan.' },
+  premium: { name: 'Premium', price: 1.4, demand: 0.6, hint: 'Fewer subscribers, each paying more. Good for a thin constellation.' },
+};
 
 export const CUSTOMERS = ['Aurora Telecom', 'Helix Earth Obs', 'Kestrel Defense', 'Meridian Labs', 'Polaris Comms', 'Tern Weather', 'Vela Science', 'Orion Media'];
 

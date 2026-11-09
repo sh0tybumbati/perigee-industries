@@ -58,7 +58,7 @@ In January 2010 nobody has landed a booster yet, so the company starts with expe
 - Droneship, unlocked by Droneship Recovery: full payload, but it needs a free droneship, which is out at sea and busy for 4 days, and the booster reaches its hangar 2 days later.
 - Expend (the only mode at the start): the booster is thrown away for +15% payload. The hull is lost and needs no refit, and a new one has to be built for the next flight ($3M and 30 t of aluminum for a Peregrine 9).
 
-2.2 Broadband Constellation Network (Passive Income)
+2.2 Broadband Constellation Network (Passive Income) (the regional model below is replaced by section 2.19)
 Orbital Shells: Earth orbit is split into 4 distinct latitude/altitude shells (LEO Equatorial, LEO Polar, MEO, GEO).
 
 Deployment Cadence: Peregrine 9 carries up to 24 satellites per launch; Skyship carries up to 60 Gen-2 satellites.
@@ -398,6 +398,32 @@ Depot docking: refueling is shown as a short scene on the map at the LEO pin.
 - The scene is cosmetic. The depot rules do not change. It plays on the Earth map, and when another body is on screen it plays as a toast only.
 
 Base hints: a waiting Habitat shows a warning in the Base tab until the base has a power source ("place a reactor first, or this habitat's crew will die"), and a habitat with crew and no power shows a red "Crew at risk" line with the fix (connect it to a reactor or solar array with a duct).
+
+2.19 Skylink Rethought: One Constellation, Licensed Markets (Phase 12)
+Satellites orbit the whole planet, so the constellation is one global pool, not six regional ones. A batch launched to LEO or Polar LEO joins the pool, and the pool serves every market the company is licensed to sell in. Regions still exist for contract customers (shipping times), but satellites no longer have a target region.
+
+Capacity and demand: each satellite adds 0.3k subscribers of capacity. Each licensed market has subscribers that grow towards a demand ceiling. When total subscribers exceed capacity the network is congested: quality is capacity divided by subscribers, revenue per subscriber falls by that factor, and subscribers start to churn. Satellites decay over 5 years, so capacity shrinks if launches stop.
+
+Markets are unlocked in two ways:
+1. Density: a market can only be applied for once the constellation has enough satellites in orbit (the number is its density requirement).
+2. Licensing: the company pays a one-time licensing fee to that country or bloc, then waits for approval (days, shown in the tab). Subscribers start arriving once the license is active.
+
+| Market | Density needed | License | Approval | Subscribers at saturation | Revenue per subscriber per month |
+| United States | 12 | $3M | 10 d | 36k | $110 |
+| Canada & Mexico | 24 | $4M | 20 d | 8k | $95 |
+| Maritime & Aviation | 60 | $10M | 90 d | 6k | $300 |
+| European Union | 70 | $25M | 120 d | 26k | $100 |
+| United Kingdom | 70 | $8M | 60 d | 7k | $110 |
+| Australia & New Zealand | 80 | $6M | 60 d | 6k | $105 |
+| Latin America | 80 | $12M | 90 d | 14k | $60 |
+| Africa | 90 | $14M | 150 d | 24k | $30 |
+| Japan & Korea | 100 | $15M | 120 d | 14k | $95 |
+| India | 110 | $20M | 240 d | 12k | $25 |
+| Southeast Asia | 120 | $10M | 150 d | 10k | $40 |
+
+Service plan (the balancing lever): Budget (price x0.7, demand x1.5), Standard (x1, x1) and Premium (price x1.4, demand x0.6). A thin constellation can run Premium to earn from fewer users without congestion; a dense one runs Budget to fill its capacity. Changing plan moves each market's subscribers towards the new ceiling over time.
+
+The Skylink tab shows satellites, capacity against subscribers with a congestion bar, the three plans, and one row per market with its status (locked with the density needed, approval pending, or active with subscribers and revenue) and a License button. Old saves have their regional satellites pooled and the markets in the regions they covered licensed for free. Milestones: first licensed market and 50k and 100k subscribers.
 
 3. Technology Tree
                       [ PEREGRINE ERA ]
