@@ -265,3 +265,15 @@ test('undo takes back the last duct (refunded) and the last placement, until dro
   assert.ok(B.undoLast(s));
   assert.equal(B.undoBlocker(b), 'Nothing to undo');
 });
+
+test('habitat hints: warn before power exists, and flag crew in an unpowered habitat', async () => {
+  const B = await import('../src/base.js');
+  const base = B.createBase('shackleton');
+  assert.match(B.habitatWarning(base, 'habitat'), /reactor/);
+  assert.equal(B.habitatWarning(base, 'reactor'), null);
+  assert.equal(B.crewAtRisk(base), 0);
+  base.modules.push({ id: 1, type: 'habitat', x: 0, y: 0, rot: 0, crew: 6, cover: 0 });
+  assert.equal(B.crewAtRisk(base), 1);
+  base.modules.push({ id: 2, type: 'reactor', x: 0, y: 0, rot: 0, crew: 0, cover: 0 });
+  assert.equal(B.habitatWarning(base, 'habitat'), null);
+});

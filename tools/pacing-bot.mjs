@@ -100,8 +100,9 @@ for (let seed = 0; seed < N; seed++) {
     }
     sim.tick(s);
     if (s.tech.has('isru')) mark('allTech');
+    for (const [k, v] of [['cash100', 100], ['cash275', 275], ['cash485', 485], ['cash1000', 1000]]) if (s.cash >= v) mark(k); // 275 ~ a minimal Vermilion build-out, 485 ~ Boca Chica
   }
   out.push({ ...ms, lunar, lost, cash: Math.round(s.cash), launches, fleet: s.fleet.length, income: +s.income.toFixed(2), idle: idleDays });
 }
 const med = (k) => { const v = out.map(o => o[k]).filter(x => x != null).sort((a, b) => a - b); return v.length ? `${v[Math.floor(v.length / 2)]} (${v[0]}-${v[v.length - 1]}, n=${v.length})` : 'never'; };
-for (const k of ['landing','fastCores','heavyCores','behemoth','skyship','tanker','lunar1','allTech','lunar','launches','lost','cash','income','fleet']) console.log(k.padEnd(11), med(k));
+for (const k of ['landing','fastCores','heavyCores','behemoth','skyship','tanker','lunar1','allTech','cash100','cash275','cash485','cash1000','lunar','launches','lost','cash','income','fleet']) console.log(k.padEnd(11), med(k));

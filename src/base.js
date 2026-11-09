@@ -121,6 +121,16 @@ export function undoLast(s, base = s.base) {
   return true;
 }
 
+// Hints for the Base tab: a habitat needs power from the moment its crew arrive.
+export function habitatWarning(base, type) {
+  if (type !== 'habitat') return null;
+  return base.modules.some((m) => MODULES[m.type].power > 0) ? null : 'No power yet: place a reactor first, or this habitat\'s crew will die.';
+}
+export function crewAtRisk(base) {
+  const { byModule } = analyze(base);
+  return base.modules.filter((m) => m.type === 'habitat' && m.crew && byModule.get(m.id).powerFactor === 0).length;
+}
+
 // ---- networks -------------------------------------------------------------------------------
 
 // Connected groups of modules, with their power and crew balance.

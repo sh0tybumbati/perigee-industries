@@ -395,6 +395,8 @@ Depot docking: refueling is shown as a short scene on the map at the LEO pin.
 - A Moon or Mars flight: after the ascent, the ship meets the depot and takes its propellant: the dots flow the other way and "-400 t" floats up with what is left.
 - The scene is cosmetic. The depot rules do not change. It plays on the Earth map, and when another body is on screen it plays as a toast only.
 
+Base hints: a waiting Habitat shows a warning in the Base tab until the base has a power source ("place a reactor first, or this habitat's crew will die"), and a habitat with crew and no power shows a red "Crew at risk" line with the fix (connect it to a reactor or solar array with a duct).
+
 3. Technology Tree
                       [ PEREGRINE ERA ]
                               │

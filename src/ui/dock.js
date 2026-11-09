@@ -617,14 +617,17 @@ function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
     const on = ctx.mode.kind === 'place' && ctx.mode.pendingId === p.id;
     ui.row(X, y, W, 23, { on });
     ui.label(X + 8, y + 4, MODULES[p.type].name, { size: 13, bold: true });
-    ui.label(X + 150, y + 5, `${MODULES[p.type].len} tiles · ${MODULES[p.type].blurb}`, { size: 11, color: COL.dimText });
+    const warn = B.habitatWarning(base, p.type);
+    ui.label(X + 150, y + 5, warn ?? `${MODULES[p.type].len} tiles · ${MODULES[p.type].blurb}`, { size: 11, color: warn ? hex(COL.warn) : COL.dimText });
     ui.button(X + W - 80, y + 1, 78, 21, on ? 'Placing' : 'Place', () => actions.startPlace(p.id), { size: 11 });
   });
   if (base.pending.length > 4) ui.label(X + W, Y + 78 + 4 * 26, `+${base.pending.length - 4} more`, { size: 11, right: true, color: COL.dimText });
 
   const hint = ctx.mode.kind === 'place' ? 'Click the grid to place. R rotates. Right click or Esc cancels.'
     : ctx.mode.kind === 'duct' ? 'Click a port, then a second port. Right click or Esc stops.' : '';
+  const risk = B.crewAtRisk(base);
   if (hint) ui.label(X, Y + 186, hint, { size: 12, color: hex(COL.warn) });
+  else if (risk) ui.label(X, Y + 186, `Crew at risk: ${risk} habitat${risk === 1 ? ' has' : 's have'} no power. Connect to a reactor or solar array with a duct.`, { size: 12, bold: true, color: hex(COL.bad) });
 
   ui.button(X, Y + 208, 230, 28, ctx.mode.kind === 'duct' ? 'Stop connecting' : `Connect ducts ($${DUCT_COST}M each)`, () => actions.toggleDuct(), {
     size: 12, fill: ctx.mode.kind === 'duct' ? COL.btnOn : COL.btn, stroke: ctx.mode.kind === 'duct' ? COL.good : COL.accent,
