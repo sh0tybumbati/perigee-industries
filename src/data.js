@@ -69,16 +69,20 @@ export const SITES = {
     name: 'Boca Chica (Starbase)', short: 'Boca Chica', letter: 'B', lat: 26.0, lon: -97.2, pads: ['Orbital Pad A', 'Orbital Pad B'], factory: true, towers: true,
     price: { buy: 120 }, noDests: ['polar', 'sso'], catchDiscount: 0.85, blurb: 'Pads come with catch towers. Catch vehicles build 15% cheaper and faster.',
   },
+  vermilion: {
+    name: 'Vermilion Parish', short: 'Vermilion', letter: 'L', lat: 29.6, lon: -92.3, pads: ['Gulf Pad 1', 'Gulf Pad 2'], factory: false, towers: true,
+    price: { buy: 80 }, noDests: ['polar', 'sso'], blurb: 'Louisiana Gulf Coast. Pads come with catch towers, but there is no factory.',
+  },
 };
 export const SITE_IDS = Object.keys(SITES);
 // Days for a customer's payload to reach a launch site (GDD 2.14).
 export const SHIP_DAYS = {
-  na: { cape: 2, vandenberg: 2, boca: 2 },
-  eu: { cape: 6, vandenberg: 7, boca: 6 },
-  apac: { cape: 9, vandenberg: 6, boca: 9 },
-  sa: { cape: 5, vandenberg: 6, boca: 4 },
-  af: { cape: 8, vandenberg: 9, boca: 8 },
-  mar: { cape: 3, vandenberg: 3, boca: 3 },
+  na: { cape: 2, vandenberg: 2, boca: 2, vermilion: 2 },
+  eu: { cape: 6, vandenberg: 7, boca: 6, vermilion: 6 },
+  apac: { cape: 9, vandenberg: 6, boca: 9, vermilion: 10 },
+  sa: { cape: 5, vandenberg: 6, boca: 4, vermilion: 4 },
+  af: { cape: 8, vandenberg: 9, boca: 8, vermilion: 7 },
+  mar: { cape: 3, vandenberg: 3, boca: 3, vermilion: 2 },
 };
 export const LEASE_FEE = 0.15; // $M per launch from a leased site
 export const BAY_FEE = 0.08; // $M per refit in a rented hangar

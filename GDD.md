@@ -234,6 +234,7 @@ Rent first, buy later: the company starts by leasing Pad 39A and a rented hangar
 | Cape Canaveral | Home site: LEO, GTO, lunar | 3 | Starts leased, buy for $60M | No polar or sun-synchronous launches (overflight rules) |
 | Vandenberg | The only polar and sun-synchronous launches | 2 | Lease for $15M, buy for $85M | LEO family only, and no factory |
 | Boca Chica (Starbase) | Super-heavy site | 2 | Buy for $120M | Pads come with catch towers. Catch vehicles (Behemoth, Skyship) cost 15% less and build 15% faster here |
+| Vermilion Parish (L) | Gulf Coast catch site | 2 | Buy for $80M | Louisiana. Pads come with catch towers, so it can launch Behemoth and Skyship, but it has no factory and no build discount. Cheaper to open than Boca Chica; payloads from South America and Africa arrive a little sooner than at Cape. No polar or sun-synchronous launches |
 
 Leased site limits: 1 pad, up to 2 rented hangars, no towers, no plants, no extra factory lines.
 Owned site options: more pads ($25M and $40M for the 2nd and 3rd), up to 3 owned hangars ($15M each), catch towers ($40M per pad), tank expansion, propellant plants and factory lines.
@@ -318,16 +319,16 @@ Later (not in this phase): fleet art, a Cape scene with pads and tanks, a tutori
 Contracts now come from somewhere. Each contract has a customer region (North America, Europe, Asia-Pacific, South America, Africa or Maritime & Air), and its payload has to be shipped to the launch site before it can fly.
 
 Shipping: when a contract is accepted (first loaded into the manifest) the customer starts shipping the payload. The days it takes depend on the region and the launch site:
-| Customer region | Cape (C) | Vandenberg (V) | Boca Chica (B) |
-| North America | 2 | 2 | 2 |
-| Europe | 6 | 7 | 6 |
-| Asia-Pacific | 9 | 6 | 9 |
-| South America | 5 | 6 | 4 |
-| Africa | 8 | 9 | 8 |
-| Maritime & Air | 3 | 3 | 3 |
+| Customer region | Cape (C) | Vandenberg (V) | Boca Chica (B) | Vermilion Parish (L) |
+| North America | 2 | 2 | 2 | 2 |
+| Europe | 6 | 7 | 6 | 6 |
+| Asia-Pacific | 9 | 6 | 9 | 10 |
+| South America | 5 | 6 | 4 | 4 |
+| Africa | 8 | 9 | 8 | 7 |
+| Maritime & Air | 3 | 3 | 3 | 2 |
 A launch is blocked until every payload in the manifest has arrived ("Payload for Orion Media arrives in 3 days"). Shipping time counts from the day the contract was first accepted, and changing the launch site recomputes the arrival for the new site. Contracts from before this change have no region and ship instantly. Moon-route Mars flights and tanker, depot and module launches are not affected.
 
-Site letters: every launch site has a letter code, used on the contract board and the map: C for Cape Canaveral, V for Vandenberg and B for Boca Chica.
+Site letters: every launch site has a letter code, used on the contract board and the map: C for Cape Canaveral, V for Vandenberg and B for Boca Chica and L for Vermilion Parish.
 
 Automatic launch site: loading a contract chooses the best launch site for the whole manifest. A site is eligible when it is open to the company (leased or owned), it can reach the orbit (Vandenberg is the only polar and sun-synchronous site) and it has a pad the vehicle can use (a catch tower for Behemoth and Skyship). Eligible sites are ranked by the earliest day the launch could happen, which is the latest of the payloads' arrival day, the next free pad and today. Ties go to the lower cost (the lease fee and any propellant that would have to be bought at spot), and then to the current site. The Mission tab's launch site changes by itself, and picking a site by hand (map pin or site list) overrides it until the next contract is loaded.
 

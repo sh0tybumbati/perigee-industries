@@ -379,18 +379,18 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
   ui.heading(X, Y, 'LAUNCH SITES  ·  click to view, the launch site is highlighted');
   SITE_IDS.forEach((id, i) => {
     const st = s.sites[id];
-    const y = Y + 16 + i * 28;
+    const y = Y + 16 + i * 24;
     const d = SITES[id];
-    ui.row(X, y, W, 26, { on: id === view, onClick: () => actions.viewSite(id), hint: d.blurb });
-    ui.label(X + 10, y + 6, d.name, { size: 13, bold: true, color: st.status === 'locked' ? COL.dimText : COL.text });
-    ui.label(X + 230, y + 7, tenureLabel[st.status], { size: 11, bold: true, color: hex(tenureColor[st.status]) });
-    ui.label(X + 300, y + 7, st.status === 'locked' ? '' : `${st.pads.length} pad${st.pads.length === 1 ? '' : 's'} · ${st.bays.length} hangar${st.bays.length === 1 ? '' : 's'}`, { size: 11, color: COL.dimText });
-    if (id === s.site) ui.label(X + W - 10, y + 7, 'LAUNCH SITE', { size: 11, bold: true, right: true, color: hex(COL.good) });
+    ui.row(X, y, W, 22, { on: id === view, onClick: () => actions.viewSite(id), hint: d.blurb });
+    ui.label(X + 10, y + 4, d.name, { size: 13, bold: true, color: st.status === 'locked' ? COL.dimText : COL.text });
+    ui.label(X + 230, y + 5, tenureLabel[st.status], { size: 11, bold: true, color: hex(tenureColor[st.status]) });
+    ui.label(X + 300, y + 5, st.status === 'locked' ? '' : `${st.pads.length} pad${st.pads.length === 1 ? '' : 's'} · ${st.bays.length} hangar${st.bays.length === 1 ? '' : 's'}`, { size: 11, color: COL.dimText });
+    if (id === s.site) ui.label(X + W - 10, y + 5, 'LAUNCH SITE', { size: 11, bold: true, right: true, color: hex(COL.good) });
   });
 
   const st = s.sites[view];
   const d = SITES[view];
-  const y0 = Y + 106;
+  const y0 = Y + 120;
   ui.label(X, y0, `${d.short}  ·  ${tenureLabel[st.status].toLowerCase()}`, { size: 15, bold: true, color: hex(tenureColor[st.status]) });
   if (st.status !== 'owned') {
     if (st.status === 'locked' && d.price.lease !== undefined) {

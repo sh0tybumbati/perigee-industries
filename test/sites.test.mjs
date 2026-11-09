@@ -266,3 +266,14 @@ test('reputation grows the contract board and its pace', () => {
   for (let i = 0; i < 20; i++) sim.tick(s);
   assert.ok(s.contracts.length >= 6, `board filled faster: ${s.contracts.length}`);
 });
+
+test('Vermilion Parish: buy-only Gulf site with catch towers, no factory, no polar', () => {
+  const s = sim.createState();
+  assert.equal(s.sites.vermilion.status, 'locked');
+  assert.equal(sim.siteBlocker(s, 'vermilion', 'lease'), 'Not available');
+  s.cash = 200;
+  assert.ok(sim.acquireSite(s, 'vermilion', 'buy'));
+  assert.equal(s.sites.vermilion.pads[0].tower, true);
+  assert.equal(sim.buildBlocker(s, 'peregrine9', 'vermilion'), 'No factory here');
+  assert.equal(sim.buildCostAt('skyship', 'vermilion').cost, ROCKETS.skyship.buildCost, 'no catch discount');
+});
