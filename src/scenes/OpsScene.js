@@ -9,6 +9,7 @@ import { renderMission, renderFleet, renderFactory, renderSites, renderTech, ren
 import { Lane, renderFlights, renderDepotAndLog } from '../ui/bottom.js';
 import { FX } from '../fx.js';
 import { renderSiteScene } from '../ui/art.js';
+import { CHAPTERS, COLONY_DAYS, currentChapter, chapterDone, goalProgress } from '../goals.js';
 import { W, H, EXTRA, PHONE } from '../layout.js';
 
 const STATUS_SHIFT = 190; // on a phone the bottom strip is a panel over the lower half of the screen
@@ -73,8 +74,8 @@ export class OpsScene extends Phaser.Scene {
     this.input.on('pointerdown', () => audio.unlock());
     this.setupKeys();
     this.cameras.main.setBounds(0, 0, W, H);
-    this.ui = this.add.container(0, 0);
-    this.dockC = this.add.container(0, 0); // the dock panel, which slides over when it has the screen to itself
+    this.ui = this.add.container(0, 0).setDepth(10); // above the pins and labels the map layer draws
+    this.dockC = this.add.container(0, 0).setDepth(9); // the dock panel, which slides over when it has the screen to itself
     this.hint = this.add.text(MAP.x + 10, MAP.y + MAP.h - 20, '', { fontFamily: FONT, fontSize: 12, color: hex(COL.accent), stroke: '#05070d', strokeThickness: 3 });
     this.uiHelper = new UI(this, this.ui, (fn) => this.act(fn), (t) => this.hint.setText(t));
     this.dockUi = new UI(this, this.dockC, (fn) => this.act(fn), (t) => this.hint.setText(t));
@@ -186,6 +187,10 @@ export class OpsScene extends Phaser.Scene {
     } else if (e.type === 'dock') {
       // a ship refuels after its ascent, so that scene waits for the launch animation
       this.fx.dock(e.mode, e.t, e.left, e.mode === 'refuel' ? 1900 : 0);
+    } else if (e.type === 'victory') {
+      this.victoryOpen = true;
+      this.setSpeed(0);
+      audio.success();
     } else if (e.type === 'test') {
       if (e.success) audio.success();
       else { audio.failure(); this.cameras.main.shake(420, 0.01); }
@@ -433,6 +438,92 @@ export class OpsScene extends Phaser.Scene {
     else { renderFlights(ui, s); renderDepotAndLog(ui, s); }
     if (this.view !== 'dock' && (this.tab === 'sites' || this.tab === 'factory')) renderSiteScene(ui, s, this.tab === 'sites' ? (this.siteView && s.sites[this.siteView] ? this.siteView : s.site) : this.factorySite);
     if (step) this.renderCoach(ui, step);
+    else if (this.view !== 'dock') this.renderGoalStrip(s, ui);
+    if (this.goalsOpen && this.view !== 'dock') this.renderGoals(s, ui);
+    if (this.victoryOpen) this.renderVictory(s, ui);
+  }
+
+  // ---- goals (GDD 2.21) ------------------------------------------------------------------
+  // The strip at the foot of the map: the current objective and its progress. Press it for the Goals panel.
+  renderGoalStrip(s, ui) {
+    const ch = currentChapter(s);
+    const g = ch?.goals.find((x) => s.goals[x.id] == null);
+    const w = Math.min(380, MAP.w - 20);
+    const x = MAP.x + MAP.w - w - 8;
+    const y = MAP.y + MAP.h - 30;
+    const prog = g && goalProgress(s, g);
+    const text = !ch ? 'Colony won. Goals complete' : `${ch.name}: ${g.text}${prog ? `  (${prog[0]} / ${prog[1]})` : ''}`;
+    ui.row(x, y, w, 24, { on: !!this.goalsOpen, onClick: () => { this.goalsOpen = !this.goalsOpen; }, hint: 'Your current goal. Press for all goals.' });
+    ui.label(x + 8, y + 5, 'GOAL', { size: 10, bold: true, color: hex(COL.warn) });
+    ui.label(x + 44, y + 5, text, { size: 11, wrap: w - 52 });
+  }
+
+  renderGoals(s, ui) {
+    const w = Math.min(520, MAP.w - 20);
+    const x = MAP.x + 10;
+    const y = MAP.y + 8;
+    const h = MAP.h - 48;
+    ui.row(x, y, w, h, { fill: 0x0a1426, stroke: COL.accent, onClick: () => {} }).setAlpha(0.97);
+    ui.heading(x + 12, y + 8, 'GOALS');
+    ui.button(x + w - 62, y + 6, 52, 22, 'Close', () => { this.goalsOpen = false; }, { size: 11 });
+    const cur = currentChapter(s);
+    let ly = y + 34;
+    CHAPTERS.forEach((ch, i) => {
+      const done = chapterDone(s, ch);
+      const open = ch === cur;
+      const col = done ? hex(COL.good) : open ? COL.text : COL.dimText;
+      ui.label(x + 12, ly, `${done ? '✓' : open ? '▶' : '•'}  ${i + 1}. ${ch.name}`, { size: 13, bold: true, color: col });
+      ui.label(x + w - 12, ly + 1, done ? `done day ${Math.max(...ch.goals.map((g) => s.goals[g.id]))}` : ch.grant ? `grant $${ch.grant}M` : 'the win', { size: 11, right: true, color: COL.dimText });
+      ly += 20;
+      if (!open) return;
+      for (const g of ch.goals) {
+        const d = s.goals[g.id] != null;
+        const prog = !d && goalProgress(s, g);
+        ui.label(x + 34, ly, `${d ? '✓' : '○'}  ${g.text}${prog ? `   ${prog[0]} / ${prog[1]}` : ''}`, { size: 12, color: d ? hex(COL.good) : COL.text });
+        ly += 18;
+      }
+      if (ch.id === 'colony') {
+        for (const m of s.colonyMissing ?? []) { ui.label(x + 34, ly, `✗  ${m}`, { size: 11, color: hex(COL.warn) }); ly += 16; }
+        ui.label(x + 34, ly, 'Three crewed, powered habitats, a working Ice Miner and Refinery, and a Mars-based Skyship that has flown home.', { size: 10, color: COL.dimText, wrap: w - 50 });
+        ly += 30;
+      }
+      ly += 4;
+    });
+  }
+
+  renderVictory(s, ui) {
+    const best = this.recordBest(s.won);
+    const w = 460;
+    const x = Math.round((W - w) / 2);
+    const y = 110;
+    ui.row(0, 0, W, H, { fill: 0x000000, stroke: 0x000000, onClick: () => {} }).setAlpha(0.6);
+    ui.row(x, y, w, 300, { fill: 0x0a1426, stroke: COL.good, onClick: () => {} });
+    ui.label(x + w / 2, y + 16, 'A SELF-SUSTAINING MARS COLONY', { size: 20, bold: true, color: hex(COL.good), center: true });
+    ui.label(x + w / 2, y + 46, 'Perigee Industries has done it.', { size: 14, center: true });
+    const lost = s.trips.filter((t) => t.status === 'lost').length;
+    const rows = [
+      ['Date', sim.dateOf(s.won).text], ['Years taken', (s.won / 365).toFixed(1)], ['Successful flights', sim.reputation(s)],
+      ['Vehicles lost', lost], ['Skylink subscribers', `${Math.round(sim.totalSubs(s))}k`], ['Cash', `$${s.cash.toFixed(0)}M`],
+      ['Mars base crew', s.marsBase ? B.baseStatus(s.marsBase).crew : 0],
+    ];
+    rows.forEach(([k, v], i) => {
+      ui.label(x + 40, y + 84 + i * 20, k, { size: 13, color: COL.dimText });
+      ui.label(x + w - 40, y + 84 + i * 20, String(v), { size: 13, right: true });
+    });
+    ui.label(x + w / 2, y + 232, best.fresh ? 'Your fastest finish so far.' : `Your fastest finish: ${(best.day / 365).toFixed(1)} years.`, { size: 12, color: hex(COL.warn), center: true });
+    ui.button(x + w / 2 - 70, y + 258, 140, 30, 'Keep playing', () => { this.victoryOpen = false; }, { fill: COL.btnOn, stroke: COL.good });
+  }
+
+  // The earliest finish is kept in the browser. Returns it, and whether this run set it.
+  recordBest(day) {
+    const key = 'perigee-industries-best';
+    try {
+      const prev = +localStorage.getItem(key);
+      if (!prev || day < prev) { localStorage.setItem(key, String(day)); return { day, fresh: true }; }
+      return { day: prev, fresh: false };
+    } catch {
+      return { day, fresh: true };
+    }
   }
 
   // ---- phone: the status panel -----------------------------------------------------------

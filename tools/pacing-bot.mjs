@@ -1,6 +1,7 @@
 // Play-through bot: plays the whole tech tree headless and prints median days to milestones.
 // usage: node tools/pacing-bot.mjs [runs] [days]
 import * as sim from '../src/sim.js';
+import { CHAPTERS } from '../src/goals.js';
 import { MARKETS, TECH, ROCKETS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, DESTINATIONS } from '../src/data.js';
 const GEN = !!process.env.GEN; // GEN=1: also research Gen-2/3, fly the best generation and license mobile markets
 const ORDER = ['landing','gen1','fastCores','heavyCores','hull','raptor','tiles','skyship','plants','tanker','habitat','isru'];
@@ -108,7 +109,9 @@ for (let seed = 0; seed < N; seed++) {
     if (s.tech.has('isru')) mark('allTech');
     for (const [k, v] of [['cash100', 100], ['cash275', 275], ['cash485', 485], ['cash1000', 1000]]) if (s.cash >= v) mark(k); // 275 ~ a minimal Vermilion build-out, 485 ~ Boca Chica
   }
-  out.push({ ...ms, rev: +sim.dailyRevenue(s).toFixed(2), mobRev: +MARKETS.filter(m => m.cell).reduce((a, m) => a + sim.marketRevenue(s, m), 0).toFixed(2), cap: sim.skylinkCapacity(s), load: +sim.totalLoad(s).toFixed(1), q: +sim.skylinkQuality(s).toFixed(2), lunar, lost, cash: Math.round(s.cash), launches, fleet: s.fleet.length, income: +s.income.toFixed(2), idle: idleDays });
+  const gDay = process.env.GOALS ? Object.fromEntries(Object.entries(s.goals).map(([k, v]) => [`g:${k}`, v])) : {};
+  const chDay = Object.fromEntries(CHAPTERS.map((c) => [`ch:${c.id}`, c.goals.every((g) => s.goals[g.id] != null) ? Math.max(...c.goals.map((g) => s.goals[g.id])) : undefined]));
+  out.push({ ...ms, ...chDay, ...gDay, rev: +sim.dailyRevenue(s).toFixed(2), mobRev: +MARKETS.filter(m => m.cell).reduce((a, m) => a + sim.marketRevenue(s, m), 0).toFixed(2), cap: sim.skylinkCapacity(s), load: +sim.totalLoad(s).toFixed(1), q: +sim.skylinkQuality(s).toFixed(2), lunar, lost, cash: Math.round(s.cash), launches, fleet: s.fleet.length, income: +s.income.toFixed(2), idle: idleDays });
 }
 const med = (k) => { const v = out.map(o => o[k]).filter(x => x != null).sort((a, b) => a - b); return v.length ? `${v[Math.floor(v.length / 2)]} (${v[0]}-${v[v.length - 1]}, n=${v.length})` : 'never'; };
-for (const k of ['landing','fastCores','heavyCores','behemoth','skyship','tanker','lunar1','allTech','cash100','cash275','cash485','cash1000','gen2','mobile1','rev','mobRev','cap','load','q','lunar','launches','lost','cash','income','fleet']) console.log(k.padEnd(11), med(k));
+for (const k of [...CHAPTERS.map((c) => `ch:${c.id}`), ...(process.env.GOALS ? CHAPTERS.flatMap((c) => c.goals.map((g) => `g:${g.id}`)) : []), 'landing','fastCores','heavyCores','behemoth','skyship','tanker','lunar1','allTech','cash100','cash275','cash485','cash1000','gen2','mobile1','rev','mobRev','cap','load','q','lunar','launches','lost','cash','income','fleet']) console.log(k.padEnd(11), med(k));

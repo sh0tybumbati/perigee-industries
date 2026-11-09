@@ -124,7 +124,7 @@ test('arrival can fail: nothing is paid, and a safe arrival pays the contract', 
   const lost = run(0.01);
   assert.equal(lost.s.trips.at(-1).status, 'lost');
   assert.ok(lost.gained < 5);
-  assert.match(lost.s.log.at(-1), /Martian atmosphere/);
+  assert.ok(lost.s.log.some((l) => /Martian atmosphere/.test(l)));
   const ok = run(0.9);
   assert.equal(ok.s.trips.at(-1).status, 'done');
   assert.ok(ok.gained > 150);

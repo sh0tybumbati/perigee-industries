@@ -12,10 +12,11 @@ import {
   MARS_SITES, MARS_LEARNING, MARS_RETURN, MARS_RETURN_WINDOWS, MARS_RETURN_CONTRACT, BASE_PARAMS,
 } from './data.js';
 import { createBase, tickBase } from './base.js';
+import { adoptGoals, tickGoals } from './goals.js';
 
 export { OVERHEAD_PER_DAY };
 export const SAT_BATCH = 6;
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 const MAX_TRIPS = 80;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -85,6 +86,11 @@ export function createState() {
     tech: new Set(),
     log: [],
     totalLaunches: 0,
+    goals: {}, // goal id -> day done (GDD 2.21)
+    chaptersPaid: {},
+    profitDays: 0, // days in a row with net income above zero
+    colonyDays: 0, // days in a row the Mars colony conditions have held
+    won: null, // the day the colony was won
     nextId: 1,
   };
   addVehicle(s, 'peregrine9', 'cape');
@@ -185,6 +191,8 @@ export function deserialize(json) {
       o.constellation = { 1: +o.constellation || 0, 2: 0, 3: 0 };
       o.v = 10;
     }
+    const goalless = o.v === 10; // v11 adds goals: what is already true counts as done
+    if (o.v === 10) o.v = 11;
     if (o.v !== SAVE_VERSION) return null;
     const base = createState();
     const s = { ...base, ...o, tech: new Set(Array.isArray(o.tech) ? o.tech : []) };
@@ -217,6 +225,11 @@ export function deserialize(json) {
     if (!s.sites[s.site] || s.sites[s.site].status === 'locked') s.site = 'cape';
     if (!['rtls', 'drone', 'expend'].includes(s.recovery)) s.recovery = 'rtls';
     if (!Number.isFinite(s.cash) || !Number.isFinite(s.day)) return null;
+    if (goalless) adoptGoals(s);
+    else {
+      s.goals = o.goals && typeof o.goals === 'object' ? { ...o.goals } : {};
+      s.chaptersPaid = o.chaptersPaid && typeof o.chaptersPaid === 'object' ? { ...o.chaptersPaid } : {};
+    }
     return s;
   } catch {
     return null;
@@ -1385,6 +1398,11 @@ export function tick(s) {
   for (const n of [100, 500, 1000]) if (s.cash >= n) milestone(s, `cash${n}`, `$${n}M in the bank`, 'The company is growing up.');
   // Payroll is covered by investors below the floor, so a bad run never locks the game.
   s.cash = Math.max(s.cash - OVERHEAD_PER_DAY, Math.min(s.cash, CASH_FLOOR));
+  tickGoals(s, {
+    milestone: (id, title, text) => milestone(s, id, title, text),
+    note: (msg, kind) => note(s, msg, kind),
+    victory: () => { note(s, 'A self-sustaining Mars colony: Perigee Industries has done it.', 'good'); emit({ type: 'victory', day: s.day }); },
+  });
 
   // Investors step in when the company can no longer fly anything.
   const p9 = ROCKETS.peregrine9;
