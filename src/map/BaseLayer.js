@@ -75,6 +75,16 @@ export class BaseLayer {
     return best;
   }
 
+  // The panel (the shared rect) changed size: recentre the grid and rebuild the terrain on the next show.
+  resize() {
+    const { rect } = this;
+    this.ox = rect.x + Math.floor((rect.w - BASE_W * T) / 2);
+    this.oy = rect.y + Math.floor((rect.h - BASE_H * T) / 2);
+    this.zone.setSize(rect.w, rect.h);
+    this.zone.input.hitArea.setSize(rect.w, rect.h);
+    this.terrainKey = null;
+  }
+
   show() {
     const base = this.getBase();
     if (this.terrainKey !== base.site) {

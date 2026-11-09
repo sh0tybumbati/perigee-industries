@@ -84,6 +84,16 @@ export class Globe {
     this.tanHalf = Math.tan((FOV * DEG) / 2);
   }
 
+  resize(width, height) {
+    this.width = width;
+    this.height = height;
+    this.renderer.setSize(width, height);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    this.view.width = width;
+    this.view.height = height;
+  }
+
   ensure(id) {
     if (this.bodies[id]) return this.bodies[id];
     const style = BODY_STYLE[id];

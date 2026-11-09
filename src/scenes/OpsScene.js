@@ -17,6 +17,8 @@ import * as audio from '../audio.js';
 const SAVE_KEY = 'perigee-industries-save';
 const MAP = { x: 10, y: 90, w: 690 + EXTRA, h: 432 };
 const DOCK = { x: 722 + EXTRA, y: 98, w: 536 };
+// how far the dock slides left when it has the whole screen to itself
+const DOCK_SHIFT = { dock: () => Math.round((W - 560) / 2) - (710 + EXTRA) };
 const TABS = [['mission', 'Mission'], ['fleet', 'Fleet'], ['factory', 'Factory'], ['sites', 'Sites'], ['base', 'Base'], ['tech', 'R&D'], ['skylink', 'Skylink']];
 const TICK_MS = 2400;
 
@@ -40,6 +42,7 @@ export class OpsScene extends Phaser.Scene {
 
   create() {
     this.s = this.loadGame() ?? sim.createState();
+    this.view = 'split'; // 'split' | 'map' | 'dock'
     this.drawStars();
     this.drawFrame();
     this.map = new MapLayer(this, MAP, {
@@ -71,8 +74,10 @@ export class OpsScene extends Phaser.Scene {
     this.setupKeys();
     this.cameras.main.setBounds(0, 0, W, H);
     this.ui = this.add.container(0, 0);
+    this.dockC = this.add.container(0, 0); // the dock panel, which slides over when it has the screen to itself
     this.hint = this.add.text(MAP.x + 10, MAP.y + MAP.h - 20, '', { fontFamily: FONT, fontSize: 12, color: hex(COL.accent), stroke: '#05070d', strokeThickness: 3 });
     this.uiHelper = new UI(this, this.ui, (fn) => this.act(fn), (t) => this.hint.setText(t));
+    this.dockUi = new UI(this, this.dockC, (fn) => this.act(fn), (t) => this.hint.setText(t));
     this.statusUi = PHONE ? new UI(this, this.statusDyn, (fn) => this.act(fn), (t) => this.hint.setText(t)) : null;
     this.map.setBody(DESTINATIONS[this.s.dest].body);
     this.map.focus(this.s.dest);
@@ -90,9 +95,14 @@ export class OpsScene extends Phaser.Scene {
     }
   }
 
+  // The view decides which panels are drawn: 'split' is map and dock side by side, 'map' and 'dock' give one the whole width.
   drawFrame() {
-    const g = this.add.graphics();
-    const panels = [[10, 58, 690 + EXTRA, 466], [710 + EXTRA, 58, 560, 466]];
+    const g = (this.frameG ??= this.add.graphics());
+    g.clear();
+    const panels = [];
+    if (this.view === 'split') panels.push([10, 58, 690 + EXTRA, 466], [710 + EXTRA, 58, 560, 466]);
+    else if (this.view === 'map') panels.push([10, 58, W - 20, 466]);
+    else panels.push([DOCK_SHIFT.dock() + 710 + EXTRA, 58, 560, 466]);
     if (!PHONE) panels.push([10, 530, 690 + EXTRA, 180], [710 + EXTRA, 530, 560, 180]);
     for (const [x, y, w, h] of panels) {
       g.fillStyle(COL.panel, 0.92).fillRect(x, y, w, h);
@@ -400,6 +410,7 @@ export class OpsScene extends Phaser.Scene {
     const s = this.s;
     const ui = this.uiHelper;
     this.ui.removeAll(true);
+    this.dockC.removeAll(true);
     this.hint.setText(''); // hovered widgets are rebuilt below, so their pointerout never fires
     if (this.lastCash !== undefined) {
       const d = s.cash - this.lastCash;
@@ -408,16 +419,19 @@ export class OpsScene extends Phaser.Scene {
     this.lastCash = s.cash;
     const step = sim.tutorialStep(s);
     this.renderTopBar(s, ui);
-    this.renderMapTabs(s, ui);
-    this.renderDockTabs(ui);
+    const dui = this.dockUi;
+    if (this.view !== 'dock') this.renderMapTabs(s, ui);
+    this.renderViewButtons(ui);
+    if (this.view !== 'map') this.renderDockTabs(dui);
     const { x, y, w } = DOCK;
     const actions = this.actions;
     const ctx = { mode: this.baseMode, sub: this.baseSub, view: this.baseView, base: this.activeBase(), body: this.baseBody, factorySite: this.factorySite, siteView: this.siteView, skyTab: this.skyTab };
-    if (this.tab === 'base') renderBase(ui, s, x, y, w, actions, ctx);
-    else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink })[this.tab](ui, s, x, y, w, actions, ctx);
+    if (this.view === 'map') { /* the dock is hidden */ }
+    else if (this.tab === 'base') renderBase(dui, s, x, y, w, actions, ctx);
+    else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink })[this.tab](dui, s, x, y, w, actions, ctx);
     if (PHONE) this.renderStatus(s);
     else { renderFlights(ui, s); renderDepotAndLog(ui, s); }
-    if (this.tab === 'sites' || this.tab === 'factory') renderSiteScene(ui, s, this.tab === 'sites' ? (this.siteView && s.sites[this.siteView] ? this.siteView : s.site) : this.factorySite);
+    if (this.view !== 'dock' && (this.tab === 'sites' || this.tab === 'factory')) renderSiteScene(ui, s, this.tab === 'sites' ? (this.siteView && s.sites[this.siteView] ? this.siteView : s.site) : this.factorySite);
     if (step) this.renderCoach(ui, step);
   }
 
@@ -535,7 +549,31 @@ export class OpsScene extends Phaser.Scene {
       });
       bx += 110;
     }
-    ui.label(MAP.x + MAP.w - 12, 69, 'Drag to rotate  ·  click an orbit or pin', { size: 11, color: COL.dimText, right: true });
+    if (this.view === 'map') ui.label(MAP.x + MAP.w - 170, 69, 'Drag to rotate  ·  click an orbit or pin', { size: 11, color: COL.dimText, right: true });
+  }
+
+  // Split, Map or Dock: which panel gets the screen. In dock view there is no map tab row, so the buttons sit in the free margin.
+  renderViewButtons(ui) {
+    const x = this.view === 'dock' ? 20 : MAP.x + MAP.w - 152;
+    [['split', 'Split', 'Map and dock side by side.'], ['map', 'Map', 'The map takes the whole width and the dock is hidden.'], ['dock', 'Dock', 'The dock on its own, with the map hidden.']].forEach(([id, name, hint], i) => {
+      const on = this.view === id;
+      ui.button(x + i * 50, 63, 46, 24, name, () => this.setView(id), {
+        size: 11, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent, hint,
+      });
+    });
+  }
+
+  setView(v) {
+    if (v === this.view) return;
+    this.view = v;
+    this.forceCloseBase();
+    MAP.w = v === 'map' ? W - 20 : 690 + EXTRA;
+    this.map.resize();
+    this.base.resize();
+    this.map.setActive(v !== 'dock');
+    this.dockC.x = v === 'dock' ? DOCK_SHIFT.dock() : 0;
+    this.drawFrame();
+    this.syncMap(true);
   }
 
   renderDockTabs(ui) {

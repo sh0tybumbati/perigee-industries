@@ -59,11 +59,7 @@ export class MapLayer {
     this.tex = scene.textures.addCanvas('globe', this.globe.view);
     this.image = scene.add.image(rect.x, rect.y, 'globe').setOrigin(0);
     this.g = scene.add.graphics();
-    // Everything drawn over the planet is clipped to the map panel.
-    const clip = scene.make.graphics({ x: 0, y: 0, add: false });
-    clip.fillStyle(0xffffff).fillRect(rect.x, rect.y, rect.w, rect.h);
-    this.mask = clip.createGeometryMask();
-    this.g.setMask(this.mask);
+    this.clipTo(rect);
     this.pins = {};
     this.anchors = {};
     this.bodyId = null;
@@ -84,6 +80,27 @@ export class MapLayer {
     });
     this.zone.on('pointerup', () => { last = null; });
     this.zone.on('pointerout', () => { last = null; });
+  }
+
+  // Everything drawn over the planet is clipped to the map panel.
+  clipTo(rect) {
+    this.clip?.destroy();
+    this.clip = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    this.clip.fillStyle(0xffffff).fillRect(rect.x, rect.y, rect.w, rect.h);
+    this.mask = this.clip.createGeometryMask();
+    this.g.setMask(this.mask);
+  }
+
+  // The panel (the shared rect) changed size: rebuild the render target, texture, mask and hit zone.
+  resize() {
+    const { rect } = this;
+    this.globe.resize(rect.w, rect.h);
+    this.scene.textures.remove('globe');
+    this.tex = this.scene.textures.addCanvas('globe', this.globe.view);
+    this.image.setTexture('globe');
+    this.zone.setSize(rect.w, rect.h);
+    this.zone.input.hitArea.setSize(rect.w, rect.h);
+    this.clipTo(rect);
   }
 
   setBody(id) {

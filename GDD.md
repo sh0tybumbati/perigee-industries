@@ -391,6 +391,7 @@ Phone layout: on a short landscape screen (a phone, under about 560 pixels of he
 - The bottom strip (transit lane, depot bar, flights in transit and mission log) is hidden, which shortens the canvas from 720 to 530 pixels and enlarges everything by about a third. A Status button in the top bar opens the strip as a panel over the lower half of the screen, and a second tap closes it.
 - The top bar drops the sparkline and the day count to make room, and the smallest text and buttons are made a little bigger.
 - Tablets and desktops keep the full layout.
+- View buttons (all devices): Split, Map and Dock sit at the right end of the map's tab row. Split is the usual map-and-dock layout. Map gives the globe or base grid the whole width and hides the dock. Dock hides the map and centres the dock panel, and the buttons move to the free margin on its left. The choice is not saved. The globe, its clip and the base grid are resized to the panel, so pins, rings and the base view all stay lined up.
 
 Depot docking: refueling is shown as a short scene on the map at the LEO pin.
 - A tanker arriving: the tanker drifts in from the side, docks with the depot (a flash and a clunk), and propellant dots stream across while "+100 t" floats up and the depot's total is shown.
