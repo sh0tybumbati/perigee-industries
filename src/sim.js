@@ -192,6 +192,7 @@ export function deserialize(json) {
     s.constellation = { 1: Math.max(0, +o.constellation?.[1] || 0), 2: Math.max(0, +o.constellation?.[2] || 0), 3: Math.max(0, +o.constellation?.[3] || 0) };
     if (!SATS[s.satGen] || !s.tech.has(SATS[s.satGen].tech)) s.satGen = 1;
     s.markets = Object.fromEntries(MARKETS.map((m) => [m.id, { ...base.markets[m.id], ...o.markets?.[m.id] }]));
+    if (MARKETS.some((m) => m.cell && s.markets[m.id].status !== 'locked')) s.tech.add('dtc'); // saves from before Direct-to-Cell was its own research
     if (!PLANS[s.plan]) s.plan = 'standard';
     s.depot = { ...base.depot, ...o.depot };
     s.flightCounts = { ...o.flightCounts };
@@ -875,7 +876,7 @@ export function marketBlocker(s, id) {
   const st = s.markets[id];
   if (st.status === 'active') return 'Licensed';
   if (st.status === 'pending') return 'Approval pending';
-  if (!s.tech.has(m.cell ? 'gen2' : 'gen1')) return `Research Skylink Gen-${m.cell ? 2 : 1}`;
+  if (!s.tech.has(m.cell ? 'dtc' : 'gen1')) return m.cell ? 'Research Direct-to-Cell' : 'Research Skylink Gen-1';
   if (satCount(s, m.cell ? 2 : 1) < m.minSats) return `Needs ${m.minSats} ${m.cell ? 'Gen-2 or newer ' : ''}satellites in orbit`;
   return canSpend(s, m.license) ? null : 'Not enough cash';
 }

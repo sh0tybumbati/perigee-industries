@@ -4,7 +4,7 @@ import * as sim from '../src/sim.js';
 import { MARKETS, TECH, ROCKETS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, DESTINATIONS } from '../src/data.js';
 const GEN = !!process.env.GEN; // GEN=1: also research Gen-2/3, fly the best generation and license mobile markets
 const ORDER = ['landing','gen1','fastCores','heavyCores','hull','raptor','tiles','skyship','plants','tanker','habitat','isru'];
-if (GEN) ORDER.splice(ORDER.indexOf('heavyCores'), 0, 'gen2');
+if (GEN) ORDER.splice(ORDER.indexOf('heavyCores'), 0, 'gen2'); if (GEN) ORDER.splice(ORDER.indexOf('skyship') + 1, 0, 'dtc');
 const N = +process.argv[2] || 20, DAYS = +process.argv[3] || 2500;
 const out = [];
 const cargoTypes = ['skyship', 'behemoth', 'peregrineHeavy', 'peregrine9'];

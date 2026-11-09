@@ -544,7 +544,7 @@ export function renderSkylink(ui, s, X, Y, W, actions, ctx) {
   const cap = sim.skylinkCapacity(s);
   const load = sim.totalLoad(s);
   const q = sim.skylinkQuality(s);
-  const mobileOpen = s.tech.has('gen2');
+  const mobileOpen = s.tech.has('dtc');
   const tab = mobileOpen && ctx?.skyTab === 'mobile' ? 'mobile' : 'broadband';
   ui.heading(X, Y, 'SKYLINK  ·  one constellation, licensed markets');
   const gens = [1, 2, 3].filter((g) => s.constellation[g] >= 0.5).map((g) => `${SATS[g].name} ${Math.round(s.constellation[g])}`).join(' · ');

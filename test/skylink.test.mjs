@@ -132,8 +132,10 @@ test('the Gen button cycles through researched generations; a Gen-2 batch is hea
 test('mobile markets need Gen-2 research and Gen-2 or newer satellites, and load the network lightly', () => {
   const s = fresh();
   sats(s, 100);
-  assert.match(sim.marketBlocker(s, 'cell-us'), /Gen-2/);
+  assert.match(sim.marketBlocker(s, 'cell-us'), /Direct-to-Cell/);
   s.tech.add('gen2');
+  assert.match(sim.marketBlocker(s, 'cell-us'), /Direct-to-Cell/, 'Gen-2 alone does not open mobile');
+  s.tech.add('dtc');
   assert.match(sim.marketBlocker(s, 'cell-us'), /Gen-2 or newer/, 'Gen-1 satellites do not count');
   sats(s, 40, 2);
   assert.equal(sim.marketBlocker(s, 'cell-us'), null);
