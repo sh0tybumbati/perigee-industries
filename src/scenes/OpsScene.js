@@ -355,6 +355,7 @@ export class OpsScene extends Phaser.Scene {
       buyPad: (id) => sim.buyPad(s, id),
       buildTower: (id, i) => sim.buildTower(s, id, i),
       addBay: (id) => sim.addBay(s, id),
+      buildWell: (id) => sim.buildWell(s, id),
       buyCommodity: (id, type, amt) => sim.buyCommodity(s, id, type, amt),
       expandTank: (id, type) => sim.expandTank(s, id, type),
       buildPlant: (id, fuel) => sim.buildPlant(s, id, fuel),

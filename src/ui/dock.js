@@ -2,7 +2,7 @@
 import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
-  PLANT_COST, PLANT_MAX, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
+  PLANT_COST, PLANT_MAX, WELL_COST, MAX_WELLS, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
   PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
@@ -323,10 +323,10 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
       hint: SITES[id].catchDiscount ? 'Catch vehicles build 15% cheaper and faster here.' : 'Home factory.',
     });
   });
-  const next = LINE_COSTS[site.lines];
-  ui.label(X, Y + 50, `Lines ${site.lines}/${LINE_COSTS.length}`, { size: 13, bold: true });
+  const next = sim.lineCostOf(fid, site.lines);
+  ui.label(X, Y + 50, `Lines ${site.lines}/${LINE_COSTS.length - (SITES[fid].bare ? 1 : 0)}`, { size: 13, bold: true });
   if (site.status === 'owned' && next !== undefined) {
-    ui.button(X + W - 190, Y + 46, 190, 24, `Add line  $${next}M`, () => actions.buyLine(fid), { enabled: sim.canSpend(s, next), size: 12 });
+    ui.button(X + W - 190, Y + 46, 190, 24, `${site.lines ? 'Add line' : 'Build first line'}  $${next}M`, () => actions.buyLine(fid), { enabled: sim.canSpend(s, next), size: 12 });
   } else if (site.status !== 'owned') {
     ui.label(X + W, Y + 52, 'Own the site to add lines', { size: 12, right: true, color: COL.dimText });
   }
@@ -411,38 +411,65 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
     ui.label(X, y0 + 22, d.blurb, { size: 11, color: COL.dimText, wrap: W });
   }
 
-  // Pads
+  // Pads: one row each for small sites, a summary and build buttons when there are dozens
   const py = y0 + 38;
-  ui.heading(X, py, `PADS  ·  ${st.pads.length}/${st.status === 'owned' ? d.pads.length : 1}`);
-  d.pads.forEach((name, i) => {
-    const y = py + 16 + i * 24;
-    const pad = st.pads[i];
-    if (pad) {
-      const left = pad.busyUntil - s.day;
-      ui.row(X, y, W, 22);
-      ui.label(X + 8, y + 4, pad.name, { size: 12, bold: true });
-      ui.label(X + 120, y + 4, pad.tower ? 'catch tower' : 'no tower', { size: 11, color: hex(pad.tower ? COL.good : COL.dim) });
-      ui.label(X + 220, y + 4, left > 0 ? `busy ${left}d` : 'ready', { size: 11, color: hex(left > 0 ? COL.warn : COL.good) });
-      if (!pad.tower && st.status === 'owned') {
-        ui.button(X + W - 170, y + 1, 170, 20, `Build tower  $${TOWER_COST}M`, () => actions.buildTower(view, i), { size: 11, enabled: !sim.towerBlocker(s, view, i) });
-      }
-    } else if (i === st.pads.length && st.status === 'owned') {
-      ui.row(X, y, W, 22, { fill: 0x0a101c });
-      ui.label(X + 8, y + 4, `${name}  (not built)`, { size: 12, color: COL.dimText });
-      ui.button(X + W - 170, y + 1, 170, 20, `Build pad  $${PAD_COSTS[i]}M`, () => actions.buyPad(view), { size: 11, enabled: !sim.padBlocker(s, view) });
+  const owned = st.status === 'owned';
+  ui.heading(X, py, `PADS  ·  ${st.pads.length}/${owned ? d.pads.length : 1}`);
+  let padsEnd;
+  if (d.pads.length > 4) {
+    const towers = st.pads.filter((p) => p.tower).length;
+    const ready = st.pads.filter((p) => p.busyUntil <= s.day).length;
+    const nextBare = st.pads.findIndex((p) => !p.tower);
+    ui.row(X, py + 16, W, 22);
+    ui.label(X + 8, py + 21, st.pads.length ? `${st.pads.length} built · ${towers} towered · ${ready} ready` : 'No pads yet: bare land', { size: 11, bold: true, color: st.pads.length ? COL.text : COL.dimText });
+    if (owned) {
+      const nextCost = sim.padCostOf(view, st.pads.length);
+      ui.button(X + W - 340, py + 17, 164, 20, `Build pad  $${nextCost}M`, () => actions.buyPad(view), { size: 11, enabled: !sim.padBlocker(s, view), hint: sim.padBlocker(s, view) ?? `A new pad on open land: $${nextCost}M.` });
+      ui.button(X + W - 170, py + 17, 170, 20, `Build tower  $${TOWER_COST}M`, () => actions.buildTower(view, nextBare), { size: 11, enabled: nextBare >= 0 && !sim.towerBlocker(s, view, nextBare), hint: 'Catch tower on the next pad without one.' });
     }
-  });
+    padsEnd = py + 16 + 22 + 8;
+  } else {
+    d.pads.forEach((name, i) => {
+      const y = py + 16 + i * 24;
+      const pad = st.pads[i];
+      if (pad) {
+        const left = pad.busyUntil - s.day;
+        ui.row(X, y, W, 22);
+        ui.label(X + 8, y + 4, pad.name, { size: 12, bold: true });
+        ui.label(X + 120, y + 4, pad.tower ? 'catch tower' : 'no tower', { size: 11, color: hex(pad.tower ? COL.good : COL.dim) });
+        ui.label(X + 220, y + 4, left > 0 ? `busy ${left}d` : 'ready', { size: 11, color: hex(left > 0 ? COL.warn : COL.good) });
+        if (!pad.tower && owned) {
+          ui.button(X + W - 170, y + 1, 170, 20, `Build tower  $${TOWER_COST}M`, () => actions.buildTower(view, i), { size: 11, enabled: !sim.towerBlocker(s, view, i) });
+        }
+      } else if (i === st.pads.length && owned) {
+        ui.row(X, y, W, 22, { fill: 0x0a101c });
+        ui.label(X + 8, y + 4, `${name}  (not built)`, { size: 12, color: COL.dimText });
+        ui.button(X + W - 170, y + 1, 170, 20, `Build pad  $${sim.padCostOf(view, i)}M`, () => actions.buyPad(view), { size: 11, enabled: !sim.padBlocker(s, view) });
+      }
+    });
+    padsEnd = py + 16 + d.pads.length * 24 + 6;
+  }
 
   // Hangars
-  const hy = py + 16 + d.pads.length * 24 + 6;
-  const maxBays = MAX_BAYS[st.status];
-  ui.label(X, hy, `HANGARS  ${st.bays.length}/${maxBays}  ·  ${st.bays.map((b) => (b.tenure === 'owned' ? 'owned' : 'rented')).join(', ')}`, { size: 12, bold: true, color: hex(COL.accent) });
+  const hy = padsEnd;
+  const maxBays = sim.maxBaysOf(view, st.status);
+  const bayName = d.bare ? 'megahangar' : 'hangar';
+  ui.label(X, hy, `${bayName.toUpperCase()}S  ${st.bays.length}/${maxBays}  ·  ${st.bays.length ? st.bays.map((b) => (b.tenure === 'owned' ? 'owned' : 'rented')).join(', ') : 'none built'}`, { size: 12, bold: true, color: hex(COL.accent) });
   if (st.bays.length < maxBays) {
-    ui.button(X + W - 170, hy - 3, 170, 22, st.status === 'owned' ? `Buy hangar  $${BAY_BUY_COST}M` : `Rent hangar  $${BAY_RENT_DEPOSIT}M`, () => actions.addBay(view), { size: 11, enabled: !sim.bayBlocker(s, view) });
+    const bc = sim.bayCostOf(view, st.status);
+    ui.button(X + W - 170, hy - 3, 170, 22, owned ? `Build ${bayName}  $${bc}M` : `Rent hangar  $${bc}M`, () => actions.addBay(view), { size: 11, enabled: !sim.bayBlocker(s, view) });
+  }
+
+  // Gas wells (natural gas sites)
+  let wy = hy + 26;
+  if (d.gas) {
+    ui.label(X, wy, `GAS WELLS  ${st.wells ?? 0}/${MAX_WELLS}  ·  feed methalox plants (RP-1 gets nothing)`, { size: 12, bold: true, color: hex(COL.accent) });
+    if (owned) ui.button(X + W - 170, wy - 3, 170, 22, `Drill well  $${WELL_COST}M`, () => actions.buildWell(view), { size: 11, enabled: !sim.wellBlocker(s, view) });
+    wy += 26;
   }
 
   // Fuel and materials
-  const fy = hy + 26;
+  const fy = wy;
   ui.heading(X, fy, 'TANKS AND MATERIALS  ·  spot price drifts, bulk buys are 10% cheaper');
   Object.keys(COMMODITIES).forEach((type, i) => {
     const y = fy + 16 + i * 34;
@@ -450,7 +477,7 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
     const isFuel = type === 'kerolox' || type === 'methalox';
     ui.row(X, y, W, 32);
     ui.label(X + 8, y + 1, COMMODITIES[type].name, { size: 11, bold: true });
-    ui.bar(X + 190, y + 7, 140, 8, st.stock[type] / st.cap[type], st.stock[type] < st.cap[type] * 0.2 ? COL.warn : COL.accent);
+    ui.bar(X + 190, y + 7, 140, 8, st.cap[type] ? st.stock[type] / st.cap[type] : 0, st.stock[type] < st.cap[type] * 0.2 ? COL.warn : COL.accent);
     ui.label(X + 338, y + 3, `${Math.round(st.stock[type])} / ${st.cap[type]} t`, { size: 11 });
     ui.label(X + W - 8, y + 3, `$${sim.spot(s, type).toFixed(3)}M/t`, { size: 11, bold: true, right: true, color: hex(m > 1.15 ? COL.bad : m < 0.9 ? COL.good : COL.dim) });
     ui.button(X + 8, y + 16, 86, 15, 'Buy 100 t', () => actions.buyCommodity(view, type, 100), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
@@ -460,7 +487,7 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
       const lvl = st.plants[type];
       const b = sim.plantBlocker(s, view, type);
       ui.button(X + 336, y + 16, W - 344, 15, lvl >= PLANT_MAX ? `Plant L${lvl}: ${lvl * PLANT_RATE} t/day` : `Plant L${lvl + 1}  $${PLANT_COST}M${lvl ? `  (now ${lvl * PLANT_RATE} t/day)` : ''}`, () => actions.buildPlant(view, type), {
-        size: 10, enabled: !b, hint: b ?? `A plant makes ${PLANT_RATE} t per day per level at about 30% of the base price.`,
+        size: 10, enabled: !b, hint: b ?? `A plant makes ${PLANT_RATE} t per day per level at about 30% of the base price${SITES[view].gas && type === 'methalox' ? ', 15% for levels fed by a gas well' : ''}.`,
       });
     }
   });

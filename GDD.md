@@ -233,8 +233,20 @@ Rent first, buy later: the company starts by leasing Pad 39A and a rented hangar
 | Site | Role | Pads | Acquire | Notes |
 | Cape Canaveral | Home site: LEO, GTO, lunar | 3 | Starts leased, buy for $60M | No polar or sun-synchronous launches (overflight rules) |
 | Vandenberg | The only polar and sun-synchronous launches | 2 | Lease for $15M, buy for $85M | LEO family only, and no factory |
-| Boca Chica (Starbase) | Super-heavy site | 2 | Buy for $220M | Pads come with catch towers. Catch vehicles (Behemoth, Skyship) cost 15% less and build 15% faster here |
-| Vermilion Parish (L) | Gulf Coast catch site | 2 | Buy for $100M | Louisiana. Pads come with catch towers, so it can launch Behemoth and Skyship, but it has no factory and no build discount. Payloads from South America and Africa arrive a little sooner than at Cape. No polar or sun-synchronous launches |
+| Boca Chica (Starbase) | Super-heavy site | up to 8 | Buy for $220M | Bare land: the purchase includes no pads, hangars, tanks, plants, towers or factory line. Everything is built out from nothing (see below). Catch vehicles (Behemoth, Skyship) cost 15% less and build 15% faster here |
+| Vermilion Parish (L) | Gulf Coast greenfield | up to 24 | Buy for $100M | Louisiana. Bare land with room for dozens of pads, no factory. Sits on natural gas deposits that must be extracted: gas wells ($20M each, up to 3) feed its methalox plants, which then make methane at half the usual production cost |
+
+Greenfield sites (Boca Chica and Vermilion Parish): buying only gets the land. The site starts with no pads, no hangars, zero tank capacity, no plants and no factory line. Costs to build out:
+| Item | Boca Chica | Vermilion Parish |
+| Pad | $40M each, up to 8 | $25M each, up to 24 |
+| Catch tower | $40M per pad | $40M per pad |
+| Megahangar (refit bay) | $60M each, up to 8 | $50M each, up to 12 |
+| Factory line | $40M, $80M, $120M (up to 3) | none (no factory) |
+| Tanks and plants | usual prices, starting from zero capacity | usual prices |
+| Gas wells | none | $20M each, up to 3 |
+Two ways to make fuel: propellant plants (research Propellant Plants) synthesize kerolox or methalox at any site you own, at about 30% of the base price per tonne. Vermilion Parish adds a second mechanism, extraction: its gas wells tap the on-site natural gas, and each well lets one level of methalox plant run at half the production cost (15% of base price). Wells only help methalox (Starship-class fuel); kerolox (RP-1, used by Peregrine) is unaffected. Wells do nothing without a plant, and a plant without wells is an ordinary plant.
+
+A reusable vehicle needs a megahangar for its refit at its launch site, so a greenfield site cannot launch reusable hulls until one is built. The auto site choice skips sites with no suitable pad. With dozens of pads, the Sites tab shows a summary and one build button instead of a row per pad.
 
 Leased site limits: 1 pad, up to 2 rented hangars, no towers, no plants, no extra factory lines.
 Owned site options: more pads ($25M and $40M for the 2nd and 3rd), up to 3 owned hangars ($15M each), catch towers ($40M per pad), tank expansion, propellant plants and factory lines.

@@ -7,7 +7,7 @@ import {
   SITES, SITE_IDS, LEASE_FEE, BAY_FEE, BAY_RENT_DEPOSIT, BAY_BUY_COST, MAX_BAYS, PAD_COSTS, TOWER_COST, PAD_TURN,
   PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND, DRONESHIP_FEE, DRONESHIP_COST, MAX_DRONESHIPS, DRONESHIP_CYCLE,
   DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
-  RUSH_PREMIUM, START_CAPS, START_STOCK, TANK_STEP, PLANT_RATE, PLANT_COST, PLANT_MAX, PLANT_COST_FRAC,
+  RUSH_PREMIUM, START_CAPS, START_STOCK, TANK_STEP, PLANT_RATE, PLANT_COST, PLANT_MAX, PLANT_COST_FRAC, GAS_PLANT_DISCOUNT, WELL_COST, MAX_WELLS,
   MARS_WINDOWS, MARS_ROUTES, MARS_DESTS, MARS_CONTRACT, START_DATE, PROTOS, ODDS_LEARNING, ODDS_MAX,
   MARS_SITES, MARS_LEARNING, MARS_RETURN, MARS_RETURN_WINDOWS, MARS_RETURN_CONTRACT, BASE_PARAMS,
 } from './data.js';
@@ -35,15 +35,17 @@ const newPad = (d, i) => ({ name: d.pads[i], tower: !!d.towers, busyUntil: 0 });
 function makeSite(id, status) {
   const d = SITES[id];
   const active = status !== 'locked';
+  const bare = !!d.bare && status === 'owned'; // greenfield: nothing is built yet
   return {
     id,
     status,
-    pads: active ? [newPad(d, 0)] : [],
-    bays: active ? [{ tenure: status === 'owned' ? 'owned' : 'rented', freeAt: 0 }] : [],
+    pads: active && !bare ? [newPad(d, 0)] : [],
+    bays: active && !bare ? [{ tenure: status === 'owned' ? 'owned' : 'rented', freeAt: 0 }] : [],
     stock: id === 'cape' ? { ...START_STOCK } : { kerolox: 0, methalox: 0, steel: 0, aluminum: 0 },
-    cap: { ...START_CAPS },
+    cap: bare ? { kerolox: 0, methalox: 0, steel: 0, aluminum: 0 } : { ...START_CAPS },
     plants: { kerolox: 0, methalox: 0 },
-    lines: active && d.factory ? 1 : 0,
+    wells: 0,
+    lines: active && d.factory && !bare ? 1 : 0,
     queue: [],
   };
 }
@@ -535,17 +537,36 @@ export function acquireSite(s, id, mode) {
   return true;
 }
 
+export const padCostOf = (id, n) => SITES[id].padCost ?? PAD_COSTS[n];
+export const bayCostOf = (id, status) => (status === 'owned' ? SITES[id].bayCost ?? BAY_BUY_COST : BAY_RENT_DEPOSIT);
+export const maxBaysOf = (id, status) => (status === 'owned' && SITES[id].maxBays) || MAX_BAYS[status];
+export const lineCostOf = (id, n) => LINE_COSTS[n + (SITES[id].bare ? 1 : 0)];
+export const wellBlocker = (s, id) => {
+  const site = s.sites[id];
+  if (!SITES[id].gas) return 'No gas deposits here';
+  if (site.status !== 'owned') return 'Own the site first';
+  if (site.wells >= MAX_WELLS) return 'All wells drilled';
+  return canSpend(s, WELL_COST) ? null : 'Not enough cash';
+};
+export function buildWell(s, id) {
+  if (wellBlocker(s, id)) return false;
+  s.cash -= WELL_COST;
+  s.sites[id].wells++;
+  note(s, `Gas well ${s.sites[id].wells} drilled at ${SITES[id].short} (-$${WELL_COST}M).`);
+  return true;
+}
+
 export function padBlocker(s, id) {
   const site = s.sites[id];
   if (site.status !== 'owned') return 'Own the site first';
   if (site.pads.length >= SITES[id].pads.length) return 'All pads built';
-  return canSpend(s, PAD_COSTS[site.pads.length]) ? null : 'Not enough cash';
+  return canSpend(s, padCostOf(id, site.pads.length)) ? null : 'Not enough cash';
 }
 
 export function buyPad(s, id) {
   if (padBlocker(s, id)) return false;
   const site = s.sites[id];
-  const cost = PAD_COSTS[site.pads.length];
+  const cost = padCostOf(id, site.pads.length);
   s.cash -= cost;
   site.pads.push(newPad(SITES[id], site.pads.length));
   note(s, `${SITES[id].pads[site.pads.length - 1]} built at ${SITES[id].short} (-$${cost}M).`);
@@ -570,8 +591,8 @@ export function buildTower(s, id, i) {
 export function bayBlocker(s, id) {
   const site = s.sites[id];
   if (site.status === 'locked') return 'Not available';
-  if (site.bays.length >= MAX_BAYS[site.status]) return site.status === 'leased' ? 'Buy the site for more hangars' : 'All hangars built';
-  const cost = site.status === 'owned' ? BAY_BUY_COST : BAY_RENT_DEPOSIT;
+  if (site.bays.length >= maxBaysOf(id, site.status)) return site.status === 'leased' ? 'Buy the site for more hangars' : 'All hangars built';
+  const cost = bayCostOf(id, site.status);
   return canSpend(s, cost) ? null : 'Not enough cash';
 }
 
@@ -579,7 +600,7 @@ export function addBay(s, id) {
   if (bayBlocker(s, id)) return false;
   const site = s.sites[id];
   const owned = site.status === 'owned';
-  const cost = owned ? BAY_BUY_COST : BAY_RENT_DEPOSIT;
+  const cost = bayCostOf(id, site.status);
   s.cash -= cost;
   site.bays.push({ tenure: owned ? 'owned' : 'rented', freeAt: s.day });
   note(s, `${owned ? 'Bought' : 'Rented'} a hangar at ${SITES[id].short} (-$${cost}M).`);
@@ -652,9 +673,10 @@ export function plantBlocker(s, id, fuel) {
 
 export function buildPlant(s, id, fuel) {
   if (plantBlocker(s, id, fuel)) return false;
-  s.cash -= PLANT_COST;
+  const cost = PLANT_COST;
+  s.cash -= cost;
   s.sites[id].plants[fuel]++;
-  note(s, `${COMMODITIES[fuel].name} plant level ${s.sites[id].plants[fuel]} at ${SITES[id].short} (-$${PLANT_COST}M).`);
+  note(s, `${COMMODITIES[fuel].name} plant level ${s.sites[id].plants[fuel]} at ${SITES[id].short} (-$${cost}M).`);
   return true;
 }
 
@@ -672,7 +694,8 @@ function tickPlants(s) {
       const level = site.plants[fuel];
       if (!level) continue;
       const make = Math.min(level * PLANT_RATE, site.cap[fuel] - site.stock[fuel]);
-      const cost = make * COMMODITIES[fuel].price * PLANT_COST_FRAC;
+      const cheap = fuel === 'methalox' ? Math.min(level, site.wells ?? 0) : 0; // levels fed by gas wells
+      const cost = make * COMMODITIES[fuel].price * PLANT_COST_FRAC * (1 - (cheap / level) * (1 - GAS_PLANT_DISCOUNT));
       if (make > 0 && s.cash >= cost) { site.stock[fuel] += make; s.cash -= cost; }
     }
   }
@@ -730,7 +753,7 @@ export function cancelBuild(s, siteId, id) {
 export function lineBlocker(s, siteId) {
   const site = s.sites[siteId];
   if (!SITES[siteId].factory || site.status !== 'owned') return 'Own the site first';
-  const cost = LINE_COSTS[site.lines];
+  const cost = lineCostOf(siteId, site.lines);
   if (cost === undefined) return 'All lines built';
   return canSpend(s, cost) ? null : 'Not enough cash';
 }
@@ -738,7 +761,7 @@ export function lineBlocker(s, siteId) {
 export function buyLine(s, siteId = 'cape') {
   if (lineBlocker(s, siteId)) return false;
   const site = s.sites[siteId];
-  const cost = LINE_COSTS[site.lines];
+  const cost = lineCostOf(siteId, site.lines);
   s.cash -= cost;
   site.lines++;
   note(s, `Production line ${site.lines} online at ${SITES[siteId].short} (-$${cost}M).`);
@@ -835,6 +858,8 @@ export function launchBlocker(s) {
     if (!site || site.status === 'locked') return 'Pick a launch site you have access to';
     const eff = effDest(s);
     if (!siteAllows(s.site, eff)) return `${SITES[s.site].short} cannot launch to ${DESTINATIONS[eff].name}`;
+    if (!site.pads.length) return 'Build a pad first (Sites tab)';
+    if (!site.bays.length && recoveryOf(s) !== 'expend' && r.role !== 'depot' && r.role !== 'module') return 'Build a megahangar for the refit first (Sites tab)';
     if (pickPad(site, r.catch, s.day) < 0) {
       if (r.catch && site.pads.length && !site.pads.some((p) => p.tower)) return 'Needs a catch tower on a pad (Sites tab)';
       const soon = Math.min(...site.pads.filter((p) => !r.catch || p.tower).map((p) => p.busyUntil));
@@ -971,9 +996,9 @@ export function launch(s) {
       if (r.role === 'payload' && (mars || origin === 'mars')) trip.hull = { serial: v.serial, flights: v.flights };
     } else {
       const bay = bestBay(site);
-      const start = Math.max(s.day + roundTripDays(destId) + (rec === 'drone' ? DRONE_TOW_DAYS : 0), bay.freeAt);
+      const start = Math.max(s.day + roundTripDays(destId) + (rec === 'drone' ? DRONE_TOW_DAYS : 0), bay?.freeAt ?? 0);
       v.readyDay = start + refitDays(s);
-      bay.freeAt = v.readyDay;
+      if (bay) bay.freeAt = v.readyDay;
       v.returnDay = s.day + (d.body === 'earth' ? d.days : d.days * 2);
       v.site = s.site;
     }

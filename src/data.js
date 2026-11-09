@@ -66,12 +66,14 @@ export const SITES = {
     price: { lease: 15, buy: 85 }, allowDests: ['leo', 'polar', 'sso'], blurb: 'The only polar and sun-synchronous launches.',
   },
   boca: {
-    name: 'Boca Chica (Starbase)', short: 'Boca Chica', letter: 'B', lat: 26.0, lon: -97.2, pads: ['Orbital Pad A', 'Orbital Pad B'], factory: true, towers: true,
-    price: { buy: 220 }, noDests: ['polar', 'sso'], catchDiscount: 0.85, blurb: 'Pads come with catch towers. Catch vehicles build 15% cheaper and faster.',
+    name: 'Boca Chica (Starbase)', short: 'Boca Chica', letter: 'B', lat: 26.0, lon: -97.2, pads: Array.from({ length: 8 }, (_, i) => `Orbital Pad ${String.fromCharCode(65 + i)}`), factory: true,
+    bare: true, padCost: 40, bayCost: 60, maxBays: 8,
+    price: { buy: 220 }, noDests: ['polar', 'sso'], catchDiscount: 0.85, blurb: 'Bare land: build every pad, tower, hangar, tank and plant. Catch vehicles build 15% cheaper and faster.',
   },
   vermilion: {
-    name: 'Vermilion Parish', short: 'Vermilion', letter: 'L', lat: 29.6, lon: -92.3, pads: ['Gulf Pad 1', 'Gulf Pad 2'], factory: false, towers: true,
-    price: { buy: 100 }, noDests: ['polar', 'sso'], blurb: 'Louisiana Gulf Coast. Pads come with catch towers, but there is no factory.',
+    name: 'Vermilion Parish', short: 'Vermilion', letter: 'L', lat: 29.6, lon: -92.3, pads: Array.from({ length: 24 }, (_, i) => `Gulf Pad ${i + 1}`), factory: false,
+    bare: true, padCost: 25, bayCost: 50, maxBays: 12, gas: true,
+    price: { buy: 100 }, noDests: ['polar', 'sso'], blurb: 'Bare Louisiana land with room for dozens of pads and a natural gas supply (cheap methalox). No factory.',
   },
 };
 export const SITE_IDS = Object.keys(SITES);
@@ -125,6 +127,9 @@ export const START_STOCK = { kerolox: 100, methalox: 200, steel: 150, aluminum: 
 export const TANK_STEP = { kerolox: { t: 200, cost: 6 }, methalox: { t: 500, cost: 8 }, steel: { t: 400, cost: 4 }, aluminum: { t: 100, cost: 3 } };
 export const PLANT_RATE = 40; // t per day per level
 export const PLANT_COST = 25; // $M per level
+export const GAS_PLANT_DISCOUNT = 0.5; // production cost multiplier for a methalox plant level backed by a gas well
+export const WELL_COST = 20; // $M per gas well
+export const MAX_WELLS = 3;
 export const PLANT_MAX = 3;
 export const PLANT_COST_FRAC = 0.3; // production cost as a share of the base price
 

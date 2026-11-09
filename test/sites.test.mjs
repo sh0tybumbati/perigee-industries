@@ -61,7 +61,7 @@ test('sites restrict destinations: polar needs Vandenberg, which is locked until
   assert.match(sim.launchBlocker(s), /cannot launch to GTO/, 'Vandenberg is LEO family only');
 });
 
-test('catch vehicles need a pad with a tower; Boca Chica comes with towers', () => {
+test('catch vehicles need a pad with a tower; Boca Chica is bare land until built out', () => {
   const s = rich(...ALL);
   give(s, 'skyship');
   sim.setRocket(s, 'skyship');
@@ -75,8 +75,13 @@ test('catch vehicles need a pad with a tower; Boca Chica comes with towers', () 
   sim.setRocket(t, 'skyship');
   load(t);
   assert.ok(sim.acquireSite(t, 'boca', 'buy'));
-  assert.equal(t.sites.boca.pads[0].tower, true);
+  assert.equal(t.sites.boca.pads.length, 0, 'the land comes with nothing');
   sim.setSite(t, 'boca');
+  assert.match(sim.launchBlocker(t), /Build a pad/);
+  assert.ok(sim.buyPad(t, 'boca'));
+  assert.ok(sim.buildTower(t, 'boca', 0));
+  assert.match(sim.launchBlocker(t), /megahangar/);
+  assert.ok(sim.addBay(t, 'boca'));
   assert.equal(sim.launchBlocker(t), null);
 });
 
@@ -226,6 +231,10 @@ test('Boca Chica builds catch vehicles cheaper and faster; Vandenberg has no fac
   assert.ok(bocaBuild.cost < capeBuild.cost && bocaBuild.days < capeBuild.days);
   assert.equal(sim.buildCostAt('peregrine9', 'boca').cost, ROCKETS.peregrine9.buildCost, 'no discount on non-catch hulls');
   assert.equal(sim.buildBlocker(s, 'peregrine9', 'vandenberg'), 'No factory here');
+  assert.equal(s.sites.boca.lines, 0);
+  assert.equal(sim.buildBlocker(s, 'skyship', 'boca'), 'No factory here', 'the first line has to be built');
+  assert.ok(sim.buyLine(s, 'boca'));
+  assert.equal(s.sites.boca.cap.steel, 0);
   assert.equal(sim.queueBuild(s, 'skyship', 'boca'), true);
   assert.equal(s.sites.boca.queue.length, 1);
 });
@@ -267,13 +276,38 @@ test('reputation grows the contract board and its pace', () => {
   assert.ok(s.contracts.length >= 6, `board filled faster: ${s.contracts.length}`);
 });
 
-test('Vermilion Parish: buy-only Gulf site with catch towers, no factory, no polar', () => {
+test('Vermilion Parish: bare land with room for dozens of pads, no factory, cheap methalox', () => {
   const s = sim.createState();
   assert.equal(s.sites.vermilion.status, 'locked');
   assert.equal(sim.siteBlocker(s, 'vermilion', 'lease'), 'Not available');
-  s.cash = 200;
+  s.cash = 1000;
   assert.ok(sim.acquireSite(s, 'vermilion', 'buy'));
-  assert.equal(s.sites.vermilion.pads[0].tower, true);
+  const v = s.sites.vermilion;
+  assert.equal(v.pads.length + v.bays.length + v.cap.methalox + v.lines, 0, 'nothing comes with the land');
+  assert.equal(SITES.vermilion.pads.length, 24);
+  for (let i = 0; i < 24; i++) assert.ok(sim.buyPad(s, 'vermilion'), `pad ${i + 1}`);
+  assert.equal(sim.padBlocker(s, 'vermilion'), 'All pads built');
   assert.equal(sim.buildBlocker(s, 'peregrine9', 'vermilion'), 'No factory here');
-  assert.equal(sim.buildCostAt('skyship', 'vermilion').cost, ROCKETS.skyship.buildCost, 'no catch discount');
+  assert.equal(sim.wellBlocker(sim.createState(), 'cape'), 'No gas deposits here');
+});
+
+test('gas wells at Vermilion Parish halve methalox production cost; plants work at any owned site', () => {
+  const run = (wells) => {
+    const s = rich('plants');
+    s.sites.vermilion = JSON.parse(JSON.stringify(s.sites.vermilion));
+    assert.ok(sim.acquireSite(s, 'vermilion', 'buy'));
+    assert.ok(sim.expandTank(s, 'vermilion', 'methalox'));
+    assert.ok(sim.buildPlant(s, 'vermilion', 'methalox'));
+    for (let i = 0; i < wells; i++) assert.ok(sim.buildWell(s, 'vermilion'));
+    const cash = s.cash;
+    sim.tick(s);
+    assert.ok(s.sites.vermilion.stock.methalox > 0, 'a plant works with or without wells');
+    return cash - s.cash;
+  };
+  assert.ok(run(1) < run(0), 'a well makes the same tonnes cheaper');
+  const s = rich('plants');
+  assert.ok(sim.acquireSite(s, 'boca', 'buy'));
+  assert.ok(sim.expandTank(s, 'boca', 'methalox'));
+  assert.ok(sim.buildPlant(s, 'boca', 'methalox'), 'any owned site can build a plant');
+  assert.equal(sim.buildWell(s, 'boca'), false);
 });
