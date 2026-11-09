@@ -47,7 +47,7 @@ for (let seed = 0; seed < N; seed++) {
       if (s.tech.has('plants') && cape().plants.methalox < 2 && s.cash > 200 && s.tech.has('skyship')) sim.buildPlant(s, 'cape', 'methalox');
     }
     // license another Skylink market only while the constellation has spare capacity, cheapest first
-    for (const m of MARKETS.slice().sort((a, b) => a.license - b.license)) if (!sim.marketBlocker(s, m.id) && s.cash > m.license + 8 && sim.totalSubs(s) < 0.6 * sim.skylinkCapacity(s)) sim.applyLicense(s, m.id);
+    for (const m of MARKETS.slice().sort((a, b) => a.license - b.license)) if (!sim.marketBlocker(s, m.id) && s.cash > m.license + 8 && sim.totalLoad(s) < 0.6 * sim.skylinkCapacity(s)) sim.applyLicense(s, m.id);
     // keep the tanks stocked while prices are good
     for (const f of ['kerolox', 'methalox', 'lox', 'steel', 'aluminum']) if (cape().stock[f] < cape().cap[f] * 0.4 && s.market[f] < 1.1) sim.buyCommodity(s, 'cape', f, 200);
     if (s.tech.has('tanker')) {

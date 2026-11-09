@@ -173,10 +173,12 @@ export const BODIES = {
   mars: { name: 'Mars' },
 };
 
-export const SAT_MASS = 0.27; // t, Gen-1
-export const SAT_VOLUME = 0.9; // m^3, stacked
-export const SAT_LIFE_DAYS = 5 * 365;
-export const SAT_COST = 0.35; // $M each
+// Satellite generations (GDD 2.20). capacity: thousands of broadband subscribers each. only: vehicles that can carry them.
+export const SATS = {
+  1: { name: 'Gen-1', mass: 0.27, volume: 0.9, cost: 0.35, capacity: 0.3, life: 5 * 365, tech: 'gen1' },
+  2: { name: 'Gen-2 Mini', mass: 0.8, volume: 1.8, cost: 0.7, capacity: 1.2, life: 5 * 365, tech: 'gen2' },
+  3: { name: 'Gen-3', mass: 2.0, volume: 3.5, cost: 2, capacity: 5, life: 7 * 365, tech: 'gen3', only: ['skyship'] },
+};
 export const OVERHEAD_PER_DAY = 0.12; // $M payroll and facilities
 export const CASH_FLOOR = 5; // $M overhead never drains cash below this
 
@@ -204,8 +206,16 @@ export const MARKETS = [
   { id: 'jpkr', name: 'Japan & Korea', minSats: 100, license: 15, lead: 120, subs: 14, arpu: 95 },
   { id: 'in', name: 'India', minSats: 110, license: 20, lead: 240, subs: 12, arpu: 25 },
   { id: 'sea', name: 'Southeast Asia', minSats: 120, license: 10, lead: 150, subs: 10, arpu: 40 },
+  // Mobile carriers: light subscribers (load), counted against Gen-2 and newer satellites only.
+  { id: 'cell-us', cell: true, name: 'US mobile carriers', minSats: 30, license: 15, lead: 60, subs: 300, arpu: 8, load: 0.04 },
+  { id: 'cell-eu', cell: true, name: 'EU mobile carriers', minSats: 40, license: 30, lead: 150, subs: 260, arpu: 9, load: 0.04 },
+  { id: 'cell-uk', cell: true, name: 'UK mobile carriers', minSats: 40, license: 10, lead: 90, subs: 60, arpu: 9, load: 0.04 },
+  { id: 'cell-anz', cell: true, name: 'Australia & NZ carriers', minSats: 40, license: 8, lead: 60, subs: 50, arpu: 9, load: 0.04 },
+  { id: 'cell-jpkr', cell: true, name: 'Japan & Korea carriers', minSats: 60, license: 20, lead: 150, subs: 150, arpu: 8, load: 0.04 },
+  { id: 'cell-latam', cell: true, name: 'Latin America carriers', minSats: 50, license: 15, lead: 120, subs: 180, arpu: 4, load: 0.04 },
+  { id: 'cell-af', cell: true, name: 'Africa carriers', minSats: 60, license: 12, lead: 150, subs: 120, arpu: 3, load: 0.04 },
+  { id: 'cell-in', cell: true, name: 'India carriers', minSats: 80, license: 20, lead: 300, subs: 240, arpu: 2, load: 0.04 },
 ];
-export const SAT_CAPACITY = 0.3; // thousands of subscribers per satellite
 export const SUB_GROWTH = 0.05; // share of the gap to the demand ceiling closed per day
 export const CHURN = 0.03; // daily subscriber loss per point of congestion
 export const PLANS = {
@@ -222,7 +232,9 @@ export const TECH = [
   { id: 'fastCores', name: 'Rapid Reflight', cost: 25, era: 'Peregrine', desc: 'Peregrine turnaround -2 days', requires: ['landing'] },
   { id: 'plants', name: 'Propellant Plants', cost: 70, era: 'Peregrine', desc: 'Owned sites can build kerolox and methalox plants', requires: ['fastCores'] },
   { id: 'gen1', name: 'Skylink Gen-1', cost: 5, era: 'Peregrine', desc: 'Unlock broadband satellite batches', requires: [] },
+  { id: 'gen2', name: 'Skylink Gen-2', cost: 60, era: 'Peregrine', desc: 'Gen-2 Mini satellites (1.2k subscribers each) and mobile carrier service', requires: ['fastCores', 'gen1'] },
   { id: 'heavyCores', name: 'Peregrine Heavy', cost: 60, era: 'Peregrine', desc: 'Unlock 64 t Peregrine Heavy. Needs a test flight.', requires: ['fastCores'] },
+  { id: 'gen3', name: 'Skylink Gen-3', cost: 300, era: 'Super-Heavy', desc: 'Full-size 5k-subscriber satellites. Skyship only.', requires: ['skyship', 'gen2'] },
   { id: 'hull', name: 'Stainless Hull', cost: 120, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },
   { id: 'raptor', name: 'Harrier V3', cost: 150, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },
   { id: 'tiles', name: 'Heat Shield Tiles', cost: 140, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },

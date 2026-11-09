@@ -50,7 +50,7 @@ test('v2 saves migrate: cores become hulls, worn-out cores are dropped', () => {
   assert.equal(s.fleet[0].type, 'peregrine9');
   assert.equal(s.fleet[0].flights, 4);
   assert.equal(s.cash, 80);
-  assert.equal(s.constellation, 12, 'regional satellites pool');
+  assert.equal(s.constellation[1], 12, 'regional satellites pool as Gen-1');
   assert.equal(s.markets.us.status, 'active', 'markets in covered regions are licensed');
   assert.equal(s.markets.eu.status, 'locked');
   assert.equal(s.flightCounts.behemoth, 1);

@@ -2,7 +2,7 @@
 import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
-  PLANT_COST, PLANT_MAX, MARKETS, PLANS, WELL_COST, MAX_WELLS, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
+  PLANT_COST, PLANT_MAX, MARKETS, PLANS, SATS, WELL_COST, MAX_WELLS, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
   PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
@@ -263,7 +263,8 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
       size: 12, color: hex(s.depot.prop >= need && s.rocket === 'skyship' ? COL.good : COL.warn),
     });
   } else if (gen1 && satsOk) {
-    ui.label(X, ry + 3, `Payout $${t.payout}M  ·  Skylink sats ${s.sats} (join the global constellation)`, { size: 12, color: hex(COL.good) });
+    ui.label(X, ry + 3, `Payout $${t.payout}M  ·  Skylink sats ${s.sats}`, { size: 12, color: hex(COL.good) });
+    ui.button(X + 250, ry, 170, 22, SATS[s.satGen].name, () => actions.cycleSatGen(), { size: 11, hint: `Click to change the satellite generation. ${SATS[s.satGen].capacity}k subscribers each, ${SATS[s.satGen].mass} t, $${SATS[s.satGen].cost}M.` });
     ui.button(X + 428, ry, 50, 22, `-${sim.SAT_BATCH}`, () => sim.adjustSats(s, -sim.SAT_BATCH), { enabled: s.sats > 0, size: 11 });
     ui.button(X + 486, ry, 50, 22, `+${sim.SAT_BATCH}`, () => sim.adjustSats(s, sim.SAT_BATCH), { enabled: s.sats < sim.rocketDef(s).sats, size: 11 });
   } else {
@@ -539,44 +540,56 @@ function renderTimeline(ui, s, X, Y) {
   });
 }
 
-export function renderSkylink(ui, s, X, Y, W, actions) {
+export function renderSkylink(ui, s, X, Y, W, actions, ctx) {
   const cap = sim.skylinkCapacity(s);
-  const subs = sim.totalSubs(s);
+  const load = sim.totalLoad(s);
   const q = sim.skylinkQuality(s);
+  const mobileOpen = s.tech.has('gen2');
+  const tab = mobileOpen && ctx?.skyTab === 'mobile' ? 'mobile' : 'broadband';
   ui.heading(X, Y, 'SKYLINK  ·  one constellation, licensed markets');
-  ui.label(X, Y + 18, `${Math.round(s.constellation)} satellites`, { size: 13, bold: true });
-  ui.label(X + 130, Y + 19, `capacity ${cap.toFixed(1)}k  ·  subscribers ${subs.toFixed(1)}k`, { size: 12, color: COL.dimText });
-  ui.bar(X + 330, Y + 22, W - 330 - 70, 9, cap ? Math.min(1, subs / cap) : 0, q < 1 ? COL.bad : subs > cap * 0.85 ? COL.warn : COL.good);
-  ui.label(X + W, Y + 19, q < 1 ? `CONGESTED ${Math.round(q * 100)}%` : `${cap ? Math.round((subs / cap) * 100) : 0}% full`, { size: 11, bold: true, right: true, color: hex(q < 1 ? COL.bad : COL.dim) });
+  const gens = [1, 2, 3].filter((g) => s.constellation[g] >= 0.5).map((g) => `${SATS[g].name} ${Math.round(s.constellation[g])}`).join(' · ');
+  ui.label(X, Y + 18, `${Math.round(sim.satCount(s))} satellites`, { size: 13, bold: true });
+  ui.label(X + 118, Y + 20, gens, { size: 11, color: COL.dimText });
+  ui.label(X + 300, Y + 19, `capacity ${cap.toFixed(1)}k  ·  load ${load.toFixed(1)}k`, { size: 11, color: COL.dimText });
+  ui.bar(X + 300, Y + 32, W - 300, 4, cap ? Math.min(1, load / cap) : 0, q < 1 ? COL.bad : load > cap * 0.85 ? COL.warn : COL.good);
+  ui.label(X + W, Y + 1, `${q < 1 ? `CONGESTED ${Math.round(q * 100)}%  ·  ` : ''}$${sim.dailyRevenue(s).toFixed(3)}M/day`, { size: 12, bold: true, right: true, color: hex(q < 1 ? COL.bad : sim.dailyRevenue(s) >= sim.OVERHEAD_PER_DAY ? COL.good : COL.warn) });
 
   ui.label(X, Y + 42, 'Plan', { size: 12, color: COL.dimText });
   Object.entries(PLANS).forEach(([id, p], i) => {
-    ui.button(X + 44 + i * 112, Y + 38, 106, 22, `${p.name}  x${p.price}`, () => actions.setPlan(id), {
-      size: 11, fill: s.plan === id ? COL.btnOn : COL.btn, stroke: s.plan === id ? COL.good : COL.accent, hint: p.hint,
+    ui.button(X + 36 + i * 80, Y + 38, 76, 22, p.name, () => actions.setPlan(id), {
+      size: 11, fill: s.plan === id ? COL.btnOn : COL.btn, stroke: s.plan === id ? COL.good : COL.accent, hint: `${p.hint} Price x${p.price}, demand x${p.demand}.`,
     });
   });
-  const total = sim.dailyRevenue(s);
-  ui.label(X + W, Y + 1, `$${total.toFixed(3)}M/day  ·  overhead $${sim.OVERHEAD_PER_DAY}M`, { size: 12, bold: true, right: true, color: hex(total >= sim.OVERHEAD_PER_DAY ? COL.good : COL.warn) });
+  [['broadband', 'Broadband'], ['mobile', 'Mobile']].forEach(([id, label], i) => {
+    const locked = id === 'mobile' && !mobileOpen;
+    ui.button(X + W - 190 + i * 96, Y + 38, 92, 22, locked ? 'Mobile (Gen-2)' : label, () => actions.skyTab(id), {
+      size: 10, enabled: !locked, fill: tab === id ? COL.btnOn : COL.btn, stroke: tab === id ? COL.good : COL.accent,
+      hint: locked ? 'Research Skylink Gen-2 to sell mobile service through carriers.' : undefined,
+    });
+  });
 
+  const list = MARKETS.filter((m) => !!m.cell === (tab === 'mobile'));
   const y0 = Y + 68;
-  MARKETS.forEach((m, i) => {
-    const y = y0 + i * 23;
+  const rowH = list.length > 9 ? 23 : 25;
+  list.forEach((m, i) => {
+    const y = y0 + i * rowH;
     const st = s.markets[m.id];
     const blocker = sim.marketBlocker(s, m.id);
-    ui.row(X, y, W, 21, { fill: st.status === 'active' ? 0x123524 : COL.row, hint: `${m.name}: up to ${m.subs}k subscribers at $${m.arpu}/month. Licence $${m.license}M, approval ${m.lead} days, needs ${m.minSats} satellites.` });
-    ui.label(X + 8, y + 3, m.name, { size: 12, bold: true, color: st.status === 'locked' && s.constellation < m.minSats ? COL.dimText : COL.text });
+    const have = sim.satCount(s, m.cell ? 2 : 1);
+    ui.row(X, y, W, rowH - 2, { fill: st.status === 'active' ? 0x123524 : COL.row, hint: `${m.name}: up to ${m.subs}k subscribers at $${m.arpu}/month${m.cell ? ' (light users: they load the network at ' + (m.load * 100) + '% of a broadband user)' : ''}. License $${m.license}M, approval ${m.lead} days, needs ${m.minSats} ${m.cell ? 'Gen-2 or newer ' : ''}satellites.` });
+    ui.label(X + 8, y + 3, m.name, { size: 12, bold: true, color: st.status === 'locked' && have < m.minSats ? COL.dimText : COL.text });
     if (st.status === 'active') {
       ui.label(X + 190, y + 4, `${st.subs.toFixed(1)}k / ${sim.demandCeiling(s, m).toFixed(1)}k subs`, { size: 11 });
       ui.label(X + W - 8, y + 4, `$${sim.marketRevenue(s, m).toFixed(3)}M/day`, { size: 11, bold: true, right: true, color: hex(COL.good) });
     } else if (st.status === 'pending') {
       ui.label(X + 190, y + 4, `approval in ${Math.max(0, st.readyDay - s.day)} days`, { size: 11, bold: true, color: hex(COL.warn) });
     } else {
-      ui.label(X + 190, y + 4, s.constellation >= m.minSats ? 'ready to license' : `needs ${m.minSats} satellites`, { size: 11, color: s.constellation >= m.minSats ? COL.text : COL.dimText });
-      ui.button(X + W - 132, y + 1, 130, 19, `License  $${m.license}M · ${m.lead}d`, () => actions.applyLicense(m.id), { size: 10, enabled: !blocker, hint: blocker ?? `Pay $${m.license}M and wait ${m.lead} days for approval.` });
+      ui.label(X + 190, y + 4, have >= m.minSats ? 'ready to license' : `needs ${m.minSats}${m.cell ? ' Gen-2+' : ''} satellites`, { size: 11, color: have >= m.minSats ? COL.text : COL.dimText });
+      ui.button(X + W - 132, y + 1, 130, rowH - 4, `License  $${m.license}M · ${m.lead}d`, () => actions.applyLicense(m.id), { size: 10, enabled: !blocker, hint: blocker ?? `Pay $${m.license}M and wait ${m.lead} days for approval.` });
     }
   });
-  const ey = y0 + MARKETS.length * 23 + 4;
-  ui.label(X, ey, 'Satellites decay over 5 years, so capacity shrinks if launches stop. Congestion drives subscribers away: switch plan or launch more.', { size: 11, color: COL.dimText, wrap: W });
+  const ey = y0 + list.length * rowH + 4;
+  ui.label(X, ey, tab === 'mobile' ? 'Mobile users are light, but there are many of them. They share capacity with broadband.' : 'Satellites decay, so capacity shrinks if launches stop. Congestion drives subscribers away: switch plan or launch more.', { size: 11, color: COL.dimText, wrap: W });
   renderTimeline(ui, s, X, ey + 30);
 }
 

@@ -340,6 +340,8 @@ export class OpsScene extends Phaser.Scene {
         this.lastDest = null;
       },
       setPlan: (id) => sim.setPlan(s, id),
+      cycleSatGen: () => sim.cycleSatGen(s),
+      skyTab: (id) => { this.skyTab = id; },
       applyLicense: (id) => sim.applyLicense(s, id),
       buyPad: () => sim.buyPad(s),
       buyLine: (id) => sim.buyLine(s, id),
@@ -410,7 +412,7 @@ export class OpsScene extends Phaser.Scene {
     this.renderDockTabs(ui);
     const { x, y, w } = DOCK;
     const actions = this.actions;
-    const ctx = { mode: this.baseMode, sub: this.baseSub, view: this.baseView, base: this.activeBase(), body: this.baseBody, factorySite: this.factorySite, siteView: this.siteView };
+    const ctx = { mode: this.baseMode, sub: this.baseSub, view: this.baseView, base: this.activeBase(), body: this.baseBody, factorySite: this.factorySite, siteView: this.siteView, skyTab: this.skyTab };
     if (this.tab === 'base') renderBase(ui, s, x, y, w, actions, ctx);
     else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink })[this.tab](ui, s, x, y, w, actions, ctx);
     if (PHONE) this.renderStatus(s);

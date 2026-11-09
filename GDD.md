@@ -425,6 +425,21 @@ Service plan (the balancing lever): Budget (price x0.7, demand x1.5), Standard (
 
 The Skylink tab shows satellites, capacity against subscribers with a congestion bar, the three plans, and one row per market with its status (locked with the density needed, approval pending, or active with subscribers and revenue) and a License button. Old saves have their regional satellites pooled and the markets in the regions they covered licensed for free. Milestones: first licensed market and 50k and 100k subscribers.
 
+2.20 Satellite Generations and Mobile Service (Phase 13)
+Skylink satellites come in generations, each its own batch type on the Mission tab (a Gen button next to the +/- buttons cycles through the ones researched). The constellation pool tracks how many of each generation are in orbit, and capacity is the sum.
+| | Gen-1 | Gen-2 Mini | Gen-3 |
+| Capacity per satellite | 0.3k subscribers | 1.2k | 5k |
+| Mass / volume | 0.27 t / 0.9 m3 | 0.8 t / 1.8 m3 | 2.0 t / 3.5 m3 |
+| Cost | $0.35M | $0.7M | $2M |
+| Life | 5 years | 5 years | 7 years |
+| Rides on | any payload vehicle | any payload vehicle | Skyship only |
+| Research | Skylink Gen-1 ($5M) | Skylink Gen-2 ($60M, needs Rapid Reflight) | Skylink Gen-3 ($300M, needs Skyship and Gen-2) |
+Gen-2 Mini matches the real V2 Mini, which flies on a Falcon 9: a Peregrine 9 carries 24 of them (about four times the capacity of a Gen-1 batch). Gen-3 is the full-size satellite that needs a Starship-class vehicle.
+
+Mobile service (direct-to-cell): Gen-2 research opens a second tab of markets, mobile carriers, licensed the same way as broadband (density, a fee and an approval wait) but with a carrier agreement per country or bloc. Two differences: the density requirement counts only Gen-2 and Gen-3 satellites, and a mobile subscriber is light (text and data), so each one loads the network at a fraction of a broadband subscriber. Mobile is many subscribers at a low price, so it fills capacity quickly and rewards the higher-capacity generations. Mobile markets: US, EU, UK, Australia & NZ, Japan & Korea, Latin America, Africa and India carriers. Congestion is shared: mobile and broadband compete for the same capacity.
+
+Old saves keep their satellites as Gen-1 (save version 10).
+
 3. Technology Tree
                       [ PEREGRINE ERA ]
                               │
