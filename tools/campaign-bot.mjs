@@ -129,10 +129,10 @@ for (let seed = 0; seed < N; seed++) {
     for (const c of s.contracts) c.acceptedDay ??= s.day; // the bot accepts every contract as it appears
     // Keep the satellite plant busy: a few batches of each researched generation, while cash allows.
     for (const g of [1, 2, 3]) {
-      const want = g === 1 ? 24 : 48;
+      const want = g === 1 ? 48 : 60;
       const inQ = s.satQueue.filter((q) => q.gen === g).length * sim.SAT_BATCH;
       const keepCash = (typeof nextT !== 'undefined' && nextT ? nextT.cost + 12 : 15) + 10;
-      if (s.tech.has(SATS_TECH[g]) && s.satQueue.length < 3 && s.satStock[g] + inQ < want && s.cash > keepCash + sim.satBatchCost(g)) sim.queueSats(s, g);
+      if (s.tech.has(SATS_TECH[g]) && s.satQueue.length < 6 && s.satStock[g] + inQ < want && s.cash > keepCash + sim.satBatchCost(g)) sim.queueSats(s, g);
     }
     s.site = 'cape'; // the bot builds and flies its hulls at Cape Canaveral
     let launchedToday = 0;
@@ -200,7 +200,7 @@ for (let seed = 0; seed < N; seed++) {
           const pay = sim.manifestTotals(s).payout;
           if (SAT_DESTS.includes(dest) && s.tech.has('gen1')) {
             const keep = nextT ? nextT.cost + 12 : 15;
-            for (let q = 0; q < 10; q++) { sim.adjustSats(s, 6); const t = sim.manifestTotals(s); if (t.mass > cap.mass || t.volume > cap.volume || sim.launchCost(s) + keep > s.cash) { sim.adjustSats(s, -6); break; } }
+            for (let q = 0; q < 80; q++) { sim.adjustSats(s, 6); const t = sim.manifestTotals(s); if (t.mass > cap.mass || t.volume > cap.volume || sim.launchCost(s) + keep > s.cash) { sim.adjustSats(s, -6); break; } }
           }
           const score = pay + s.sats * 0.1;
           if (score > 0 && (!bestPlan || score > bestPlan.score)) bestPlan = { score, dest, picked: [...picked], sats: s.sats };
