@@ -5,7 +5,7 @@ import * as B from '../base.js';
 import { MapLayer } from '../map/MapLayer.js';
 import { BaseLayer } from '../map/BaseLayer.js';
 import { COL, FONT, UI, hex } from '../ui/ui.js';
-import { CONTRACT_ROWS, renderMission, renderFleet, renderFactory, renderSites, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
+import { CONTRACT_ROWS, HULL_ROWS, renderMission, renderFleet, renderFactory, renderSites, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
 import { Lane } from '../ui/lane.js';
 import { renderDepot, renderLog, logEntries } from '../ui/panels.js';
 import { drawIcon } from '../ui/icons.js';
@@ -79,10 +79,11 @@ export class OpsScene extends Phaser.Scene {
     // The mouse wheel over the Mission tab scrolls the contract board.
     this.contractScroll = 0;
     this.input.on('wheel', (p, _o, _dx, dy) => {
-      if ((this.tab !== 'mission' && this.tab !== 'log') || this.view === 'map') return;
+      if (!['mission', 'log', 'fleet'].includes(this.tab) || this.view === 'map') return;
       const left = DOCK.x + (this.dockC?.x ?? 0);
       if (p.x < left || p.x > left + DOCK.w) return;
       if (this.tab === 'log') this.actions.scrollLog(Math.sign(dy));
+      else if (this.tab === 'fleet') this.actions.scrollHulls(Math.sign(dy));
       else this.actions.scrollContracts(Math.sign(dy));
     });
     this.setupKeys();
@@ -380,6 +381,8 @@ export class OpsScene extends Phaser.Scene {
       logFilter: this.logFilter ?? 'all',
       setLogFilter: (f) => { this.logFilter = f; this.logScroll = 0; this.render(); },
       scrollLog: (d) => { this.logScroll = Math.max(0, Math.min(Math.max(0, logEntries(s, this.logFilter ?? 'all').length - 1), (this.logScroll ?? 0) + d * 3)); this.render(); },
+      hullScroll: this.hullScroll ?? 0,
+      scrollHulls: (d) => { this.hullScroll = Math.max(0, Math.min(Math.max(0, s.fleet.length - HULL_ROWS), (this.hullScroll ?? 0) + d)); this.render(); },
       contractScroll: this.contractScroll ?? 0,
       scrollContracts: (d) => { this.contractScroll = Math.max(0, Math.min(Math.max(0, s.contracts.length - CONTRACT_ROWS), (this.contractScroll ?? 0) + d)); this.render(); },
       toggleContract: (id) => {

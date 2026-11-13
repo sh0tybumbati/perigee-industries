@@ -13,6 +13,7 @@ import { EXTRA, MAP_BOTTOM, PHONE } from '../layout.js';
 
 // The tall desktop dock has room for more contract rows and locked loadouts than a phone (GDD 2.25).
 export const CONTRACT_ROWS = PHONE ? 5 : 9;
+export const HULL_ROWS = PHONE ? 9 : 12;
 const LOCK_ROWS = PHONE ? 2 : 4;
 const TALL = !PHONE; // the other tabs also spread out on a tall screen
 // The contract board is as tall as it needs to be, from five rows up to the most the screen holds.
@@ -329,8 +330,14 @@ export function renderFleet(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, `HULLS  ·  ${s.fleet.length}`);
   if (!s.fleet.length) ui.label(X, Y + 20, 'No hulls. Queue one in the Factory tab.', { size: 13, color: hex(COL.warn) });
   const sorted = [...s.fleet].sort((a, b) => a.type.localeCompare(b.type) || a.serial.localeCompare(b.serial));
-  const HULL_ROWS = PHONE ? 9 : 12;
-  sorted.slice(0, HULL_ROWS).forEach((v, i) => {
+  const maxScroll = Math.max(0, sorted.length - HULL_ROWS);
+  const scroll = Math.min(actions.hullScroll ?? 0, maxScroll);
+  if (maxScroll) {
+    ui.label(X + W - 52, Y, `${scroll + 1}-${scroll + HULL_ROWS} of ${sorted.length}`, { size: 11, color: COL.dimText, right: true });
+    ui.button(X + W - 44, Y - 3, 20, 16, '▲', () => actions.scrollHulls(-1), { size: 9, enabled: scroll > 0, hint: 'Scroll the hull list (or use the mouse wheel).' });
+    ui.button(X + W - 20, Y - 3, 20, 16, '▼', () => actions.scrollHulls(1), { size: 9, enabled: scroll < maxScroll, hint: 'Scroll the hull list (or use the mouse wheel).' });
+  }
+  sorted.slice(scroll, scroll + HULL_ROWS).forEach((v, i) => {
     const y = Y + 18 + i * 26;
     const st = sim.vehicleState(s, v);
     const r = ROCKETS[v.type];
@@ -352,9 +359,8 @@ export function renderFleet(ui, s, X, Y, W, actions) {
     ui.bar(X + 392, y + 8, 80, 8, wear, wear > 0.7 ? COL.bad : wear > 0.4 ? COL.warn : COL.good);
     ui.label(X + W - 8, y + 5, `${v.flights}/${life}`, { size: 12, right: true, color: COL.dimText });
   });
-  if (sorted.length > HULL_ROWS) ui.label(X, Y + 18 + HULL_ROWS * 26, `+${sorted.length - HULL_ROWS} more hulls`, { size: 12, color: COL.dimText });
 
-  const dy = PHONE ? Y + 262 : Y + 38 + Math.max(1, Math.min(sorted.length, HULL_ROWS)) * 26 + (sorted.length > HULL_ROWS ? 14 : 0);
+  const dy = PHONE ? Y + 262 : Y + 38 + Math.max(1, Math.min(sorted.length, HULL_ROWS)) * 26;
   ui.heading(X, dy, `DRONESHIPS  ·  ${s.droneships.length}/${MAX_DRONESHIPS}`);
   if (s.droneships.length < MAX_DRONESHIPS) {
     ui.button(X + W - 190, dy - 4, 190, 22, `Buy droneship  $${DRONESHIP_COST}M`, () => actions.buyDroneship(), { enabled: s.tech.has('droneship') && sim.canSpend(s, DRONESHIP_COST), size: 11, hint: s.tech.has('droneship') ? undefined : 'Research Droneship Recovery first.' });
