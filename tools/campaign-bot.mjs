@@ -1,6 +1,6 @@
 // Campaign bot: the pacing bot plus a late game. It buys sites, builds a Moon base and a Mars colony from module ships,
 // and reports the day each goal chapter (GDD 2.21) is done. usage: node tools/campaign-bot.mjs [runs] [days]
-// DEBUG=1 prints each run's end state.
+// DEBUG=1 prints each run's end state. Runs are seeded: SEED=n picks a different set, the same SEED repeats exactly.
 import * as sim from '../src/sim.js';
 const SATS_TECH = { 1: 'gen1', 2: 'gen2', 3: 'gen3' };
 import { CHAPTERS, colonyCheck } from '../src/goals.js';
@@ -55,8 +55,20 @@ function autoPlace(s, base, pm) {
   }
   return false;
 }
+// A small seeded generator replaces Math.random, so two invocations with the same SEED give the same numbers.
+// SEED=n picks a different set of runs (default 1). usage: SEED=7 node tools/campaign-bot.mjs 8
+const SEED0 = (+process.env.SEED || 1) * 1000;
+function mulberry32(a) {
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 const cargoTypes = ['skyship', 'behemoth', 'peregrineHeavy', 'peregrine9'];
 for (let seed = 0; seed < N; seed++) {
+  Math.random = mulberry32(SEED0 + seed); // every run is repeatable: same SEED and run number, same game
   const s = sim.createState(); const ms = {}; let marsCargo = 0, returns = 0; let lunar = 0, lost = 0, launches = 0, idleDays = 0;
   const mark = (k) => { if (!(k in ms)) ms[k] = s.day; };
   const cape = () => s.sites.cape;
