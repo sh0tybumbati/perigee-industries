@@ -465,6 +465,15 @@ Accepting a contract and loading a rocket are now two separate steps, and the la
 
 The manual LAUNCH button still works for tankers, depot and module ships (no contracts, never locked) and for a draft that needs no shipping (no region, or satellites only at Cape Canaveral). Old saves load with no locked loadouts.
 
+2.23 The Satellite Plant: Build Before You Launch (Phase 15)
+Skylink satellites used to appear from nowhere and be paid for at launch. They are now built first and kept in stock.
+
+- The plant: Skylink satellites are built at the company's plant beside the Cape Canaveral factory, on a line of their own that never competes with the rocket lines. It makes one batch of 6 at a time, in the order queued. Each generation can be queued once its research is done: Gen-1 $2.1M and 1 day per batch, Gen-2 Mini $4.2M and 2 days, Gen-3 $12M and 3 days (6 satellites at the generation's unit price, from the SATS table). The cost is paid when the batch is queued, so building ahead ties cash up. A batch that has not started can be cancelled for a 50% refund. Up to 10 batches can be queued. Finished satellites go into the stock of their generation. The Factory tab has a SATELLITE PLANT strip with stock, the batch in work and a button to queue a batch of each generation.
+- Using them: a draft loadout can only carry satellites that are in stock, so the +6 button stops at the stock and the Mission tab shows how many of the current generation are built. The cost of satellites is no longer part of the launch cost or the launch receipt: it was paid when they were built. Locking a loadout takes its satellites out of the stock (so two loadouts cannot use the same ones) and cancelling it puts them back. A draft that is launched by hand takes them at launch. A satellite that is lost with a failed launch is lost.
+- Shipping: satellites travel from the plant to the launch site as set out in 2.22 (0 days to Cape Canaveral, up to 3 to Vandenberg).
+- Saves: old saves start with no satellites in stock. A draft or locked loadout from an earlier build loses its satellite count.
+- Pacing: building ahead is a real decision now (cash tied up in stock, a Gen-1 batch costs less than one launch), and Gen-3 takes the longest, so a stream of Skyship launches with Gen-3 is limited by the plant (60 satellites is 10 batches, 30 days) unless stock was built ahead.
+
 3. Technology Tree
 Costs are in $M. "Flight" means the tech needs a prototype test flight (2.12). Prerequisites are as built.
 

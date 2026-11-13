@@ -201,6 +201,7 @@ test('manifests hold one destination: contracts follow the map selection', () =>
 
 test('satellites only ride to LEO shells', () => {
   const s = rich('gen1');
+  s.satStock[1] = 50;
   sim.setDest(s, 'gto');
   sim.adjustSats(s, 6);
   assert.equal(s.sats, 0);

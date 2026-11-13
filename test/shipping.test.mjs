@@ -120,6 +120,7 @@ test('drafting ships nothing; locking in accepts and starts the clock; cancel fo
 test('several loadouts can be locked at once and each launches when its own parts arrive', () => {
   const s = world();
   s.tech.add('gen1');
+  s.satStock[1] = 12;
   s.cash = 5000;
   const near = contract(s, { region: 'na' });
   const far = contract(s, { region: 'eu' });
@@ -156,6 +157,7 @@ test('satellite shipping depends on the site', () => {
   const s = world();
   s.tech.add('gen1');
   sim.acquireSite(s, 'vandenberg', 'lease');
+  s.satStock[1] = 12;
   sim.adjustSats(s, sim.SAT_BATCH);
   assert.equal(sim.shipDaysNeeded(s), 0, 'the plant is at Cape Canaveral');
   assert.equal(sim.launchBlocker(s), null, 'no shipping at Cape, so it can launch by hand');
@@ -165,4 +167,52 @@ test('satellite shipping depends on the site', () => {
   assert.match(sim.loadoutBlocker(s, s.locked[0]), /Satellites arrive in 3 day/);
   idle(s, 3);
   assert.equal(sim.loadoutBlocker(s, s.locked[0]), null);
+});
+
+test('satellites are built in the plant before they can be launched', () => {
+  const s = world();
+  s.tech.add('gen1');
+  sim.adjustSats(s, sim.SAT_BATCH);
+  assert.equal(s.sats, 0, 'nothing in stock to load');
+  const cash = s.cash;
+  assert.ok(sim.queueSats(s, 1));
+  assert.equal(+(cash - s.cash).toFixed(2), 2.1, 'paid when queued');
+  assert.equal(s.satStock[1], 0);
+  idle(s, 1);
+  assert.equal(s.satStock[1], 6);
+  sim.adjustSats(s, 12);
+  assert.equal(s.sats, 6, 'only what is built');
+  assert.equal(sim.queueSats(s, 2), false, 'Gen-2 is not researched');
+});
+
+test('batches build one at a time, and an unstarted batch cancels for half', () => {
+  const s = world();
+  s.tech.add('gen1'); s.tech.add('gen2');
+  sim.queueSats(s, 2); sim.queueSats(s, 1);
+  assert.equal(s.satQueue.length, 2);
+  idle(s, 1);
+  assert.equal(s.satStock[2], 0, 'a Gen-2 batch takes two days');
+  assert.equal(sim.cancelSats(s, s.satQueue[0].id), false, 'work has started');
+  const cash = s.cash;
+  assert.ok(sim.cancelSats(s, s.satQueue[1].id));
+  assert.equal(+(s.cash - cash).toFixed(2), 1.05);
+  idle(s, 1);
+  assert.equal(s.satStock[2], 6);
+});
+
+test('locking sets satellites aside and cancelling returns them; launching spends them', () => {
+  const s = world();
+  s.tech.add('gen1');
+  s.satStock[1] = 12;
+  sim.adjustSats(s, 12);
+  assert.ok(sim.lockLoadout(s));
+  assert.equal(s.satStock[1], 0);
+  sim.adjustSats(s, 6);
+  assert.equal(s.sats, 0, 'the locked ones cannot be used twice');
+  assert.ok(sim.cancelLoadout(s, s.locked[0].id));
+  assert.equal(s.satStock[1], 12);
+  sim.adjustSats(s, 6);
+  assert.equal(sim.launchBlocker(s), null);
+  assert.ok(sim.launch(s).ok);
+  assert.equal(s.satStock[1], 6, 'a hand launch takes six from the stock');
 });

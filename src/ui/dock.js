@@ -3,7 +3,7 @@ import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
   PLANT_COST, PLANT_MAX, MARKETS, PLANS, SATS, WELL_COST, MAX_WELLS, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
-  PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
+  SAT_BATCH_DAYS, PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
 import * as B from '../base.js';
@@ -294,10 +294,10 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
       size: 12, color: hex(s.depot.prop >= need && s.rocket === 'skyship' ? COL.good : COL.warn),
     });
   } else if (gen1 && satsOk) {
-    ui.label(X, ry + 3, `Payout $${t.payout}M  ·  Skylink sats ${s.sats}`, { size: 12, color: hex(COL.good) });
+    ui.label(X, ry + 3, `Payout $${t.payout}M  ·  sats ${s.sats} (${s.satStock[s.satGen]} ${SATS[s.satGen].name} built)`, { size: 12, color: hex(COL.good) });
     ui.button(X + 250, ry, 170, 22, SATS[s.satGen].name, () => actions.cycleSatGen(), { size: 11, hint: `Click to change the satellite generation. ${SATS[s.satGen].capacity}k subscribers each, ${SATS[s.satGen].mass} t, $${SATS[s.satGen].cost}M.` });
     ui.button(X + 428, ry, 50, 22, `-${sim.SAT_BATCH}`, () => sim.adjustSats(s, -sim.SAT_BATCH), { enabled: s.sats > 0, size: 11 });
-    ui.button(X + 486, ry, 50, 22, `+${sim.SAT_BATCH}`, () => sim.adjustSats(s, sim.SAT_BATCH), { enabled: s.sats < sim.rocketDef(s).sats, size: 11 });
+    ui.button(X + 486, ry, 50, 22, `+${sim.SAT_BATCH}`, () => sim.adjustSats(s, sim.SAT_BATCH), { enabled: s.sats < Math.min(sim.rocketDef(s).sats, s.satStock[s.satGen]), size: 11, hint: s.satStock[s.satGen] ? undefined : 'No satellites built: queue a batch in the Factory tab.' });
   } else {
     ui.label(X, ry + 3, `Payout $${t.payout}M${gen1 ? '  ·  Skylink satellites ride to LEO or Polar LEO' : '  ·  Research Skylink Gen-1 for satellite batches'}`, {
       size: 12, color: COL.dimText,
@@ -385,7 +385,7 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
   });
   if (site.queue.length > 2) ui.label(X, Y + 132 + 2 * 26, `+${site.queue.length - 2} more queued`, { size: 11, color: COL.dimText });
 
-  const by = Y + 196;
+  const by = Y + 188;
   ui.heading(X, by, 'BUILD  ·  metal from this yard, shortages bought at +10%');
   const types = Object.keys(ROCKETS);
   const cw = (W - 8) / 2;
@@ -394,13 +394,30 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
     const blocker = sim.buildBlocker(s, id, fid);
     const { cost, days } = sim.buildCostAt(id, fid);
     const x = X + (i % 2) * (cw + 8);
-    const y = by + 18 + Math.floor(i / 2) * 27;
+    const y = by + 16 + Math.floor(i / 2) * 23;
     const nm = r.role === 'module' ? r.name : r.short;
-    ui.button(x, y, cw, 25, blocker === 'Locked' ? `${nm}: locked` : `${nm}  $${cost}M · ${days}d`, () => actions.queueBuild(id, fid), {
+    ui.button(x, y, cw, 21, blocker === 'Locked' ? `${nm}: locked` : `${nm}  $${cost}M · ${days}d`, () => actions.queueBuild(id, fid), {
       enabled: !blocker, size: 12,
       hint: blocker && blocker !== 'Locked' ? `${r.name}: ${blocker}` : `${r.name}: ${r.payload ? `${r.payload} t, ` : ''}rated ${r.coreLife} flight${r.coreLife > 1 ? 's' : ''}. ${r.steel} t of ${r.metal === 'aluminum' ? 'aluminum' : 'steel'}.`,
     });
-    if (blocker !== 'Locked') icon(ui, x + 6, y + 2, 13, 21, id);
+    if (blocker !== 'Locked') icon(ui, x + 6, y + 1, 11, 19, id);
+  });
+  if (s.tech.has('gen1')) renderSatPlant(ui, s, X, by + 22 + Math.ceil(types.length / 2) * 23, W, actions);
+}
+
+// Skylink satellites are built ahead of time, one batch at a time, and kept in stock (GDD 2.23).
+function renderSatPlant(ui, s, X, Y, W, actions) {
+  const stock = [1, 2, 3].filter((g) => s.tech.has(SATS[g].tech)).map((g) => `${SATS[g].name} ${s.satStock[g]}`).join(' · ');
+  const q = s.satQueue[0];
+  ui.heading(X, Y, `SATELLITE PLANT  ·  built: ${stock}`);
+  ui.label(X + W, Y, q ? `${SATS[q.gen].name} batch ${q.daysLeft}d${s.satQueue.length > 1 ? `  ·  +${s.satQueue.length - 1} queued` : ''}` : 'idle', { size: 11, right: true, color: q ? COL.dimText : hex(COL.warn) });
+  const gens = [1, 2, 3].filter((g) => s.tech.has(SATS[g].tech));
+  const bw = (W - 8 * (gens.length - 1)) / gens.length;
+  gens.forEach((g, i) => {
+    const blocker = sim.satBuildBlocker(s, g);
+    ui.button(X + i * (bw + 8), Y + 15, bw, 22, `${SATS[g].name} x${sim.SAT_BATCH}  $${sim.satBatchCost(g)}M · ${SAT_BATCH_DAYS[g]}d`, () => actions.queueSats(g), {
+      size: 11, enabled: !blocker, hint: blocker ?? `Queue ${sim.SAT_BATCH} ${SATS[g].name} satellites. They wait in stock until a loadout takes them.${SATS[g].only ? ' Gen-3 only flies on a Skyship.' : ''}`,
+    });
   });
 }
 

@@ -181,6 +181,9 @@ export const SATS = {
   2: { name: 'Gen-2 Mini', mass: 0.8, volume: 1.8, cost: 0.7, capacity: 1.2, life: 5 * 365, tech: 'gen2' },
   3: { name: 'Gen-3', mass: 2.0, volume: 3.5, cost: 2, capacity: 5, life: 7 * 365, tech: 'gen3', only: ['skyship'] },
 };
+// The satellite plant builds one batch of six at a time (GDD 2.23): days per batch by generation.
+export const SAT_BATCH_DAYS = { 1: 1, 2: 2, 3: 3 };
+export const SAT_QUEUE_MAX = 10;
 export const OVERHEAD_PER_DAY = 0.12; // $M payroll and facilities
 export const CASH_FLOOR = 5; // $M overhead never drains cash below this
 

@@ -3,7 +3,7 @@ import {
   ROCKETS, SATS, REGIONS, MARKETS, SUB_GROWTH, CHURN, PLANS, CUSTOMERS, TECH,
   OVERHEAD_PER_DAY, CASH_FLOOR, BEHEMOTH_LEARNING, BEHEMOTH_MIN_RISK,
   DEPOT_CAP, TANKER_LOAD, BOILOFF_PER_DAY,
-  DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, SHIP_DAYS, SAT_SHIP_DAYS,
+  DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, SHIP_DAYS, SAT_SHIP_DAYS, SAT_BATCH_DAYS, SAT_QUEUE_MAX,
   SITES, SITE_IDS, LEASE_FEE, BAY_FEE, BAY_RENT_DEPOSIT, BAY_BUY_COST, MAX_BAYS, PAD_COSTS, TOWER_COST, PAD_TURN,
   PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND, DRONESHIP_FEE, DRONESHIP_COST, MAX_DRONESHIPS, DRONESHIP_CYCLE,
   DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
@@ -77,6 +77,8 @@ export function createState() {
     marsRoute: 'direct', // direct (from Earth) | moon (a Moon-built Skyship leaves the base)
     constellation: { 1: 0, 2: 0, 3: 0 }, // active Skylink satellites by generation, one global pool
     satGen: 1, // generation of the next satellite batch
+    satStock: { 1: 0, 2: 0, 3: 0 }, // built satellites waiting at the plant (GDD 2.23)
+    satQueue: [], // batches in the satellite plant: { id, gen, daysLeft, total, cost }
     markets: Object.fromEntries(MARKETS.map((m) => [m.id, { status: 'locked', readyDay: 0, subs: 0 }])),
     plan: 'standard',
     depot: { built: false, prop: 0 },
@@ -200,6 +202,10 @@ export function deserialize(json) {
     delete s.v;
     delete s.lock; // an earlier build held a single locked loadout
     s.locked = Array.isArray(o.locked) ? o.locked : [];
+    for (const l of s.locked) if (!l.satsHeld) l.sats = 0; // satellites used to be bought at launch, not built and held
+    s.satStock = { 1: Math.max(0, +o.satStock?.[1] || 0), 2: Math.max(0, +o.satStock?.[2] || 0), 3: Math.max(0, +o.satStock?.[3] || 0) };
+    if (!Array.isArray(s.satQueue)) s.satQueue = [];
+    if (!o.satStock) s.sats = 0;
     for (const c of s.contracts ?? []) if (!c.lockId) delete c.acceptedDay; // older saves started shipping on load
     s.constellation = { 1: Math.max(0, +o.constellation?.[1] || 0), 2: Math.max(0, +o.constellation?.[2] || 0), 3: Math.max(0, +o.constellation?.[3] || 0) };
     if (!SATS[s.satGen] || !s.tech.has(SATS[s.satGen].tech)) s.satGen = 1;
@@ -468,7 +474,8 @@ export const satsReady = (s) => (s._lockDay ?? s.day) + (s.sats ? satShipDays(s.
 // draft, so another one can be built straight away.
 export function lockLoadout(s) {
   if (rocketDef(s).role !== 'payload' || (!s.manifest.length && !s.sats)) return false;
-  const L = { id: s.nextId++, day: s.day, rocket: s.rocket, dest: s.dest, site: s.site, origin: s.origin, manifest: [...s.manifest], sats: s.sats, satGen: s.satGen };
+  const L = { id: s.nextId++, day: s.day, rocket: s.rocket, dest: s.dest, site: s.site, origin: s.origin, manifest: [...s.manifest], sats: s.sats, satGen: s.satGen, satsHeld: true };
+  s.satStock[s.satGen] -= s.sats; // the satellites are set aside for this loadout
   for (const c of s.contracts) if (s.manifest.includes(c.id)) { c.acceptedDay = s.day; c.lockId = L.id; }
   s.locked.push(L);
   s.manifest = [];
@@ -479,7 +486,8 @@ export function lockLoadout(s) {
 export function cancelLoadout(s, id) {
   const i = s.locked.findIndex((l) => l.id === id);
   if (i < 0) return false;
-  s.locked.splice(i, 1);
+  const [L] = s.locked.splice(i, 1);
+  if (L.satsHeld) s.satStock[L.satGen] += L.sats;
   for (const c of s.contracts) if (c.lockId === id) { delete c.lockId; delete c.acceptedDay; }
   return true;
 }
@@ -844,6 +852,42 @@ export function queueBuild(s, type, siteId = 'cape') {
   return true;
 }
 
+// ---- the satellite plant (GDD 2.23) ---------------------------------------------------------
+
+export const satBatchCost = (gen) => +(SAT_BATCH * SATS[gen].cost).toFixed(2);
+export function satBuildBlocker(s, gen) {
+  if (!SATS[gen] || !s.tech.has(SATS[gen].tech)) return 'Research it first';
+  if (s.satQueue.length >= SAT_QUEUE_MAX) return 'Plant queue is full';
+  if (!canSpend(s, satBatchCost(gen))) return 'Not enough cash';
+  return null;
+}
+
+export function queueSats(s, gen) {
+  if (satBuildBlocker(s, gen)) return false;
+  const cost = satBatchCost(gen);
+  s.cash -= cost;
+  s.satQueue.push({ id: s.nextId++, gen, daysLeft: SAT_BATCH_DAYS[gen], total: SAT_BATCH_DAYS[gen], cost });
+  return true;
+}
+
+export function cancelSats(s, id) {
+  const q = s.satQueue.find((x) => x.id === id);
+  if (!q || q.daysLeft < q.total) return false; // work has started
+  s.satQueue = s.satQueue.filter((x) => x !== q);
+  s.cash += +(q.cost * CANCEL_REFUND).toFixed(2);
+  return true;
+}
+
+function tickSatPlant(s) {
+  const q = s.satQueue[0];
+  if (!q) return;
+  q.daysLeft--;
+  if (q.daysLeft > 0) return;
+  s.satQueue.shift();
+  s.satStock[q.gen] += SAT_BATCH;
+  note(s, `${SAT_BATCH} ${SATS[q.gen].name} satellites came off the plant line.`);
+}
+
 export function cancelBuild(s, siteId, id) {
   const site = s.sites[siteId];
   const q = site.queue.find((x) => x.id === id);
@@ -904,14 +948,14 @@ export const satGenOk = (s, g) => !!SATS[g] && s.tech.has(SATS[g].tech) && (!SAT
 export function cycleSatGen(s) {
   for (let i = 1; i <= 3; i++) {
     const g = ((s.satGen - 1 + i) % 3) + 1;
-    if (satGenOk(s, g)) { s.satGen = g; return; }
+    if (satGenOk(s, g)) { s.satGen = g; s.sats = Math.min(s.sats, s.satStock[g]); return; }
   }
 }
 
 export function adjustSats(s, delta) {
   if (!satGenOk(s, s.satGen)) s.satGen = 1;
   if (!s.tech.has('gen1') || rocketDef(s).role !== 'payload' || !SAT_DESTS.includes(s.dest)) return;
-  s.sats = Math.max(0, Math.min(rocketDef(s).sats, s.sats + delta));
+  s.sats = Math.max(0, Math.min(rocketDef(s).sats, s.satStock[s.satGen], s.sats + delta));
 }
 
 // ---- economy ---------------------------------------------------------------
@@ -1025,7 +1069,6 @@ export function launchCosts(s) {
   if (site?.status === 'leased') add('Pad lease', LEASE_FEE);
   if (site?.bays.length && rec !== 'expend' && r.role !== 'depot' && r.role !== 'module' && bestBay(site).tenure === 'rented') add('Hangar rental', BAY_FEE);
   if (rec === 'drone') add('Droneship', DRONESHIP_FEE);
-  if (r.role === 'payload') add(`Skylink ${SATS[s.satGen].name} satellites`, s.sats * SATS[s.satGen].cost);
   const total = +items.reduce((n, i) => n + i.amt, 0).toFixed(2);
   return { items, total, fuel: { ...need, parts: buy.parts, fromTanks: need.t - short, short } };
 }
@@ -1087,6 +1130,7 @@ export function launchBlocker(s) {
     if (!s.manifest.length && !s.sats) return 'Manifest is empty';
     if (t.mass > cap.mass) return 'Over payload mass limit';
     if (t.volume > cap.volume) return 'Over fairing volume limit';
+    if (s.sats && s._lockDay == null && s.sats > s.satStock[s.satGen]) return `Only ${s.satStock[s.satGen]} ${SATS[s.satGen].name} satellites built: queue more in the Factory tab`;
     if (s.sats && !SAT_DESTS.includes(s.dest)) return 'Skylink satellites fly to LEO or Polar LEO';
     if (s.sats && !satGenOk(s, s.satGen)) return `${SATS[s.satGen].name} satellites need a ${SATS[s.satGen].only ? 'Skyship' : 'researched generation'}`;
     if (s.sats && origin !== 'earth') return 'Skylink satellites launch from Earth';
@@ -1122,6 +1166,7 @@ export function launchBlocker(s) {
 export function launch(s) {
   const reason = launchBlocker(s);
   if (reason) return { ok: false, reason };
+  const held = s._lockDay != null; // a locked loadout's satellites were taken from the stock when it was locked
   delete s._lockDay;
   const r = rocketDef(s);
   const v = nextVehicle(s, s.rocket);
@@ -1162,6 +1207,7 @@ export function launch(s) {
     trip.payout = t.payout;
     trip.sats = s.sats;
     trip.satGen = s.satGen;
+    if (!held) s.satStock[s.satGen] -= s.sats;
     const need = moon ? 0 : tliNeed(s);
     s.contracts = s.contracts.filter((c) => !s.manifest.includes(c.id));
     s.manifest = [];
@@ -1446,6 +1492,7 @@ export function tick(s) {
     site.queue = site.queue.filter((q) => q.daysLeft > 0);
   }
   tickPlants(s);
+  tickSatPlant(s);
 
   s.income = dailyRevenue(s);
   s.cash += s.income;

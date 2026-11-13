@@ -2,6 +2,7 @@
 // and reports the day each goal chapter (GDD 2.21) is done. usage: node tools/campaign-bot.mjs [runs] [days]
 // DEBUG=1 prints each run's end state.
 import * as sim from '../src/sim.js';
+const SATS_TECH = { 1: 'gen1', 2: 'gen2', 3: 'gen3' };
 import { CHAPTERS, colonyCheck } from '../src/goals.js';
 import * as B from '../src/base.js';
 import { MODULES, MARKETS, TECH, ROCKETS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, DESTINATIONS } from '../src/data.js';
@@ -126,6 +127,13 @@ for (let seed = 0; seed < N; seed++) {
       if (count('skyshipTanker') < (nextType ? 6 : 2) && sim.canSpend(s, 60)) sim.queueBuild(s, 'skyshipTanker');
     }
     for (const c of s.contracts) c.acceptedDay ??= s.day; // the bot accepts every contract as it appears
+    // Keep the satellite plant busy: a few batches of each researched generation, while cash allows.
+    for (const g of [1, 2, 3]) {
+      const want = g === 1 ? 24 : 48;
+      const inQ = s.satQueue.filter((q) => q.gen === g).length * sim.SAT_BATCH;
+      const keepCash = (typeof nextT !== 'undefined' && nextT ? nextT.cost + 12 : 15) + 10;
+      if (s.tech.has(SATS_TECH[g]) && s.satQueue.length < 3 && s.satStock[g] + inQ < want && s.cash > keepCash + sim.satBatchCost(g)) sim.queueSats(s, g);
+    }
     let launchedToday = 0;
     for (let k = 0; k < cape().pads.length; k++) {
       // late game duties first: module ships, Mars cargo, the way home, and a full depot
@@ -177,7 +185,7 @@ for (let seed = 0; seed < N; seed++) {
       for (const type of cargoTypes) {
         if (!sim.nextVehicle(s, type)) continue;
         sim.setRocket(s, type); s.manifest = []; s.sats = 0;
-        if (GEN) { s.satGen = 1; for (const g of [3, 2]) if (sim.satGenOk(s, g)) { s.satGen = g; break; } }
+        if (GEN) { s.satGen = 1; for (const g of [3, 2]) if (sim.satGenOk(s, g) && s.satStock[g] > 0) { s.satGen = g; break; } }
         s.recovery = !s.tech.has('landing') ? 'expend' : type === 'peregrineHeavy' && s.tech.has('droneship') && sim.freeDroneship(s) >= 0 ? 'drone' : 'rtls';
         const cap = sim.capacity(s);
         let bestPlan = null;

@@ -126,7 +126,8 @@ test('the Gen button cycles through researched generations; a Gen-2 batch is hea
   s.satGen = 2;
   s.sats = 24;
   assert.ok(Math.abs(sim.manifestTotals(s).mass - 24 * SATS[2].mass) < 1e-9);
-  assert.ok(sim.launchCosts(s).items.some((i) => /Gen-2 Mini/.test(i.label) && Math.abs(i.amt - 24 * 0.7) < 0.01));
+  assert.ok(!sim.launchCosts(s).items.some((i) => /satellites/.test(i.label)), 'satellites are paid for when they are built');
+  assert.equal(sim.satBatchCost(2), +(6 * 0.7).toFixed(2));
 });
 
 test('mobile markets need Gen-2 research and Gen-2 or newer satellites, and load the network lightly', () => {
