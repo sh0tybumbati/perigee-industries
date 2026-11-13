@@ -19,3 +19,8 @@ export const widthFor = (w, h) => sizeFor(w, h).W;
 const here = typeof window === 'undefined' ? { phone: false, H: 720, W: BASE_W } : sizeFor(window.innerWidth, window.innerHeight);
 export const { phone: PHONE, H, W } = here;
 export const EXTRA = W - BASE_W;
+
+// With no bottom strip the panels run to the foot of the canvas; a phone is a shorter canvas.
+export const PANEL_H = PHONE ? 466 : 652;
+export const MAP_H = PANEL_H - 34;
+export const MAP_BOTTOM = 90 + MAP_H; // where the map ends

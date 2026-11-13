@@ -157,7 +157,7 @@ The primary screen is the map view. Earth, Moon and Mars each get a 3D planet mo
 Orbits are drawn as 3D rings around the planet. Landing sites are 2D pins on the surface. Both are clickable.
 Active flights are 2D pins with a dashed trail from the launch site (or the arrival direction) to their destination.
 Past flights stay on the map as faded dashed lines, so the history of the company's flights is readable at a glance. Lost flights are drawn in red.
-A transit lane along the bottom shows flights that are between bodies, with their arrival times.
+A transit lane (2.25) shows flights between bodies, as a ribbon along the top of the map once a flight has first gone beyond Earth orbit.
 
 2.7 Contracts vs. Building the Base
 The central tension of the game: the same Skyship capacity can carry a paying customer's payload or the company's own base modules. Customer contracts fund the base, and every flight spent on the base is a flight not earning money. Base modules are delivered to a chosen landing site on the Moon map, and the base is built up there following the dependencies in 2.4. Mars follows the same pattern after the Mars Transfer tech.
@@ -376,7 +376,7 @@ Milestones: first module on Mars, Mars base founded, first Mars methalox, first 
 
 2.18 Phone Layout and Depot Docking (Phase 11)
 Phone layout: on a short landscape screen (a phone, under about 560 pixels of height) the layout changes so that everything is larger.
-- The bottom strip (transit lane, depot bar, flights in transit and mission log) is hidden, which shortens the canvas from 720 to 530 pixels and enlarges everything by about a third. A Status button in the top bar opens the strip as a panel over the lower half of the screen, and a second tap closes it.
+- The canvas is shortened from 720 to 530 pixels, which enlarges everything by about a third. The depot and the mission log are dock tabs (2.25), so a phone needs no separate status panel.
 - The top bar drops the sparkline and the day count to make room, and the smallest text and buttons are made a little bigger.
 - Tablets and desktops keep the full layout.
 - View buttons (all devices): Split, Map and Dock sit at the right end of the map's tab row. Split is the usual map-and-dock layout. Map gives the globe or base grid the whole width and hides the dock. Dock hides the map and centres the dock panel, and the buttons move to the free margin on its left. The choice is not saved. The globe, its clip and the base grid are resized to the panel, so pins, rings and the base view all stay lined up.
@@ -522,22 +522,19 @@ Costs are in $M. "Flight" means the tech needs a prototype test flight (2.12). P
 | Mars | Mars Transfer Vehicle | 2000 | Lunar Ice Mining, Moon Habitat Core | Mars orbit, sites, bases and routes (2.9, 2.17) |
 
 4. User Interface Architecture
-The primary screen is the map view, with a docked control panel and a bottom strip for transit and logs.
+The primary screen is the map view with a docked control panel. There is no bottom strip: both panels run to the foot of the screen (2.25).
 
 +------------------------------------------------+-----------------------------------------+
-|  MAP VIEW  [ Earth | Moon | Mars ]              |  DOCK  [ Mission | Fleet | Factory |     |
-|  3D planet, drag to rotate                      |          R&D | Skylink ]                |
-|  Orbit rings + landing-site pins (click)        |  Mission: destination, vehicle,          |
-|  Active flights: pins with dashed trails        |   contracts for that destination,        |
-|  Past flights: faded dashed lines               |   manifest bars, LAUNCH                  |
-+------------------------------------------------+  Fleet: hulls, states, pads              |
-|  TRANSIT LANE: Earth --- Moon --- Mars          |  Factory: production queue, lines        |
-|  Flights en route and arrival times             +-----------------------------------------+
-|                                                 |  LEO DEPOT BAR + MISSION LOG             |
+|  [ Earth | Moon | Mars ]        [Split|Map|Dock]|  [ icon tabs: Mission Fleet Factory Sites |
+|  +- transit lane ribbon (after first lunar -+  |   Base R&D Skylink Depot Log ]          |
+|  |  flight): Earth --- Moon --- Mars        |  |                                         |
+|  3D planet, drag to rotate                      |  The tab's panel, full height           |
+|  Orbit rings + landing-site pins (click)        |                                         |
+|  Site card (Sites/Factory)        Goal strip    |                                         |
 +------------------------------------------------+-----------------------------------------+
 
 Map layers: the 3D planet model (Three.js, rendered to a texture inside Phaser), 2D pins and labels, and 2D dashed flight trails. Pins on the back of the planet are hidden.
-Dock tabs: Mission (planning and launch), Fleet (hulls and pads), Factory (queue and lines), Sites (launch sites, infrastructure and supply), R&D (tech tree), Skylink (constellation, service plan and markets) and, once a base exists, Base.
+Dock tabs: Mission (planning and launch), Fleet (hulls and pads), Factory (queue and lines), Sites (launch sites, infrastructure and supply), R&D (tech tree), Skylink (constellation, service plan and markets), once a base exists, Base, once the LEO depot is deployed, Depot, and Log.
 Base view: once a base exists the Moon tab gains a Base button. It zooms the 3D Moon into the landing site and fades to a top-down grid of the base, where modules are drawn as tubes, ducts as ribbed hoses, buried modules under regolith and drones moving between pits and modules. A Base tab in the dock shows power, crew, stockpile, pending modules, drone focus and the Fabricator queue.
 5. Sound & Visual Style Guide
 Visual Style: Vector-based 2D flat isometric UI with clean line art, high-contrast HUD overlays, and subtle particle telemetry effects for launches.
@@ -557,4 +554,11 @@ Phase 12: Skylink as one global constellation, licensed markets, capacity versus
 Phase 13: satellite generations Gen-1/2/3 and mobile carrier markets (2.20). Save version 10.
 Playtest numbers (pacing bot, 10 runs, medians; day 1 is 1 Jan 2010): Booster Landing day 131, Rapid Reflight 629, Behemoth 1642, Operational Skyship 1970, first lunar flight 2291. About 52 launches a year, about 9 lost vehicles in 2500 days. With the Gen-2 path (GEN=1) the first mobile market only opens near day 2731.
 Phase 14: goals and an endgame (2.21): seven chapters, a goal strip and Goals panel, the 180-day colony win and an ending screen. Save version 11.
+2.25 Screen Layout: Lane, Depot and Log (Phase 15)
+The bottom strip is gone. The map and the dock each run the full height of the screen, which gives the dock room for about eight contracts at once and the map more space.
+- Transit lane: a translucent ribbon along the top of the map (Earth, Moon and Mars, with flights gliding between them). It stays hidden until a flight first goes beyond Earth orbit (saved as farFlown, and set from past trips on old saves), and is hidden in the Dock-only view. The Moon and Mars buttons above the map show how many flights are heading there.
+- Dock tabs are icons (rocket, rockets, factory, pin, dome, flask, satellite, tank, list) in a row of 56 px buttons, so up to nine fit. Hover for the name. The tutorial still highlights the tab it wants.
+- Depot tab: appears only once the depot is deployed. It shows the stored propellant big, a tank gauge with a division per tanker load, boil-off, tankers en route, and what the selected mission needs.
+- Log tab: flights in transit on top, then the mission log, newest first, colour-coded (red problems, amber warnings, green good news), with All / Good news / Problems filters, mouse wheel or arrow scrolling, and an amber dot on the tab when new entries arrived. The log keeps the last 200 entries.
+
 Next (design in progress): a launch-cadence and Direct-to-Cell gating retune, and crew (a capsule, crew contracts and base crew rotation).

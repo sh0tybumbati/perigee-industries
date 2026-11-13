@@ -6,21 +6,22 @@ import { MapLayer } from '../map/MapLayer.js';
 import { BaseLayer } from '../map/BaseLayer.js';
 import { COL, FONT, UI, hex } from '../ui/ui.js';
 import { renderMission, renderFleet, renderFactory, renderSites, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
-import { Lane, renderFlights, renderDepotAndLog } from '../ui/bottom.js';
+import { Lane } from '../ui/lane.js';
+import { renderDepot, renderLog, logEntries } from '../ui/panels.js';
+import { drawIcon } from '../ui/icons.js';
 import { FX } from '../fx.js';
 import { renderSiteScene } from '../ui/art.js';
 import { CHAPTERS, COLONY_DAYS, currentChapter, chapterDone, goalProgress } from '../goals.js';
-import { W, H, EXTRA, PHONE } from '../layout.js';
-
-const STATUS_SHIFT = 190; // on a phone the bottom strip is a panel over the lower half of the screen
+import { W, H, EXTRA, PHONE, PANEL_H, MAP_H } from '../layout.js';
 import * as audio from '../audio.js';
 
 const SAVE_KEY = 'perigee-industries-save';
-const MAP = { x: 10, y: 90, w: 690 + EXTRA, h: 432 };
+const MAP = { x: 10, y: 90, w: 690 + EXTRA, h: MAP_H };
 const DOCK = { x: 722 + EXTRA, y: 98, w: 536 };
 // how far the dock slides left when it has the whole screen to itself
 const DOCK_SHIFT = { dock: () => Math.round((W - 560) / 2) - (710 + EXTRA) };
-const TABS = [['mission', 'Mission'], ['fleet', 'Fleet'], ['factory', 'Factory'], ['sites', 'Sites'], ['base', 'Base'], ['tech', 'R&D'], ['skylink', 'Skylink']];
+// Icons, not words, so nine tabs fit; the name shows when the pointer is over one. Depot appears once the depot exists (GDD 2.25).
+const TABS = [['mission', 'Mission'], ['fleet', 'Fleet'], ['factory', 'Factory'], ['sites', 'Sites'], ['base', 'Base'], ['tech', 'R&D'], ['skylink', 'Skylink'], ['depot', 'LEO depot'], ['log', 'Mission log']];
 const TICK_MS = 2400;
 
 export class OpsScene extends Phaser.Scene {
@@ -64,10 +65,7 @@ export class OpsScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-Z', () => this.act(() => this.undoBase()));
     this.input.keyboard?.on('keydown-R', () => this.act(() => { if (this.baseMode.kind === 'place') this.baseMode.rot ^= 1; }));
     this.input.keyboard?.on('keydown-ESC', () => this.act(() => { this.baseMode = { kind: 'idle', rot: 0 }; }));
-    // The bottom strip: always on screen on desktop and tablet, a toggled panel on a phone.
-    this.statusLayer = this.add.container(0, -STATUS_SHIFT).setDepth(300).setVisible(!PHONE);
-    if (PHONE) { this.statusLayer.setVisible(false); this.buildStatusPanel(); }
-    this.lane = new Lane(this, PHONE ? this.statusLayer : null);
+    this.lane = new Lane(this, MAP);
     this.fx = new FX(this, MAP);
     this.fx.pinPos = (id) => (this.baseView === 'closed' && this.map.bodyId === 'earth' ? this.map.pinPos(id) : null);
     sim.setEventSink((e) => this.onEvent(e));
@@ -75,10 +73,11 @@ export class OpsScene extends Phaser.Scene {
     // The mouse wheel over the Mission tab scrolls the contract board.
     this.contractScroll = 0;
     this.input.on('wheel', (p, _o, _dx, dy) => {
-      if (this.tab !== 'mission' || this.view === 'map') return;
+      if ((this.tab !== 'mission' && this.tab !== 'log') || this.view === 'map') return;
       const left = DOCK.x + (this.dockC?.x ?? 0);
       if (p.x < left || p.x > left + DOCK.w) return;
-      this.actions.scrollContracts(Math.sign(dy));
+      if (this.tab === 'log') this.actions.scrollLog(Math.sign(dy));
+      else this.actions.scrollContracts(Math.sign(dy));
     });
     this.setupKeys();
     this.cameras.main.setBounds(0, 0, W, H);
@@ -87,7 +86,6 @@ export class OpsScene extends Phaser.Scene {
     this.hint = this.add.text(MAP.x + 10, MAP.y + MAP.h - 20, '', { fontFamily: FONT, fontSize: 12, color: hex(COL.accent), stroke: '#05070d', strokeThickness: 3 });
     this.uiHelper = new UI(this, this.ui, (fn) => this.act(fn), (t) => this.hint.setText(t));
     this.dockUi = new UI(this, this.dockC, (fn) => this.act(fn), (t) => this.hint.setText(t));
-    this.statusUi = PHONE ? new UI(this, this.statusDyn, (fn) => this.act(fn), (t) => this.hint.setText(t)) : null;
     this.map.setBody(DESTINATIONS[this.s.dest].body);
     this.map.focus(this.s.dest);
     this.lastDest = this.s.dest;
@@ -109,10 +107,9 @@ export class OpsScene extends Phaser.Scene {
     const g = (this.frameG ??= this.add.graphics());
     g.clear();
     const panels = [];
-    if (this.view === 'split') panels.push([10, 58, 690 + EXTRA, 466], [710 + EXTRA, 58, 560, 466]);
-    else if (this.view === 'map') panels.push([10, 58, W - 20, 466]);
-    else panels.push([DOCK_SHIFT.dock() + 710 + EXTRA, 58, 560, 466]);
-    if (!PHONE) panels.push([10, 530, 690 + EXTRA, 180], [710 + EXTRA, 530, 560, 180]);
+    if (this.view === 'split') panels.push([10, 58, 690 + EXTRA, PANEL_H], [710 + EXTRA, 58, 560, PANEL_H]);
+    else if (this.view === 'map') panels.push([10, 58, W - 20, PANEL_H]);
+    else panels.push([DOCK_SHIFT.dock() + 710 + EXTRA, 58, 560, PANEL_H]);
     for (const [x, y, w, h] of panels) {
       g.fillStyle(COL.panel, 0.92).fillRect(x, y, w, h);
       g.lineStyle(1, COL.line).strokeRect(x + 0.5, y + 0.5, w, h);
@@ -280,7 +277,7 @@ export class OpsScene extends Phaser.Scene {
     this.updateGesture();
     this.map.update(delta, this.dayFrac());
     this.base.update(time);
-    this.lane.update(this.s, this.dayFrac());
+    this.lane.update(this.s, this.dayFrac(), this.view !== 'dock');
   }
 
   // ---- base view ------------------------------------------------------------
@@ -373,6 +370,10 @@ export class OpsScene extends Phaser.Scene {
     const s = this.s;
     return {
       pickRocket: (id) => sim.setRocket(s, id),
+      logScroll: this.logScroll ?? 0,
+      logFilter: this.logFilter ?? 'all',
+      setLogFilter: (f) => { this.logFilter = f; this.logScroll = 0; this.render(); },
+      scrollLog: (d) => { this.logScroll = Math.max(0, Math.min(Math.max(0, logEntries(s, this.logFilter ?? 'all').length - 1), (this.logScroll ?? 0) + d * 3)); this.render(); },
       contractScroll: this.contractScroll ?? 0,
       scrollContracts: (d) => { this.contractScroll = Math.max(0, Math.min(Math.max(0, s.contracts.length - 5), (this.contractScroll ?? 0) + d)); this.render(); },
       toggleContract: (id) => {
@@ -462,9 +463,7 @@ export class OpsScene extends Phaser.Scene {
     const ctx = { mode: this.baseMode, sub: this.baseSub, view: this.baseView, base: this.activeBase(), body: this.baseBody, factorySite: this.factorySite, siteView: this.siteView, skyTab: this.skyTab };
     if (this.view === 'map') { /* the dock is hidden */ }
     else if (this.tab === 'base') renderBase(dui, s, x, y, w, actions, ctx);
-    else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink })[this.tab](dui, s, x, y, w, actions, ctx);
-    if (PHONE) this.renderStatus(s);
-    else { renderFlights(ui, s); renderDepotAndLog(ui, s); }
+    else ({ mission: renderMission, fleet: renderFleet, factory: renderFactory, sites: renderSites, tech: renderTech, skylink: renderSkylink, depot: renderDepot, log: renderLog })[this.tab](dui, s, x, y, w, actions, ctx);
     if (this.view !== 'dock' && (this.tab === 'sites' || this.tab === 'factory')) renderSiteScene(ui, s, this.tab === 'sites' ? (this.siteView && s.sites[this.siteView] ? this.siteView : s.site) : this.factorySite);
     if (step) this.renderCoach(ui, step);
     else if (this.view !== 'dock') this.renderGoalStrip(s, ui);
@@ -555,24 +554,6 @@ export class OpsScene extends Phaser.Scene {
     }
   }
 
-  // ---- phone: the status panel -----------------------------------------------------------
-  buildStatusPanel() {
-    const g = this.add.graphics();
-    g.fillStyle(COL.panel, 0.98).fillRect(10, 530, 690 + EXTRA, 180).fillRect(710 + EXTRA, 530, 560, 180);
-    g.lineStyle(2, COL.accent).strokeRect(10.5, 530.5, 690 + EXTRA, 180).strokeRect(710.5 + EXTRA, 530.5, 560, 180);
-    const block = this.add.zone(0, 530, W, 190).setOrigin(0).setInteractive(); // taps on the panel stay on the panel
-    this.statusDyn = this.add.container(0, 0);
-    this.statusLayer.add([g, block, this.statusDyn]);
-  }
-
-  renderStatus(s) {
-    this.statusDyn.removeAll(true);
-    this.statusLayer.setVisible(!!this.statusOpen);
-    if (!this.statusOpen) return;
-    renderFlights(this.statusUi, s);
-    renderDepotAndLog(this.statusUi, s);
-  }
-
   // The tutorial card, over the map's top-left corner.
   renderCoach(ui, step) {
     const x = MAP.x + 8;
@@ -618,10 +599,6 @@ export class OpsScene extends Phaser.Scene {
     small(rx + 310, 30, 'Fit', () => this.resetZoom(), false, 'Back to the full view. Pinch with two fingers to zoom.');
     small(rx + 344, 34, 'Full', () => (this.scale.isFullscreen ? this.scale.stopFullscreen() : this.scale.startFullscreen()), false, 'Fullscreen.');
     let nxt = rx + 382;
-    if (PHONE) {
-      small(nxt, 34, 'Log', () => { this.statusOpen = !this.statusOpen; }, !!this.statusOpen, 'Transit lane, flights, depot and mission log.');
-      nxt += 38;
-    }
     const sure = this.confirmNew;
     ui.button(nxt, 10, 46, 30, sure ? 'Erase?' : 'New', () => {
       if (sure) return this.newGame();
@@ -654,7 +631,8 @@ export class OpsScene extends Phaser.Scene {
   renderMapTabs(s, ui) {
     Object.entries(BODIES).forEach(([id, b], i) => {
       const on = this.map.bodyId === id;
-      ui.button(20 + i * 88, 63, 82, 24, b.name, () => { this.forceCloseBase(); this.map.setBody(id); }, {
+      const inbound = sim.activeTrips(s).filter((t) => DESTINATIONS[t.dest].body === id && id !== 'earth').length;
+      ui.button(20 + i * 88, 63, 82, 24, inbound ? `${b.name} · ${inbound}` : b.name, () => { this.forceCloseBase(); this.map.setBody(id); }, {
         size: 12, fill: on && this.baseView === 'closed' ? COL.btnOn : COL.btn, stroke: on && this.baseView === 'closed' ? COL.good : COL.accent,
       });
     });
@@ -696,14 +674,28 @@ export class OpsScene extends Phaser.Scene {
     this.syncMap(true);
   }
 
+  availableTabs() {
+    return TABS.filter(([id]) => id !== 'depot' || this.s.depot.built);
+  }
+
   renderDockTabs(ui) {
     const step = sim.tutorialStep(this.s);
-    TABS.forEach(([id, name], i) => {
+    const tabs = this.availableTabs();
+    if (!tabs.some(([id]) => id === this.tab)) this.tab = 'mission';
+    const last = this.s.log[this.s.log.length - 1];
+    if (this.tab === 'log') this.logSeen = last;
+    else if (this.logSeen === undefined) this.logSeen = last;
+    const g = this.add.graphics();
+    tabs.forEach(([id, name], i) => {
       const on = this.tab === id;
       const nudge = step?.tab === id && !on; // the tutorial wants this tab
-      ui.button(720 + EXTRA + i * 78, 63, 74, 24, name, () => { this.tab = id; }, {
-        size: 11, fill: on ? COL.btnOn : nudge ? 0x5a4a12 : COL.btn, stroke: on ? COL.good : nudge ? 0xffd166 : COL.accent,
+      const x = 720 + EXTRA + i * 60;
+      ui.button(x, 63, 56, 24, '', () => { this.tab = id; }, {
+        size: 11, fill: on ? COL.btnOn : nudge ? 0x5a4a12 : COL.btn, stroke: on ? COL.good : nudge ? 0xffd166 : COL.accent, hint: name,
       });
+      drawIcon(g, id, x + 28, 75, on ? 0xffffff : nudge ? 0xffd166 : COL.accent);
+      if (id === 'log' && !on && last !== this.logSeen) g.fillStyle(COL.warn).fillCircle(x + 49, 69, 3.5); // new entries
     });
+    ui.container.add(g); // after the buttons, so the icons sit on top
   }
 }

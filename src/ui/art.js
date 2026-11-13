@@ -2,6 +2,7 @@
 import { ROCKETS, SITES } from '../data.js';
 import * as sim from '../sim.js';
 import { COL, hex } from './ui.js';
+import { MAP_BOTTOM } from '../layout.js';
 
 const WHITE = 0xeef3fb;
 const STEEL = 0xb9c4d4;
@@ -55,7 +56,7 @@ export function renderSiteScene(ui, s, siteId) {
   const x = 18;
   const w = 250;
   const h = 128;
-  const y = 522 - h - 4;
+  const y = MAP_BOTTOM - h - 4;
   const g = ui.scene.add.graphics();
   ui.container.add(g);
   g.fillStyle(0x0b1530, 0.9).fillRect(x, y, w, h);

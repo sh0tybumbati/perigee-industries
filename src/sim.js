@@ -94,6 +94,7 @@ export function createState() {
     profitDays: 0, // days in a row with net income above zero
     colonyDays: 0, // days in a row the Mars colony conditions have held
     won: null, // the day the colony was won
+    farFlown: false, // a flight has gone beyond Earth orbit: the transit lane appears on the map (GDD 2.25)
     nextId: 1,
   };
   addVehicle(s, 'peregrine9', 'cape');
@@ -108,7 +109,7 @@ export const setEventSink = (fn) => { sink = fn; };
 const emit = (e) => sink?.(e);
 
 // How good or bad a log line is, for the toast colour.
-function kindOf(msg) {
+export function kindOf(msg) {
   if (/LOST|FAILED|was lost|died|crew lost|destroyed/.test(msg)) return 'bad';
   if (/SUCCEEDED|Research complete|arrived at|rolled out|ready for its test|is on station|built at the (Moon|Mars) base/.test(msg)) return 'good';
   if (/Investors|retired|window|Not enough/i.test(msg)) return 'warn';
@@ -118,7 +119,7 @@ function kindOf(msg) {
 // kind: info | good | warn | bad. pause: ask the interface to auto-pause so the player sees it.
 export function note(s, msg, kind, pause = false) {
   s.log.push(`Day ${s.day}: ${msg}`);
-  if (s.log.length > 40) s.log.shift();
+  if (s.log.length > 200) s.log.shift();
   emit({ type: 'note', msg, kind: kind ?? kindOf(msg), pause, day: s.day });
 }
 
@@ -213,6 +214,7 @@ export function deserialize(json) {
     if (MARKETS.some((m) => m.cell && s.markets[m.id].status !== 'locked')) s.tech.add('dtc'); // saves from before Direct-to-Cell was its own research
     if (!PLANS[s.plan]) s.plan = 'standard';
     s.depot = { ...base.depot, ...o.depot };
+    s.farFlown = !!o.farFlown || (Array.isArray(o.trips) && o.trips.some((x) => DESTINATIONS[x.dest]?.body && DESTINATIONS[x.dest].body !== 'earth'));
     s.flightCounts = { ...o.flightCounts };
     s.serials = { ...o.serials };
     s.market = { ...base.market, ...o.market };
@@ -1335,6 +1337,7 @@ export function launch(s) {
       note(s, `Behemoth test flight ${n} complete.${n === 3 ? ' Skyship qualification flights done.' : ''}`);
     }
   }
+  if (DESTINATIONS[trip.dest]?.body !== 'earth') s.farFlown = true;
   s.trips.push(trip);
   if (s.trips.length > MAX_TRIPS) {
     const i = s.trips.findIndex((x) => x.status !== 'enroute');
