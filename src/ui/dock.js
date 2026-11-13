@@ -14,8 +14,11 @@ import { EXTRA, MAP_BOTTOM, PHONE } from '../layout.js';
 // The tall desktop dock has room for more contract rows and locked loadouts than a phone (GDD 2.25).
 export const CONTRACT_ROWS = PHONE ? 5 : 9;
 const LOCK_ROWS = PHONE ? 2 : 4;
+const TALL = !PHONE; // the other tabs also spread out on a tall screen
 const GROW = (CONTRACT_ROWS - 5) * 25;
 const LOCK_PAD = (LOCK_ROWS - 2) * 20 + 10; // room under the manifest for the locked-loadout rows
+
+const clipTo = (str, n) => (str.length > n ? `${str.slice(0, n - 1)}…` : str);
 
 function icon(ui, x, y, w, h, type) {
   const g = ui.scene.add.graphics();
@@ -323,7 +326,8 @@ export function renderFleet(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, `HULLS  ·  ${s.fleet.length}`);
   if (!s.fleet.length) ui.label(X, Y + 20, 'No hulls. Queue one in the Factory tab.', { size: 13, color: hex(COL.warn) });
   const sorted = [...s.fleet].sort((a, b) => a.type.localeCompare(b.type) || a.serial.localeCompare(b.serial));
-  sorted.slice(0, PHONE ? 9 : 20).forEach((v, i) => {
+  const HULL_ROWS = PHONE ? 9 : 12;
+  sorted.slice(0, HULL_ROWS).forEach((v, i) => {
     const y = Y + 18 + i * 26;
     const st = sim.vehicleState(s, v);
     const r = ROCKETS[v.type];
@@ -345,9 +349,9 @@ export function renderFleet(ui, s, X, Y, W, actions) {
     ui.bar(X + 392, y + 8, 80, 8, wear, wear > 0.7 ? COL.bad : wear > 0.4 ? COL.warn : COL.good);
     ui.label(X + W - 8, y + 5, `${v.flights}/${life}`, { size: 12, right: true, color: COL.dimText });
   });
-  if (sorted.length > 9) ui.label(X, Y + 18 + 9 * 26, `+${sorted.length - 9} more hulls`, { size: 12, color: COL.dimText });
+  if (sorted.length > HULL_ROWS) ui.label(X, Y + 18 + HULL_ROWS * 26, `+${sorted.length - HULL_ROWS} more hulls`, { size: 12, color: COL.dimText });
 
-  const dy = Y + 262;
+  const dy = PHONE ? Y + 262 : Y + 38 + Math.max(1, Math.min(sorted.length, HULL_ROWS)) * 26 + (sorted.length > HULL_ROWS ? 14 : 0);
   ui.heading(X, dy, `DRONESHIPS  ·  ${s.droneships.length}/${MAX_DRONESHIPS}`);
   if (s.droneships.length < MAX_DRONESHIPS) {
     ui.button(X + W - 190, dy - 4, 190, 22, `Buy droneship  $${DRONESHIP_COST}M`, () => actions.buyDroneship(), { enabled: s.tech.has('droneship') && sim.canSpend(s, DRONESHIP_COST), size: 11, hint: s.tech.has('droneship') ? undefined : 'Research Droneship Recovery first.' });
@@ -366,6 +370,8 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
   const fsites = sim.factorySites(s);
   const fid = fsites.includes(ctx.factorySite) ? ctx.factorySite : 'cape';
   const site = s.sites[fid];
+  const QROWS = TALL ? 5 : 2; // build queue rows
+  const BP = TALL ? 30 : 23; // pitch of the build buttons
   ui.heading(X, Y, 'FACTORY SITE');
   fsites.forEach((id, i) => {
     const on = id === fid;
@@ -394,7 +400,7 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
 
   ui.heading(X, Y + 116, `BUILD QUEUE  ·  ${site.queue.length}`);
   if (!site.queue.length) ui.label(X, Y + 134, 'Nothing in production here.', { size: 12, color: COL.dimText });
-  site.queue.slice(0, 2).forEach((q, i) => {
+  site.queue.slice(0, QROWS).forEach((q, i) => {
     const y = Y + 132 + i * 26;
     const r = q.kind === 'test' ? { name: PROTOS[q.tech].name } : ROCKETS[q.type];
     const working = i < site.lines;
@@ -404,9 +410,10 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
     ui.label(X + 392, y + 5, working ? `${q.daysLeft}d left` : 'waiting', { size: 12, color: COL.dimText });
     if (q.daysLeft === q.total) ui.button(X + W - 74, y + 2, 72, 20, 'Cancel', () => actions.cancelBuild(fid, q.id), { size: 11, hint: 'Refunds 50% of the build cost.' });
   });
-  if (site.queue.length > 2) ui.label(X, Y + 132 + 2 * 26, `+${site.queue.length - 2} more queued`, { size: 11, color: COL.dimText });
+  if (site.queue.length > QROWS) ui.label(X, Y + 132 + QROWS * 26, `+${site.queue.length - QROWS} more queued`, { size: 11, color: COL.dimText });
 
-  const by = Y + 188;
+  const qShown = Math.min(site.queue.length, QROWS);
+  const by = Y + 188 + Math.max(0, qShown - 2) * 26 + (site.queue.length > QROWS ? 14 : 0);
   ui.heading(X, by, 'BUILD  ·  metal from this yard, shortages bought at +10%');
   const types = Object.keys(ROCKETS);
   const cw = (W - 8) / 2;
@@ -415,15 +422,15 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
     const blocker = sim.buildBlocker(s, id, fid);
     const { cost, days } = sim.buildCostAt(id, fid);
     const x = X + (i % 2) * (cw + 8);
-    const y = by + 16 + Math.floor(i / 2) * 23;
+    const y = by + 16 + Math.floor(i / 2) * BP;
     const nm = r.role === 'module' ? r.name : r.short;
-    ui.button(x, y, cw, 21, blocker === 'Locked' ? `${nm}: locked` : `${nm}  $${cost}M · ${days}d`, () => actions.queueBuild(id, fid), {
+    ui.button(x, y, cw, BP - 2, blocker === 'Locked' ? `${nm}: locked` : `${nm}  $${cost}M · ${days}d`, () => actions.queueBuild(id, fid), {
       enabled: !blocker, size: 12,
       hint: blocker && blocker !== 'Locked' ? `${r.name}: ${blocker}` : `${r.name}: ${r.payload ? `${r.payload} t, ` : ''}rated ${sim.coreLife(s, id)} flight${sim.coreLife(s, id) > 1 ? 's' : ''}. ${r.steel} t of ${r.metal === 'aluminum' ? 'aluminum' : 'steel'}.`,
     });
-    if (blocker !== 'Locked') icon(ui, x + 6, y + 1, 11, 19, id);
+    if (blocker !== 'Locked') icon(ui, x + 6, y + 1, 11, BP - 4, id);
   });
-  if (s.tech.has('gen1')) renderSatPlant(ui, s, X, by + 22 + Math.ceil(types.length / 2) * 23, W, actions);
+  if (s.tech.has('gen1')) renderSatPlant(ui, s, X, by + 22 + Math.ceil(types.length / 2) * BP, W, actions);
 }
 
 // Skylink satellites are built ahead of time, one batch at a time, and kept in stock (GDD 2.23).
@@ -541,21 +548,22 @@ export function renderSites(ui, s, X, Y, W, actions, ctx) {
   const fy = wy;
   ui.heading(X, fy, 'TANKS AND MATERIALS  ·  spot price drifts, bulk buys are 10% cheaper');
   Object.keys(COMMODITIES).forEach((type, i) => {
-    const y = fy + 16 + i * 30;
+    const y = fy + 16 + i * (TALL ? 40 : 30);
     const m = s.market[type];
     const isFuel = type === 'kerolox' || type === 'methalox' || type === 'lox';
-    ui.row(X, y, W, 28);
-    ui.label(X + 8, y + 1, COMMODITIES[type].name, { size: 11, bold: true });
-    ui.bar(X + 190, y + 5, 140, 8, st.cap[type] ? st.stock[type] / st.cap[type] : 0, st.stock[type] < st.cap[type] * 0.2 ? COL.warn : COL.accent);
-    ui.label(X + 338, y + 1, `${Math.round(st.stock[type])} / ${st.cap[type]} t`, { size: 11 });
-    ui.label(X + W - 8, y + 1, `$${sim.spot(s, type).toFixed(4)}M/t`, { size: 11, bold: true, right: true, color: hex(m > 1.15 ? COL.bad : m < 0.9 ? COL.good : COL.dim) });
-    ui.button(X + 8, y + 14, 86, 14, 'Buy 100 t', () => actions.buyCommodity(view, type, 100), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
-    ui.button(X + 100, y + 14, 86, 14, 'Fill tank', () => actions.buyCommodity(view, type, 99999), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
-    ui.button(X + 192, y + 14, 138, 14, `Tank +${TANK_STEP[type].t} t  $${TANK_STEP[type].cost}M`, () => actions.expandTank(view, type), { size: 10, enabled: !sim.tankBlocker(s, view, type) });
+    const tp = TALL ? 8 : 0; // extra height of a tank row
+    ui.row(X, y, W, 28 + tp);
+    ui.label(X + 8, y + 1 + tp / 2, COMMODITIES[type].name, { size: 11, bold: true });
+    ui.bar(X + 190, y + 5 + tp / 2, 140, 8, st.cap[type] ? st.stock[type] / st.cap[type] : 0, st.stock[type] < st.cap[type] * 0.2 ? COL.warn : COL.accent);
+    ui.label(X + 338, y + 1 + tp / 2, `${Math.round(st.stock[type])} / ${st.cap[type]} t`, { size: 11 });
+    ui.label(X + W - 8, y + 1 + tp / 2, `$${sim.spot(s, type).toFixed(4)}M/t`, { size: 11, bold: true, right: true, color: hex(m > 1.15 ? COL.bad : m < 0.9 ? COL.good : COL.dim) });
+    ui.button(X + 8, y + 14 + tp / 2, 86, 14 + tp / 2, 'Buy 100 t', () => actions.buyCommodity(view, type, 100), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
+    ui.button(X + 100, y + 14 + tp / 2, 86, 14 + tp / 2, 'Fill tank', () => actions.buyCommodity(view, type, 99999), { size: 10, enabled: !sim.buyBlocker(s, view, type) });
+    ui.button(X + 192, y + 14 + tp / 2, 138, 14 + tp / 2, `Tank +${TANK_STEP[type].t} t  $${TANK_STEP[type].cost}M`, () => actions.expandTank(view, type), { size: 10, enabled: !sim.tankBlocker(s, view, type) });
     if (isFuel) {
       const lvl = st.plants[type];
       const b = sim.plantBlocker(s, view, type);
-      ui.button(X + 336, y + 14, W - 344, 14, lvl >= PLANT_MAX ? `Plant L${lvl}: ${lvl * PLANT_RATE[type]} t/day` : `Plant L${lvl + 1}  $${PLANT_COST}M${lvl ? `  (now ${lvl * PLANT_RATE[type]} t/day)` : ''}`, () => actions.buildPlant(view, type), {
+      ui.button(X + 336, y + 14 + tp / 2, W - 344, 14 + tp / 2, lvl >= PLANT_MAX ? `Plant L${lvl}: ${lvl * PLANT_RATE[type]} t/day` : `Plant L${lvl + 1}  $${PLANT_COST}M${lvl ? `  (now ${lvl * PLANT_RATE[type]} t/day)` : ''}`, () => actions.buildPlant(view, type), {
         size: 10, enabled: !b, hint: b ?? `A plant makes ${PLANT_RATE[type]} t per day per level at about 30% of the base price${SITES[view].gas && type === 'methalox' ? ', 15% for levels fed by a gas well' : ''}.`,
       });
     }
@@ -566,41 +574,43 @@ export function renderTech(ui, s, X, Y, W, actions, ctx) {
   const fid = ctx.factorySite && s.sites[ctx.factorySite]?.lines ? ctx.factorySite : 'cape';
   const clip = (str, n) => (str.length > n ? `${str.slice(0, n - 1)}…` : str);
   TECH.forEach((t, i) => {
-    const y = Y + i * 20;
+    const P = TALL ? 27 : 20; // row pitch
+    const o = TALL ? 3 : 0; // text drop in a taller row
+    const y = Y + i * P;
     const st = sim.techState(s, t.id);
     const afford = sim.canSpend(s, t.cost);
     const stroke = st === 'owned' ? COL.good : st === 'testing' ? COL.warn : st === 'available' && afford ? COL.accent : COL.line;
-    ui.row(X, y, W, 18, {
+    ui.row(X, y, W, P - 2, {
       stroke, fill: st === 'owned' ? 0x123524 : COL.row,
       onClick: st === 'available' && afford ? () => actions.buyTech(t.id) : null,
       hint: st === 'locked' ? `${t.name} needs: ${sim.techBlockers(s, t.id).join(', ')}` : t.desc,
     });
     const dim = st === 'locked';
-    ui.label(X + 10, y + 2, t.name, { size: 12, bold: true, color: dim ? COL.dimText : COL.text });
+    ui.label(X + 10, y + 2 + o, t.name, { size: TALL ? 13 : 12, bold: true, color: dim ? COL.dimText : COL.text });
     if (st === 'testing') {
       const tr = s.trials[t.id];
       const p = PROTOS[t.id];
-      ui.label(X + 168, y + 3, `${Math.round(sim.testOdds(s, t.id) * 100)}% odds · ${tr.attempts} failed · ${tr.articles} ready`, { size: 10, color: hex(COL.warn) });
+      ui.label(X + 168, y + 3 + o, `${Math.round(sim.testOdds(s, t.id) * 100)}% odds · ${tr.attempts} failed · ${tr.articles} ready`, { size: 10, color: hex(COL.warn) });
       const buildB = sim.testBuildBlocker(s, t.id, fid);
-      ui.button(X + W - 232, y + 1, 112, 16, `Build $${sim.testBuildAt(t.id, fid).cost}M · ${sim.testBuildAt(t.id, fid).days}d`, () => actions.queueTest(t.id, fid), {
+      ui.button(X + W - 232, y + 1 + o / 2, 112, 16 + o, `Build $${sim.testBuildAt(t.id, fid).cost}M · ${sim.testBuildAt(t.id, fid).days}d`, () => actions.queueTest(t.id, fid), {
         size: 10, enabled: !buildB, hint: buildB ?? `${p.name}: ${p.t} t of ${p.metal}.`,
       });
       const flyB = sim.testFlightBlocker(s, t.id);
-      ui.button(X + W - 116, y + 1, 112, 16, `Fly test $${p.ops}M`, () => actions.flyTest(t.id), {
+      ui.button(X + W - 116, y + 1 + o / 2, 112, 16 + o, `Fly test $${p.ops}M`, () => actions.flyTest(t.id), {
         size: 10, enabled: !flyB, fill: flyB ? COL.btn : COL.btnOn, stroke: flyB ? COL.accent : COL.warn, hint: flyB ?? `Success or failure is a dice roll. A failure closes the pad for ${sim.rdAt(s.site).failClosed} days.`,
       });
       return;
     }
     const sub = st === 'locked' ? `Needs: ${sim.techBlockers(s, t.id).join(', ')}` : t.desc;
-    ui.label(X + 168, y + 3, clip(sub, 56), { size: 10, color: COL.dimText });
-    ui.label(X + W - 10, y + 2, st === 'owned' ? 'DONE' : `$${t.cost}M`, {
+    ui.label(X + 168, y + 3 + o, clip(sub, TALL ? 60 : 56), { size: TALL ? 11 : 10, color: COL.dimText });
+    ui.label(X + W - 10, y + 2 + o, st === 'owned' ? 'DONE' : `$${t.cost}M`, {
       size: 12, bold: true, right: true, color: st === 'owned' ? hex(COL.good) : afford || dim ? COL.dimText : hex(COL.bad),
     });
   });
 }
 
 function renderTimeline(ui, s, X, Y) {
-  const list = Object.values(s.milestones ?? {}).sort((a, b) => b.day - a.day).slice(0, 4);
+  const list = Object.values(s.milestones ?? {}).sort((a, b) => b.day - a.day).slice(0, TALL ? 10 : 4);
   ui.heading(X, Y, 'COMPANY TIMELINE');
   if (!list.length) ui.label(X, Y + 18, 'Nothing yet. Fly something.', { size: 12, color: COL.dimText });
   list.forEach((m, i) => {
@@ -639,21 +649,22 @@ export function renderSkylink(ui, s, X, Y, W, actions, ctx) {
 
   const list = MARKETS.filter((m) => !!m.cell === (tab === 'mobile'));
   const y0 = Y + 68;
-  const rowH = list.length > 9 ? 23 : 25;
+  const rowH = TALL ? 31 : list.length > 9 ? 23 : 25;
+  const ro = TALL ? 4 : 0;
   list.forEach((m, i) => {
     const y = y0 + i * rowH;
     const st = s.markets[m.id];
     const blocker = sim.marketBlocker(s, m.id);
     const have = sim.satCount(s, m.cell ? 2 : 1);
     ui.row(X, y, W, rowH - 2, { fill: st.status === 'active' ? 0x123524 : COL.row, hint: `${m.name}: up to ${m.subs}k subscribers at $${m.arpu}/month${m.cell ? ' (light users: they load the network at ' + (m.load * 100) + '% of a broadband user)' : ''}. License $${m.license}M, approval ${m.lead} days, needs ${m.minSats} ${m.cell ? 'Gen-2 or newer ' : ''}satellites.` });
-    ui.label(X + 8, y + 3, m.name, { size: 12, bold: true, color: st.status === 'locked' && have < m.minSats ? COL.dimText : COL.text });
+    ui.label(X + 8, y + 3 + ro, m.name, { size: 12, bold: true, color: st.status === 'locked' && have < m.minSats ? COL.dimText : COL.text });
     if (st.status === 'active') {
-      ui.label(X + 190, y + 4, `${st.subs.toFixed(1)}k / ${sim.demandCeiling(s, m).toFixed(1)}k subs`, { size: 11 });
-      ui.label(X + W - 8, y + 4, `$${sim.marketRevenue(s, m).toFixed(3)}M/day`, { size: 11, bold: true, right: true, color: hex(COL.good) });
+      ui.label(X + 190, y + 4 + ro, `${st.subs.toFixed(1)}k / ${sim.demandCeiling(s, m).toFixed(1)}k subs`, { size: 11 });
+      ui.label(X + W - 8, y + 4 + ro, `$${sim.marketRevenue(s, m).toFixed(3)}M/day`, { size: 11, bold: true, right: true, color: hex(COL.good) });
     } else if (st.status === 'pending') {
-      ui.label(X + 190, y + 4, `approval in ${Math.max(0, st.readyDay - s.day)} days`, { size: 11, bold: true, color: hex(COL.warn) });
+      ui.label(X + 190, y + 4 + ro, `approval in ${Math.max(0, st.readyDay - s.day)} days`, { size: 11, bold: true, color: hex(COL.warn) });
     } else {
-      ui.label(X + 190, y + 4, have >= m.minSats ? 'ready to license' : `needs ${m.minSats}${m.cell ? ' Gen-2+' : ''} satellites`, { size: 11, color: have >= m.minSats ? COL.text : COL.dimText });
+      ui.label(X + 190, y + 4 + ro, have >= m.minSats ? 'ready to license' : `needs ${m.minSats}${m.cell ? ' Gen-2+' : ''} satellites`, { size: 11, color: have >= m.minSats ? COL.text : COL.dimText });
       ui.button(X + W - 132, y + 1, 130, rowH - 4, `License  $${m.license}M · ${m.lead}d`, () => actions.applyLicense(m.id), { size: 10, enabled: !blocker, hint: blocker ?? `Pay $${m.license}M and wait ${m.lead} days for approval.` });
     }
   });
@@ -699,6 +710,8 @@ export function renderBase(ui, s, X, Y, W, actions, ctx) {
 
 function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
   const base = ctx.base;
+  const PEND = TALL ? 6 : 4; // pending-module rows
+  const PS = (PEND - 4) * 26; // everything below moves down by the extra rows
   const st = B.baseStatus(base);
   const powerOk = st.supply >= st.demand && st.unpowered === 0;
   ui.label(X, Y, `Power ${st.supply.toFixed(2)} / ${st.demand.toFixed(2)} MW`, { size: 13, bold: true, color: hex(powerOk ? COL.good : COL.bad) });
@@ -716,55 +729,56 @@ function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
 
   ui.heading(X, Y + 60, `MODULES WAITING  ·  ${base.pending.length}`);
   if (!base.pending.length) ui.label(X, Y + 80, 'None. Fly module ships to the site, or build modules with a Fabricator.', { size: 12, color: COL.dimText });
-  base.pending.slice(0, 4).forEach((p, i) => {
+  base.pending.slice(0, PEND).forEach((p, i) => {
     const y = Y + 78 + i * 26;
     const on = ctx.mode.kind === 'place' && ctx.mode.pendingId === p.id;
     ui.row(X, y, W, 23, { on });
     ui.label(X + 8, y + 4, MODULES[p.type].name, { size: 13, bold: true });
     const warn = B.habitatWarning(base, p.type);
-    ui.label(X + 150, y + 5, warn ?? `${MODULES[p.type].len} tiles · ${MODULES[p.type].blurb}`, { size: 11, color: warn ? hex(COL.warn) : COL.dimText });
+    ui.label(X + 150, y + 5, clipTo(warn ?? `${MODULES[p.type].len} tiles · ${MODULES[p.type].blurb}`, 52), { size: 11, color: warn ? hex(COL.warn) : COL.dimText });
     ui.button(X + W - 80, y + 1, 78, 21, on ? 'Placing' : 'Place', () => actions.startPlace(p.id), { size: 11 });
   });
-  if (base.pending.length > 4) ui.label(X + W, Y + 78 + 4 * 26, `+${base.pending.length - 4} more`, { size: 11, right: true, color: COL.dimText });
+  if (base.pending.length > PEND) ui.label(X + W, Y + 78 + PEND * 26, `+${base.pending.length - PEND} more`, { size: 11, right: true, color: COL.dimText });
 
   const hint = ctx.mode.kind === 'place' ? 'Click the grid to place. R rotates. Right click or Esc cancels.'
     : ctx.mode.kind === 'duct' ? 'Click a port, then a second port. Right click or Esc stops.' : '';
   const risk = B.crewAtRisk(base);
-  if (hint) ui.label(X, Y + 186, hint, { size: 12, color: hex(COL.warn) });
-  else if (risk) ui.label(X, Y + 186, `Crew at risk: ${risk} habitat${risk === 1 ? ' has' : 's have'} no power. Connect to a reactor or solar array with a duct.`, { size: 12, bold: true, color: hex(COL.bad) });
+  if (hint) ui.label(X, Y + PS + 186, hint, { size: 12, color: hex(COL.warn) });
+  else if (risk) ui.label(X, Y + PS + 186, `Crew at risk: ${risk} habitat${risk === 1 ? ' has' : 's have'} no power. Connect to a reactor or solar array with a duct.`, { size: 12, bold: true, color: hex(COL.bad) });
 
-  ui.button(X, Y + 208, 230, 28, ctx.mode.kind === 'duct' ? 'Stop connecting' : `Connect ducts ($${DUCT_COST}M each)`, () => actions.toggleDuct(), {
+  ui.button(X, Y + PS + 208, 230, 28, ctx.mode.kind === 'duct' ? 'Stop connecting' : `Connect ducts ($${DUCT_COST}M each)`, () => actions.toggleDuct(), {
     size: 12, fill: ctx.mode.kind === 'duct' ? COL.btnOn : COL.btn, stroke: ctx.mode.kind === 'duct' ? COL.good : COL.accent,
     hint: 'Ducts join the ports at the ends of two modules. Only connected modules share power and crew.',
   });
-  ui.button(X + 240, Y + 208, 110, 28, 'Rotate (R)', () => actions.rotate(), { size: 12, enabled: ctx.mode.kind === 'place' });
-  ui.button(X + 356, Y + 208, 90, 28, 'Undo (Z)', () => actions.undo(), {
+  ui.button(X + 240, Y + PS + 208, 110, 28, 'Rotate (R)', () => actions.rotate(), { size: 12, enabled: ctx.mode.kind === 'place' });
+  ui.button(X + 356, Y + PS + 208, 90, 28, 'Undo (Z)', () => actions.undo(), {
     size: 12, enabled: B.undoBlocker(base) === null, hint: B.undoBlocker(base) ?? 'Take back the last duct (refunded) or module placement.',
   });
-  ui.label(X + W, Y + 215, `${base.ducts.length} duct${base.ducts.length === 1 ? '' : 's'}`, { size: 12, right: true, color: COL.dimText });
+  ui.label(X + W, Y + PS + 215, `${base.ducts.length} duct${base.ducts.length === 1 ? '' : 's'}`, { size: 12, right: true, color: COL.dimText });
 
-  ui.heading(X, Y + 248, 'STOCKPILE');
+  ui.heading(X, Y + PS + 248, 'STOCKPILE');
   const stock = base.stock;
   [['Regolith', stock.regolith], ['Oxygen', stock.oxygen], ['Iron', stock.iron], ['Silica', stock.silica], ['Ice', stock.ice], ['Methalox', stock.methalox]].forEach(([name, v], i) => {
-    ui.label(X + i * 89, Y + 266, `${name}`, { size: 11, color: COL.dimText });
-    ui.label(X + i * 89, Y + 280, `${v.toFixed(1)} t`, { size: 14, bold: true });
+    ui.label(X + i * 89, Y + PS + 266, `${name}`, { size: 11, color: COL.dimText });
+    ui.label(X + i * 89, Y + PS + 280, `${v.toFixed(1)} t`, { size: 14, bold: true });
   });
   const surplus = Object.entries(STOCK_PRICES).reduce((n, [r, price]) => n + Math.max(0, stock[r] - STOCK_KEEP[r]) * price, 0);
-  ui.button(X, Y + 308, 250, 26, `Sell surplus  ($${surplus.toFixed(1)}M)`, () => actions.sellSurplus(), {
+  ui.button(X, Y + PS + 308, 250, 26, `Sell surplus  ($${surplus.toFixed(1)}M)`, () => actions.sellSurplus(), {
     size: 12, enabled: surplus >= 0.1, hint: `Keeps ${STOCK_KEEP.oxygen} t oxygen, ${STOCK_KEEP.iron} t iron and ${STOCK_KEEP.silica} t silica for local building.`,
   });
-  if (base.storm) ui.label(X, Y + 338, `Dust storm: everything that digs or moves runs at half speed, ${base.storm.daysLeft} more days.`, { size: 12, color: hex(COL.warn) });
+  if (base.storm) ui.label(X, Y + PS + 338, `Dust storm: everything that digs or moves runs at half speed, ${base.storm.daysLeft} more days.`, { size: 12, color: hex(COL.warn) });
   if (base.lastSpe) {
-    ui.label(X + W, Y + 314, `Last solar storm: day ${base.lastSpe.day}, ${base.lastSpe.dead} crew lost`, { size: 12, right: true, color: hex(base.lastSpe.dead ? COL.bad : COL.dim) });
+    ui.label(X + W, Y + PS + 314, `Last solar storm: day ${base.lastSpe.day}, ${base.lastSpe.dead} crew lost`, { size: 12, right: true, color: hex(base.lastSpe.dead ? COL.bad : COL.dim) });
   }
 }
 
 function renderBaseModules(ui, s, X, Y, W, actions, ctx) {
   const base = ctx.base;
   const { byModule } = B.analyze(base);
+  const MODN = TALL ? 9 : 5; // module rows
   ui.heading(X, Y, `MODULES  ·  ${base.modules.length}`);
   if (!base.modules.length) ui.label(X, Y + 20, 'Nothing placed yet. Place a pending module from the Control tab.', { size: 12, color: COL.dimText });
-  base.modules.slice(0, 5).forEach((m, i) => {
+  base.modules.slice(0, MODN).forEach((m, i) => {
     const y = Y + 18 + i * 25;
     const net = byModule.get(m.id);
     const def = MODULES[m.type];
@@ -776,9 +790,9 @@ function renderBaseModules(ui, s, X, Y, W, actions, ctx) {
       size: 11, right: true, color: hex(net.powerFactor > 0 ? COL.good : COL.bad),
     });
   });
-  if (base.modules.length > 5) ui.label(X, Y + 18 + 5 * 25, `+${base.modules.length - 5} more`, { size: 11, color: COL.dimText });
+  if (base.modules.length > MODN) ui.label(X, Y + 18 + MODN * 25, `+${base.modules.length - MODN} more`, { size: 11, color: COL.dimText });
 
-  const fy = Y + 156;
+  const fy = Y + 156 + (MODN - 5) * 25;
   ui.heading(X, fy, 'FABRICATOR  ·  build modules from local materials');
   const hasFab = base.modules.some((m) => m.type === 'fab');
   if (!hasFab) {
@@ -792,7 +806,7 @@ function renderBaseModules(ui, s, X, Y, W, actions, ctx) {
       size: 11, enabled: !blocker, hint: blocker ? `${r.name ?? MODULES[type].name}: ${blocker}` : `${r.name ?? MODULES[type].name}: ${r.days} days.`,
     });
   });
-  base.fabQueue.slice(0, 3).forEach((q, i) => {
+  base.fabQueue.slice(0, 5).forEach((q, i) => {
     const y = fy + 122 + i * 24;
     ui.row(X, y, W, 21);
     ui.label(X + 8, y + 3, LOCAL_RECIPES[q.type].name ?? MODULES[q.type].name, { size: 12, bold: true });
