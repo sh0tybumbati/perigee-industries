@@ -70,6 +70,12 @@ export class OpsScene extends Phaser.Scene {
     this.fx.pinPos = (id) => (this.baseView === 'closed' && this.map.bodyId === 'earth' ? this.map.pinPos(id) : null);
     sim.setEventSink((e) => this.onEvent(e));
     this.input.on('pointerdown', () => audio.unlock());
+    // The tab tooltip: the buttons are rebuilt while hovered, so pointerout can miss. Leaving the tab row clears it.
+    this.input.on('pointermove', (p) => {
+      if (!this.tipTab) return;
+      const left = 720 + EXTRA + (this.dockC?.x ?? 0);
+      if (p.y < 63 || p.y > 87 || p.x < left || p.x > left + 560) { this.tipTab = null; this.render(); }
+    });
     // The mouse wheel over the Mission tab scrolls the contract board.
     this.contractScroll = 0;
     this.input.on('wheel', (p, _o, _dx, dy) => {
@@ -690,12 +696,25 @@ export class OpsScene extends Phaser.Scene {
       const on = this.tab === id;
       const nudge = step?.tab === id && !on; // the tutorial wants this tab
       const x = 720 + EXTRA + i * 60;
-      ui.button(x, 63, 56, 24, '', () => { this.tab = id; }, {
-        size: 11, fill: on ? COL.btnOn : nudge ? 0x5a4a12 : COL.btn, stroke: on ? COL.good : nudge ? 0xffd166 : COL.accent, hint: name,
+      const btn = ui.button(x, 63, 56, 24, '', () => { this.tab = id; }, {
+        size: 11, fill: on ? COL.btnOn : nudge ? 0x5a4a12 : COL.btn, stroke: on ? COL.good : nudge ? 0xffd166 : COL.accent,
       });
+      // A name tooltip under the tab (the scene rebuilds the buttons, so the hovered tab is remembered).
+      btn.on('pointerover', () => { if (this.tipTab !== id) { this.tipTab = id; this.render(); } });
+      btn.on('pointerout', () => { if (this.tipTab === id) { this.tipTab = null; this.render(); } });
       drawIcon(g, id, x + 28, 75, on ? 0xffffff : nudge ? 0xffd166 : COL.accent);
       if (id === 'log' && !on && last !== this.logSeen) g.fillStyle(COL.warn).fillCircle(x + 49, 69, 3.5); // new entries
     });
     ui.container.add(g); // after the buttons, so the icons sit on top
+    const tip = tabs.findIndex(([id]) => id === this.tipTab);
+    if (tip >= 0) {
+      const t = ui.label(0, 0, tabs[tip][1], { size: 12, bold: true });
+      const w = t.width + 14;
+      const x = Math.min(720 + EXTRA + tip * 60 + 28 - w / 2, 720 + EXTRA + 560 - w - 4);
+      const bg = this.add.rectangle(x, 91, w, 22, 0x05070d, 0.95).setOrigin(0).setStrokeStyle(1, COL.accent);
+      ui.container.add(bg);
+      ui.container.bringToTop(t);
+      t.setPosition(x + 7, 95);
+    }
   }
 }

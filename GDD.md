@@ -557,7 +557,7 @@ Phase 14: goals and an endgame (2.21): seven chapters, a goal strip and Goals pa
 2.25 Screen Layout: Lane, Depot and Log (Phase 15)
 The bottom strip is gone. The map and the dock each run the full height of the screen, which gives the dock room for about eight contracts at once and the map more space.
 - Transit lane: a translucent ribbon along the top of the map (Earth, Moon and Mars, with flights gliding between them). It stays hidden until a flight first goes beyond Earth orbit (saved as farFlown, and set from past trips on old saves), and is hidden in the Dock-only view. The Moon and Mars buttons above the map show how many flights are heading there.
-- Dock tabs are icons (rocket, rockets, factory, pin, dome, flask, satellite, tank, list) in a row of 56 px buttons, so up to nine fit. Hover for the name. The tutorial still highlights the tab it wants.
+- Dock tabs are icons (rocket, rockets, factory, pin, dome, flask, satellite, tank, list) in a row of 56 px buttons, so up to nine fit. Hovering one shows its name in a small tooltip under the tab. The tutorial still highlights the tab it wants.
 - Depot tab: appears only once the depot is deployed. It shows the stored propellant big, a tank gauge with a division per tanker load, boil-off, tankers en route, and what the selected mission needs.
 - Log tab: flights in transit on top, then the mission log, newest first, colour-coded (red problems, amber warnings, green good news), with All / Good news / Problems filters, mouse wheel or arrow scrolling, and an amber dot on the tab when new entries arrived. The log keeps the last 200 entries.
 
