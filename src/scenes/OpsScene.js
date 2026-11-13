@@ -5,7 +5,7 @@ import * as B from '../base.js';
 import { MapLayer } from '../map/MapLayer.js';
 import { BaseLayer } from '../map/BaseLayer.js';
 import { COL, FONT, UI, hex } from '../ui/ui.js';
-import { renderMission, renderFleet, renderFactory, renderSites, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
+import { CONTRACT_ROWS, renderMission, renderFleet, renderFactory, renderSites, renderTech, renderSkylink, renderBase } from '../ui/dock.js';
 import { Lane } from '../ui/lane.js';
 import { renderDepot, renderLog, logEntries } from '../ui/panels.js';
 import { drawIcon } from '../ui/icons.js';
@@ -381,7 +381,7 @@ export class OpsScene extends Phaser.Scene {
       setLogFilter: (f) => { this.logFilter = f; this.logScroll = 0; this.render(); },
       scrollLog: (d) => { this.logScroll = Math.max(0, Math.min(Math.max(0, logEntries(s, this.logFilter ?? 'all').length - 1), (this.logScroll ?? 0) + d * 3)); this.render(); },
       contractScroll: this.contractScroll ?? 0,
-      scrollContracts: (d) => { this.contractScroll = Math.max(0, Math.min(Math.max(0, s.contracts.length - 5), (this.contractScroll ?? 0) + d)); this.render(); },
+      scrollContracts: (d) => { this.contractScroll = Math.max(0, Math.min(Math.max(0, s.contracts.length - CONTRACT_ROWS), (this.contractScroll ?? 0) + d)); this.render(); },
       toggleContract: (id) => {
         if (!sim.toggleContract(s, id)) this.hint.setText('One destination per launch: unload the others first.');
         this.lastDest = null;

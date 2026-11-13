@@ -9,7 +9,13 @@ import * as sim from '../sim.js';
 import * as B from '../base.js';
 import { COL, hex } from './ui.js';
 import { drawRocket } from './art.js';
-import { EXTRA, MAP_BOTTOM } from '../layout.js';
+import { EXTRA, MAP_BOTTOM, PHONE } from '../layout.js';
+
+// The tall desktop dock has room for more contract rows and locked loadouts than a phone (GDD 2.25).
+export const CONTRACT_ROWS = PHONE ? 5 : 9;
+const LOCK_ROWS = PHONE ? 2 : 4;
+const GROW = (CONTRACT_ROWS - 5) * 25;
+const LOCK_PAD = (LOCK_ROWS - 2) * 20 + 10; // room under the manifest for the locked-loadout rows
 
 function icon(ui, x, y, w, h, type) {
   const g = ui.scene.add.graphics();
@@ -160,11 +166,11 @@ export function renderMission(ui, s, X, Y, W, actions) {
   const blocker = sim.launchBlocker(s);
   const total = sim.launchCost(s);
   if (payload && (s.manifest.length || s.sats) && (sim.shipDaysNeeded(s) > 0)) {
-    ui.button(X, Y + 384, W, 38, `LOCK IN LOADOUT  ·  ships ${sim.shipDaysNeeded(s)}d, then launches ($${total}M)`, () => actions.lockLoadout(), {
+    ui.button(X, Y + 384 + (payload ? GROW + LOCK_PAD : 0), W, 38, `LOCK IN LOADOUT  ·  ships ${sim.shipDaysNeeded(s)}d, then launches ($${total}M)`, () => actions.lockLoadout(), {
       fill: 0x1d5a3a, stroke: COL.good, size: 13, hint: 'Accept the contracts: the payloads ship to the launch site and the rocket launches by itself when they all arrive. You can then build and lock in another loadout.',
     });
   } else {
-    ui.button(X, Y + 384, W, 38, blocker ? `LAUNCH  (${blocker})` : `LAUNCH to ${ed.name}  ($${total}M)`, () => actions.launch(), {
+    ui.button(X, Y + 384 + (payload ? GROW + LOCK_PAD : 0), W, 38, blocker ? `LAUNCH  (${blocker})` : `LAUNCH to ${ed.name}  ($${total}M)`, () => actions.launch(), {
       enabled: !blocker, fill: 0x7a2a1d, stroke: COL.bad, size: blocker ? 12 : 15, hint: costHint(s),
     });
   }
@@ -225,7 +231,7 @@ function lockIcon(ui, x, y, col) {
 function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, 'CONTRACTS  ·  click to load  ·  one destination per launch');
   const sorted = [...s.contracts].sort((a, b) => (b.dest === s.dest) - (a.dest === s.dest) || b.payout - a.payout);
-  const ROWS = 5;
+  const ROWS = CONTRACT_ROWS;
   const maxScroll = Math.max(0, sorted.length - ROWS);
   const scroll = Math.min(actions.contractScroll ?? 0, maxScroll);
   if (maxScroll) {
@@ -274,7 +280,7 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   if (!s.contracts.length) ui.label(X, Y + 22, 'No contracts on the board. New ones arrive every few days.', { size: 12, color: COL.dimText });
   if (maxScroll) ui.label(X + W - 52, Y, `${scroll + 1}-${scroll + Math.min(ROWS, sorted.length)} of ${sorted.length}`, { size: 11, color: COL.dimText, right: true });
 
-  const my = Y + 148;
+  const my = Y + 148 + GROW;
   const t = sim.manifestTotals(s);
   const cap = sim.capacity(s);
   const fit = (v, c) => (v > c ? COL.bad : v / c > 0.85 ? COL.warn : COL.good);
@@ -289,14 +295,14 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   const satsOk = SAT_DESTS.includes(s.dest);
   const ry = my + 30;
   if (!s.manifest.length && !s.sats && s.locked.length) {
-    s.locked.slice(0, 2).forEach((l, i) => {
+    s.locked.slice(0, LOCK_ROWS).forEach((l, i) => {
       const yy = ry + i * 20;
       const why = sim.loadoutBlocker(s, l);
       lockIcon(ui, X, yy, COL.accent);
       ui.label(X + 24, yy + 3, `${ROCKETS[l.rocket].short} to ${DESTINATIONS[l.dest].name}${l.sats ? `, ${l.sats} sats` : ''}  ·  ${why ?? 'launching'}`, { size: 11, color: hex(why ? COL.accent : COL.good) });
       ui.button(X + W - 64, yy, 64, 17, 'Cancel', () => actions.cancelLoadout(l.id), { size: 10, hint: 'Withdraw this loadout: its contracts go back to the board.' });
     });
-    if (s.locked.length > 2) ui.label(X + W - 72, ry + 40, `+${s.locked.length - 2} more locked`, { size: 10, right: true, color: COL.dimText });
+    if (s.locked.length > LOCK_ROWS) ui.label(X + W - 72, ry + LOCK_ROWS * 20, `+${s.locked.length - LOCK_ROWS} more locked`, { size: 10, right: true, color: COL.dimText });
   } else if (need) {
     ui.label(X, ry + 3, `Payout $${t.payout}M  ·  TLI propellant ${need} t needed, depot ${Math.floor(s.depot.prop)} t`, {
       size: 12, color: hex(s.depot.prop >= need && s.rocket === 'skyship' ? COL.good : COL.warn),
@@ -317,7 +323,7 @@ export function renderFleet(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, `HULLS  ·  ${s.fleet.length}`);
   if (!s.fleet.length) ui.label(X, Y + 20, 'No hulls. Queue one in the Factory tab.', { size: 13, color: hex(COL.warn) });
   const sorted = [...s.fleet].sort((a, b) => a.type.localeCompare(b.type) || a.serial.localeCompare(b.serial));
-  sorted.slice(0, 9).forEach((v, i) => {
+  sorted.slice(0, PHONE ? 9 : 20).forEach((v, i) => {
     const y = Y + 18 + i * 26;
     const st = sim.vehicleState(s, v);
     const r = ROCKETS[v.type];
