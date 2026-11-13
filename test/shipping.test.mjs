@@ -162,6 +162,7 @@ test('satellite shipping depends on the site', () => {
   assert.equal(sim.shipDaysNeeded(s), 0, 'the plant is at Cape Canaveral');
   assert.equal(sim.launchBlocker(s), null, 'no shipping at Cape, so it can launch by hand');
   sim.setSite(s, 'vandenberg');
+  s.fleet.forEach((v) => { v.site = 'vandenberg'; }); // a hull is already there
   assert.equal(sim.shipDaysNeeded(s), 3);
   sim.lockLoadout(s);
   assert.match(sim.loadoutBlocker(s, s.locked[0]), /Satellites arrive in 3 day/);
@@ -215,4 +216,79 @@ test('locking sets satellites aside and cancelling returns them; launching spend
   assert.equal(sim.launchBlocker(s), null);
   assert.ok(sim.launch(s).ok);
   assert.equal(s.satStock[1], 6, 'a hand launch takes six from the stock');
+});
+
+const hull = (s, type, site) => { const v = { id: s.nextId++, type, serial: `${type}-${s.nextId}`, flights: 0, returnDay: 0, readyDay: 0, site }; s.fleet.push(v); return v; };
+
+test('a hull flies only from the site it is at, and can be shipped between sites', () => {
+  const s = world();
+  s.fleet = [];
+  sim.acquireSite(s, 'vandenberg', 'lease');
+  const v = hull(s, 'peregrine9', 'cape');
+  sim.setSite(s, 'vandenberg');
+  assert.match(sim.launchBlocker(s), /No Peregrine 9 at Vandenberg: ship one from Cape \(7 days\)/);
+  assert.equal(sim.nextVehicle(s, 'peregrine9'), null);
+  const cash = s.cash;
+  assert.ok(sim.shipHull(s, v.id, 'vandenberg'));
+  assert.equal(sim.vehicleState(s, v), 'shipping');
+  assert.equal(+(cash - s.cash).toFixed(2), 0.2);
+  assert.equal(sim.shipHull(s, v.id, 'cape'), false, 'it is already on the road');
+  idle(s, 6);
+  assert.equal(sim.nextVehicle(s, 'peregrine9'), null);
+  idle(s, 1);
+  assert.equal(sim.nextVehicle(s, 'peregrine9'), v);
+  assert.equal(v.site, 'vandenberg');
+});
+
+test('locking a loadout for a site with no hull ships one there by itself', () => {
+  const s = world();
+  s.fleet = [];
+  sim.acquireSite(s, 'vandenberg', 'lease');
+  const v = hull(s, 'peregrine9', 'cape');
+  const c = contract(s, { region: 'na' });
+  sim.setSite(s, 'vandenberg');
+  assert.ok(sim.toggleContract(s, c.id));
+  sim.setSite(s, 'vandenberg');
+  assert.ok(sim.lockLoadout(s));
+  assert.equal(sim.vehicleState(s, v), 'shipping', 'dispatched at lock-in');
+  assert.match(sim.loadoutBlocker(s, s.locked[0]), /arrives at Vandenberg in 7 day/);
+  idle(s, 7);
+  assert.equal(sim.loadoutBlocker(s, s.locked[0]), null);
+});
+
+test('the automatic site pick prefers a site that already has a hull', () => {
+  const s = world();
+  s.fleet = [];
+  sim.acquireSite(s, 'vandenberg', 'lease');
+  hull(s, 'peregrine9', 'vandenberg');
+  const c = contract(s, { region: 'na' });
+  assert.ok(sim.toggleContract(s, c.id));
+  assert.equal(s.site, 'vandenberg');
+});
+
+test('a satellites-only draft also gets the best site picked', () => {
+  const s = world();
+  s.tech.add('gen1');
+  s.satStock[1] = 12;
+  s.fleet = [];
+  sim.acquireSite(s, 'vandenberg', 'lease');
+  hull(s, 'peregrine9', 'vandenberg');
+  sim.adjustSats(s, 6);
+  assert.equal(s.site, 'vandenberg');
+});
+
+test('Core Life research raises the rating and cuts wear risk for Peregrine cores only', () => {
+  const s = world();
+  assert.equal(sim.coreLife(s, 'peregrine9'), 10);
+  s.tech.add('life1');
+  assert.equal(sim.coreLife(s, 'peregrine9'), 20);
+  assert.equal(sim.coreLife(s, 'peregrineHeavy'), 20);
+  assert.equal(sim.coreLife(s, 'skyship'), 40);
+  s.tech.add('life2'); s.tech.add('life3');
+  assert.equal(sim.coreLife(s, 'peregrine9'), 50);
+  assert.ok(Math.abs(sim.wearRisk(s, 'peregrine9') - 0.004 * 0.3) < 1e-12);
+  const v = hull(s, 'peregrine9', 'cape');
+  v.flights = 12;
+  idle(s, 1);
+  assert.ok(s.fleet.includes(v), 'a 12-flight core is not retired any more');
 });

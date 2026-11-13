@@ -53,6 +53,7 @@ test('sites restrict destinations: polar needs Vandenberg, which is locked until
   assert.equal(sim.setSite(s, 'vandenberg'), false, 'locked');
   assert.ok(sim.acquireSite(s, 'vandenberg', 'lease'));
   assert.equal(sim.setSite(s, 'vandenberg'), true);
+  s.fleet.forEach((v) => { v.site = 'vandenberg'; });
   assert.equal(sim.launchBlocker(s), null);
   sim.setDest(s, 'gto');
   s.manifest = [];
@@ -77,6 +78,7 @@ test('catch vehicles need a pad with a tower; Boca Chica is bare land until buil
   assert.ok(sim.acquireSite(t, 'boca', 'buy'));
   assert.equal(t.sites.boca.pads.length, 0, 'the land comes with nothing');
   sim.setSite(t, 'boca');
+  t.fleet.forEach((v) => { v.site = 'boca'; });
   assert.match(sim.launchBlocker(t), /Build a pad/);
   assert.ok(sim.buyPad(t, 'boca'));
   assert.ok(sim.buildTower(t, 'boca', 0));

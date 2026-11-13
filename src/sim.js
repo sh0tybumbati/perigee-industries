@@ -3,7 +3,7 @@ import {
   ROCKETS, SATS, REGIONS, MARKETS, SUB_GROWTH, CHURN, PLANS, CUSTOMERS, TECH,
   OVERHEAD_PER_DAY, CASH_FLOOR, BEHEMOTH_LEARNING, BEHEMOTH_MIN_RISK,
   DEPOT_CAP, TANKER_LOAD, BOILOFF_PER_DAY,
-  DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, SHIP_DAYS, SAT_SHIP_DAYS, SAT_BATCH_DAYS, SAT_QUEUE_MAX,
+  DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, SHIP_DAYS, SAT_SHIP_DAYS, SAT_BATCH_DAYS, SAT_QUEUE_MAX, CORE_LIFE, CORE_LIFE_TYPES, HULL_MOVE_DAYS, HULL_MOVE_COST, HULL_MOVE_MIN,
   SITES, SITE_IDS, LEASE_FEE, BAY_FEE, BAY_RENT_DEPOSIT, BAY_BUY_COST, MAX_BAYS, PAD_COSTS, TOWER_COST, PAD_TURN,
   PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND, DRONESHIP_FEE, DRONESHIP_COST, MAX_DRONESHIPS, DRONESHIP_CYCLE,
   DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
@@ -439,7 +439,7 @@ export function toggleContract(s, id) {
   const c = s.contracts.find((x) => x.id === id);
   if (!c || c.lockId || rocketDef(s).role !== 'payload') return false;
   const i = s.manifest.indexOf(id);
-  if (i >= 0) { s.manifest.splice(i, 1); return true; }
+  if (i >= 0) { s.manifest.splice(i, 1); autoSite(s); return true; }
   // Return contracts ride return flights: loading one into an empty manifest switches the flight's origin.
   if (!s.manifest.length) {
     const want = c.origin ?? 'earth';
@@ -478,6 +478,7 @@ export function lockLoadout(s) {
   s.satStock[s.satGen] -= s.sats; // the satellites are set aside for this loadout
   for (const c of s.contracts) if (s.manifest.includes(c.id)) { c.acceptedDay = s.day; c.lockId = L.id; }
   s.locked.push(L);
+  dispatchHulls(s);
   s.manifest = [];
   s.sats = 0;
   return true;
@@ -517,14 +518,14 @@ export function launchLoadout(s, id) {
 
 // Open sites that can launch to dest, best first: earliest possible launch day, then cheapest, then the current site.
 // fuel (optional) is the vehicle's propellant need, used to price any shortage in a site's tanks.
-export function siteRanking(s, contracts, dest, { catchPad = false, fuel = null } = {}) {
+export function siteRanking(s, contracts, dest, { catchPad = false, fuel = null, rocket = null, sats = 0 } = {}) {
   const out = [];
   for (const id of SITE_IDS) {
     const site = s.sites[id];
     if (!site || site.status === 'locked' || !siteAllows(id, dest)) continue;
     const pads = site.pads.filter((p) => !catchPad || p.tower);
     if (!pads.length) continue;
-    const ready = Math.max(s.day, Math.min(...pads.map((p) => p.busyUntil)), ...contracts.map((c) => contractReady(s, c, id)));
+    const ready = Math.max(s.day, Math.min(...pads.map((p) => p.busyUntil)), ...contracts.map((c) => contractReady(s, c, id)), rocket ? hullDay(s, rocket, id) : 0, sats ? s.day + satShipDays(id) : 0);
     const cost = (site.status === 'leased' ? LEASE_FEE : 0) + (fuel ? propBuy(s, site, fuel).cash : 0);
     out.push({ id, day: ready, cost });
   }
@@ -533,14 +534,14 @@ export function siteRanking(s, contracts, dest, { catchPad = false, fuel = null 
 
 // Picks the best launch site for the whole manifest. Picking a site by hand sticks until the next contract is loaded.
 function autoSite(s) {
-  if (!s.manifest.length || flightOrigin(s) !== 'earth') return;
+  if ((!s.manifest.length && !s.sats) || flightOrigin(s) !== 'earth') return;
   const cs = s.manifest.map((id) => s.contracts.find((c) => c.id === id)).filter(Boolean);
-  const best = siteRanking(s, cs, effDest(s), { catchPad: !!rocketDef(s).catch, fuel: fuelNeed(s) })[0];
+  const best = siteRanking(s, cs, effDest(s), { catchPad: !!rocketDef(s).catch, fuel: fuelNeed(s), rocket: s.rocket, sats: s.sats })[0];
   if (best) s.site = best.id;
 }
 
 // The best site for one contract on its own, for the badge on the board.
-export const bestSiteFor = (s, c) => siteRanking(s, [c], c.dest)[0] ?? null;
+export const bestSiteFor = (s, c) => siteRanking(s, [c], c.dest, { rocket: rocketDef(s).role === 'payload' ? s.rocket : null })[0] ?? null;
 
 // ---- fleet ---------------------------------------------------------------------
 
@@ -557,15 +558,82 @@ function addVehicle(s, type, siteId = 'cape') {
 export const fleetOf = (s, type) => s.fleet.filter((v) => v.type === type);
 
 export function vehicleState(s, v) {
+  if (v.transit) return 'shipping';
   if (s.day < v.returnDay) return 'flying';
   if (s.day < v.readyDay) return 'refit';
   return 'ready';
 }
 
+// ---- where the hulls are (GDD 2.24) ---------------------------------------------------------
+
+export const hullSite = (v) => v.site ?? 'cape';
+export const hullMoveDays = (a, b) => (a === b ? 0 : HULL_MOVE_DAYS[a]?.[b] ?? HULL_MOVE_DAYS[b]?.[a] ?? 8);
+export const hullMoveCost = (type) => Math.max(HULL_MOVE_MIN, +(ROCKETS[type].buildCost * HULL_MOVE_COST).toFixed(2));
+// Earth hulls at a site, counting the ones already on their way there.
+export const hullsAt = (s, type, siteId) => fleetOf(s, type).filter((v) => hullOrigin(v) === 'earth' && (v.transit ? v.transit.to === siteId : hullSite(v) === siteId));
+
+export function shipHullBlocker(s, v, to) {
+  if (!v || hullOrigin(v) !== 'earth') return 'Only Earth hulls can be shipped';
+  if (vehicleState(s, v) !== 'ready') return 'The hull has to be ready';
+  if (!s.sites[to] || s.sites[to].status === 'locked') return 'Pick a launch site you can use';
+  if (hullSite(v) === to) return 'Already there';
+  if (!canSpend(s, hullMoveCost(v.type))) return 'Not enough cash';
+  return null;
+}
+
+export function shipHull(s, id, to) {
+  const v = s.fleet.find((x) => x.id === id);
+  if (shipHullBlocker(s, v, to)) return false;
+  const days = hullMoveDays(hullSite(v), to);
+  const cost = hullMoveCost(v.type);
+  s.cash -= cost;
+  v.transit = { to, arrive: s.day + days };
+  note(s, `${v.serial} is being shipped from ${SITES[hullSite(v)].short} to ${SITES[to].short} (${days} days, $${cost}M).`);
+  return true;
+}
+
+// The next open site after the hull's own, for the one-click button in the Fleet tab.
+export const nextShipSite = (s, v) => {
+  const open = SITE_IDS.filter((id) => s.sites[id].status !== 'locked');
+  const i = open.indexOf(hullSite(v));
+  return open.length > 1 ? open[(i + 1) % open.length] : null;
+};
+
+// The day a hull of this type could fly from a site: now if one is there and ready, else when one could arrive.
+export function hullDay(s, type, siteId) {
+  const hulls = fleetOf(s, type).filter((v) => hullOrigin(v) === 'earth');
+  if (!hulls.length) return s.day;
+  const free = (v) => Math.max(s.day, v.readyDay ?? 0, v.returnDay ?? 0);
+  const here = hulls.filter((v) => (v.transit ? v.transit.to === siteId : hullSite(v) === siteId));
+  if (here.length) return Math.min(...here.map((v) => (v.transit ? v.transit.arrive : free(v))));
+  return Math.min(...hulls.map((v) => (v.transit ? v.transit.arrive : free(v)) + hullMoveDays(v.transit ? v.transit.to : hullSite(v), siteId)));
+}
+
+// Locked loadouts that need a hull at a site get one shipped from elsewhere (least worn, nearest first).
+function dispatchHulls(s) {
+  const need = new Map();
+  for (const L of s.locked) {
+    if ((L.origin ?? 'earth') !== 'earth' || ROCKETS[L.rocket].role !== 'payload') continue;
+    const key = `${L.rocket}|${L.site}`;
+    need.set(key, (need.get(key) ?? 0) + 1);
+  }
+  for (const [key, n] of need) {
+    const [type, site] = key.split('|');
+    let have = hullsAt(s, type, site).length;
+    while (have < n) {
+      const src = fleetOf(s, type)
+        .filter((v) => hullOrigin(v) === 'earth' && vehicleState(s, v) === 'ready' && hullSite(v) !== site && hullsAt(s, type, hullSite(v)).length > (need.get(`${type}|${hullSite(v)}`) ?? 0))
+        .sort((a, b) => hullMoveDays(hullSite(a), site) - hullMoveDays(hullSite(b), site) || a.flights - b.flights)[0];
+      if (!src || !shipHull(s, src.id, site)) break;
+      have++;
+    }
+  }
+}
+
 export const readyVehicles = (s, type) => fleetOf(s, type).filter((v) => vehicleState(s, v) === 'ready');
 // The least-worn ready hull flies first.
 // Moon-based hulls fly only from the Moon, and Earth hulls only from Earth.
-export const nextVehicle = (s, type) => readyVehicles(s, type).filter((v) => hullOrigin(v) === flightOrigin(s)).sort((a, b) => a.flights - b.flights)[0] ?? null;
+export const nextVehicle = (s, type) => readyVehicles(s, type).filter((v) => hullOrigin(v) === flightOrigin(s) && (flightOrigin(s) !== 'earth' || hullSite(v) === s.site)).sort((a, b) => a.flights - b.flights)[0] ?? null;
 
 export function setRocket(s, id) {
   if (!ROCKETS[id] || !rocketUnlocked(s, id)) return;
@@ -575,13 +643,17 @@ export function setRocket(s, id) {
   if (rocketDef(s).role !== 'payload') { s.manifest = []; s.sats = 0; }
 }
 
+const coreTier = (s, type) => (CORE_LIFE_TYPES.includes(type) ? CORE_LIFE.find((c) => s.tech.has(c.tech)) : null);
+export const coreLife = (s, type) => coreTier(s, type)?.life ?? ROCKETS[type].coreLife;
+export const wearRisk = (s, type) => ROCKETS[type].wearRisk * (coreTier(s, type)?.wear ?? 1);
+
 export function failChance(s, v = nextVehicle(s, s.rocket)) {
   const r = rocketDef(s);
   let base = r.baseRisk;
   if (s.rocket === 'behemoth') base = Math.max(BEHEMOTH_MIN_RISK, base - BEHEMOTH_LEARNING * (s.flightCounts.behemoth ?? 0));
   if (isMars(effDest(s)) && !originIsMoon(s)) base += marsRisks(s).ascent;
   if (originIsMars(s)) base += MARS_RETURN.ascentRisk;
-  return base + r.wearRisk * (v?.flights ?? 0);
+  return base + wearRisk(s, s.rocket) * (v?.flights ?? 0);
 }
 
 // How the booster comes back: catch vehicles use the tower, others pick RTLS, droneship or expend.
@@ -956,6 +1028,7 @@ export function adjustSats(s, delta) {
   if (!satGenOk(s, s.satGen)) s.satGen = 1;
   if (!s.tech.has('gen1') || rocketDef(s).role !== 'payload' || !SAT_DESTS.includes(s.dest)) return;
   s.sats = Math.max(0, Math.min(rocketDef(s).sats, s.satStock[s.satGen], s.sats + delta));
+  autoSite(s);
 }
 
 // ---- economy ---------------------------------------------------------------
@@ -1085,6 +1158,17 @@ export function launchBlocker(s) {
     if (origin === 'mars') return 'No Skyship at the Mars base (land one there, or build one with the Fabricator)';
     const owned = fleetOf(s, s.rocket).filter((x) => hullOrigin(x) === origin);
     if (!owned.length) return `No ${r.short} in the fleet: build one in the Factory`;
+    if (origin === 'earth') {
+      const here = hullsAt(s, s.rocket, s.site);
+      const place = SITES[s.site].short;
+      if (!here.length) {
+        const from = owned.map((x) => ({ x, d: hullMoveDays(hullSite(x), s.site) })).sort((a, b) => a.d - b.d)[0];
+        return `No ${r.short} at ${place}: ship one from ${SITES[hullSite(from.x)].short} (${from.d} days) in the Fleet tab`;
+      }
+      const moving = here.filter((x) => x.transit);
+      if (moving.length === here.length) return `${r.short} arrives at ${place} in ${Math.min(...moving.map((x) => x.transit.arrive)) - s.day} day(s)`;
+      return `${r.short} not ready at ${place}: ${Math.min(...here.filter((x) => !x.transit).map((x) => Math.max(x.readyDay, x.returnDay))) - s.day} day(s)`;
+    }
     return `${r.short} not ready: ${Math.min(...owned.map((x) => x.readyDay)) - s.day} day(s)`;
   }
   if (!moon) {
@@ -1469,9 +1553,18 @@ export function tick(s) {
   }
   if (s.marsBase?.stock.methalox >= 1) milestone(s, 'marsFuel', 'First methalox made on Mars', 'Fuel from Martian ice and air.');
 
+  for (const v of s.fleet) {
+    if (v.transit && v.transit.arrive <= s.day) {
+      v.site = v.transit.to;
+      delete v.transit;
+      note(s, `${v.serial} arrived at ${SITES[v.site].short}.`);
+    }
+  }
+  dispatchHulls(s);
+
   // Hulls past their rated flights retire once their last refit is done.
   for (const v of [...s.fleet]) {
-    if (v.flights >= ROCKETS[v.type].coreLife && s.day >= v.readyDay) {
+    if (v.flights >= coreLife(s, v.type) && s.day >= v.readyDay) {
       s.fleet = s.fleet.filter((x) => x !== v);
       note(s, `${v.serial} retired after ${v.flights} flights.`);
     }

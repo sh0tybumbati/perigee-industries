@@ -393,6 +393,7 @@ export class OpsScene extends Phaser.Scene {
       expandTank: (id, type) => sim.expandTank(s, id, type),
       buildPlant: (id, fuel) => sim.buildPlant(s, id, fuel),
       buyDroneship: () => sim.buyDroneship(s),
+      shipHull: (id, to) => { sim.shipHull(s, id, to); this.saveGame(); },
       factorySite: (id) => { this.factorySite = id; },
       openBase: (body) => this.openBase(body),
       setOrigin: (o) => sim.setOrigin(s, o),

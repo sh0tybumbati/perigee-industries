@@ -17,7 +17,7 @@ function icon(ui, x, y, w, h, type) {
   ui.container.add(g);
 }
 
-const stateColor = { ready: COL.good, refit: COL.warn, flying: COL.accent };
+const stateColor = { ready: COL.good, refit: COL.warn, flying: COL.accent, shipping: COL.accent };
 const tenureColor = { owned: COL.good, leased: COL.warn, locked: COL.dim };
 const tenureLabel = { owned: 'OWNED', leased: 'LEASED', locked: 'CLOSED' };
 
@@ -70,11 +70,12 @@ export function renderMission(ui, s, X, Y, W, actions) {
   const bw = (W - (types.length - 1) * 5) / types.length;
   types.forEach((id, i) => {
     const total = sim.fleetOf(s, id).length;
-    const ready = sim.readyVehicles(s, id).length;
+    const here = (v) => sim.hullOrigin(v) === sim.flightOrigin(s) && (sim.flightOrigin(s) !== 'earth' || sim.hullSite(v) === s.site);
+    const ready = sim.readyVehicles(s, id).filter(here).length; // ready at the selected launch site
     const on = id === s.rocket;
     ui.button(X + i * (bw + 5), Y + 84, bw, 30, `${ROCKETS[id].short} ${ready}/${total}`, () => actions.pickRocket(id), {
       size: types.length > 6 ? 10 : 12, fill: on ? COL.btnOn : COL.btn, stroke: on ? COL.good : COL.accent,
-      hint: `${ROCKETS[id].name}: ${ready} of ${total} ready.`,
+      hint: `${ROCKETS[id].name}: ${ready} ready here, ${total} in the fleet.`,
     });
     if (bw > 150) icon(ui, X + i * (bw + 5) + 6, Y + 86, 18, 26, id);
   });
@@ -82,9 +83,9 @@ export function renderMission(ui, s, X, Y, W, actions) {
   const risk = Math.round(sim.failChance(s) * 100);
   if (v) {
     const proto = s.rocket === 'behemoth' ? ' (prototype)' : '';
-    ui.label(X, Y + 122, `Next: ${v.serial}  ·  ${v.flights}/${r.coreLife} flights  ·  risk ~${risk}%${proto}`, { size: 12, color: COL.dimText });
+    ui.label(X, Y + 122, `Next: ${v.serial}  ·  ${v.flights}/${sim.coreLife(s, s.rocket)} flights  ·  risk ~${risk}%${proto}`, { size: 12, color: COL.dimText });
   } else {
-    ui.label(X, Y + 122, sim.fleetOf(s, s.rocket).length ? 'No hull ready: refit or in flight.' : 'None in the fleet. Build one in the Factory tab.', { size: 12, color: hex(COL.warn) });
+    ui.label(X, Y + 122, sim.fleetOf(s, s.rocket).length ? (sim.launchBlocker(s) ?? 'No hull ready here.') : 'None in the fleet. Build one in the Factory tab.', { size: 12, color: hex(COL.warn), wrap: W });
   }
 
   // Launch site and recovery
@@ -313,16 +314,23 @@ export function renderFleet(ui, s, X, Y, W, actions) {
     const y = Y + 18 + i * 26;
     const st = sim.vehicleState(s, v);
     const r = ROCKETS[v.type];
-    ui.row(X, y, W, 24, { on: v.type === s.rocket && st === 'ready' && v === sim.nextVehicle(s, v.type) });
+    const to = sim.nextShipSite(s, v);
+    const canShip = to && !sim.shipHullBlocker(s, v, to);
+    ui.row(X, y, W, 24, {
+      on: v.type === s.rocket && st === 'ready' && v === sim.nextVehicle(s, v.type),
+      onClick: canShip ? () => actions.shipHull(v.id, to) : null,
+      hint: canShip ? `Click to ship ${v.serial} to ${SITES[to].short}: ${sim.hullMoveDays(sim.hullSite(v), to)} days, $${sim.hullMoveCost(v.type)}M. Launches from a site need a hull there.` : st === 'shipping' ? `${v.serial} is on its way to ${SITES[v.transit.to].short}.` : undefined,
+    });
     icon(ui, X + 6, y + 1, 14, 22, v.type);
     ui.label(X + 28, y + 5, v.serial, { size: 12, bold: true });
     ui.label(X + 92, y + 5, r.name, { size: 12, color: COL.dimText });
-    const days = st === 'ready' ? '' : ` ${Math.max(1, (st === 'flying' ? v.returnDay : v.readyDay) - s.day)}d`;
+    const days = st === 'ready' ? '' : ` ${Math.max(1, (st === 'shipping' ? v.transit.arrive : st === 'flying' ? v.returnDay : v.readyDay) - s.day)}d`;
     ui.label(X + 240, y + 5, `${st}${days}`, { size: 12, color: hex(stateColor[st]) });
-    ui.label(X + 300, y + 5, v.site === 'moon' ? 'Moon base' : v.site === 'mars' ? 'Mars base' : SITES[v.site ?? 'cape'].short, { size: 11, color: hex(v.site === 'moon' || v.site === 'mars' ? COL.accent : COL.dim) });
-    const wear = v.flights / r.coreLife;
+    ui.label(X + 300, y + 5, st === 'shipping' ? `→ ${SITES[v.transit.to].letter}` : v.site === 'moon' ? 'Moon base' : v.site === 'mars' ? 'Mars base' : SITES[v.site ?? 'cape'].short, { size: 11, color: hex(st === 'shipping' || v.site === 'moon' || v.site === 'mars' ? COL.accent : COL.dim) });
+    const life = sim.coreLife(s, v.type);
+    const wear = v.flights / life;
     ui.bar(X + 392, y + 8, 80, 8, wear, wear > 0.7 ? COL.bad : wear > 0.4 ? COL.warn : COL.good);
-    ui.label(X + W - 8, y + 5, `${v.flights}/${r.coreLife}`, { size: 12, right: true, color: COL.dimText });
+    ui.label(X + W - 8, y + 5, `${v.flights}/${life}`, { size: 12, right: true, color: COL.dimText });
   });
   if (sorted.length > 9) ui.label(X, Y + 18 + 9 * 26, `+${sorted.length - 9} more hulls`, { size: 12, color: COL.dimText });
 
@@ -398,7 +406,7 @@ export function renderFactory(ui, s, X, Y, W, actions, ctx) {
     const nm = r.role === 'module' ? r.name : r.short;
     ui.button(x, y, cw, 21, blocker === 'Locked' ? `${nm}: locked` : `${nm}  $${cost}M · ${days}d`, () => actions.queueBuild(id, fid), {
       enabled: !blocker, size: 12,
-      hint: blocker && blocker !== 'Locked' ? `${r.name}: ${blocker}` : `${r.name}: ${r.payload ? `${r.payload} t, ` : ''}rated ${r.coreLife} flight${r.coreLife > 1 ? 's' : ''}. ${r.steel} t of ${r.metal === 'aluminum' ? 'aluminum' : 'steel'}.`,
+      hint: blocker && blocker !== 'Locked' ? `${r.name}: ${blocker}` : `${r.name}: ${r.payload ? `${r.payload} t, ` : ''}rated ${sim.coreLife(s, id)} flight${sim.coreLife(s, id) > 1 ? 's' : ''}. ${r.steel} t of ${r.metal === 'aluminum' ? 'aluminum' : 'steel'}.`,
     });
     if (blocker !== 'Locked') icon(ui, x + 6, y + 1, 11, 19, id);
   });
@@ -545,34 +553,34 @@ export function renderTech(ui, s, X, Y, W, actions, ctx) {
   const fid = ctx.factorySite && s.sites[ctx.factorySite]?.lines ? ctx.factorySite : 'cape';
   const clip = (str, n) => (str.length > n ? `${str.slice(0, n - 1)}…` : str);
   TECH.forEach((t, i) => {
-    const y = Y + i * 27;
+    const y = Y + i * 20;
     const st = sim.techState(s, t.id);
     const afford = sim.canSpend(s, t.cost);
     const stroke = st === 'owned' ? COL.good : st === 'testing' ? COL.warn : st === 'available' && afford ? COL.accent : COL.line;
-    ui.row(X, y, W, 25, {
+    ui.row(X, y, W, 18, {
       stroke, fill: st === 'owned' ? 0x123524 : COL.row,
       onClick: st === 'available' && afford ? () => actions.buyTech(t.id) : null,
       hint: st === 'locked' ? `${t.name} needs: ${sim.techBlockers(s, t.id).join(', ')}` : t.desc,
     });
     const dim = st === 'locked';
-    ui.label(X + 10, y + 5, t.name, { size: 12, bold: true, color: dim ? COL.dimText : COL.text });
+    ui.label(X + 10, y + 2, t.name, { size: 12, bold: true, color: dim ? COL.dimText : COL.text });
     if (st === 'testing') {
       const tr = s.trials[t.id];
       const p = PROTOS[t.id];
-      ui.label(X + 168, y + 6, `${Math.round(sim.testOdds(s, t.id) * 100)}% odds · ${tr.attempts} failed · ${tr.articles} ready`, { size: 10, color: hex(COL.warn) });
+      ui.label(X + 168, y + 3, `${Math.round(sim.testOdds(s, t.id) * 100)}% odds · ${tr.attempts} failed · ${tr.articles} ready`, { size: 10, color: hex(COL.warn) });
       const buildB = sim.testBuildBlocker(s, t.id, fid);
-      ui.button(X + W - 232, y + 2, 112, 21, `Build $${sim.testBuildAt(t.id, fid).cost}M · ${sim.testBuildAt(t.id, fid).days}d`, () => actions.queueTest(t.id, fid), {
+      ui.button(X + W - 232, y + 1, 112, 16, `Build $${sim.testBuildAt(t.id, fid).cost}M · ${sim.testBuildAt(t.id, fid).days}d`, () => actions.queueTest(t.id, fid), {
         size: 10, enabled: !buildB, hint: buildB ?? `${p.name}: ${p.t} t of ${p.metal}.`,
       });
       const flyB = sim.testFlightBlocker(s, t.id);
-      ui.button(X + W - 116, y + 2, 112, 21, `Fly test $${p.ops}M`, () => actions.flyTest(t.id), {
+      ui.button(X + W - 116, y + 1, 112, 16, `Fly test $${p.ops}M`, () => actions.flyTest(t.id), {
         size: 10, enabled: !flyB, fill: flyB ? COL.btn : COL.btnOn, stroke: flyB ? COL.accent : COL.warn, hint: flyB ?? `Success or failure is a dice roll. A failure closes the pad for ${sim.rdAt(s.site).failClosed} days.`,
       });
       return;
     }
     const sub = st === 'locked' ? `Needs: ${sim.techBlockers(s, t.id).join(', ')}` : t.desc;
-    ui.label(X + 168, y + 6, clip(sub, 56), { size: 10, color: COL.dimText });
-    ui.label(X + W - 10, y + 5, st === 'owned' ? 'DONE' : `$${t.cost}M`, {
+    ui.label(X + 168, y + 3, clip(sub, 56), { size: 10, color: COL.dimText });
+    ui.label(X + W - 10, y + 2, st === 'owned' ? 'DONE' : `$${t.cost}M`, {
       size: 12, bold: true, right: true, color: st === 'owned' ? hex(COL.good) : afford || dim ? COL.dimText : hex(COL.bad),
     });
   });

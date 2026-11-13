@@ -474,6 +474,28 @@ Skylink satellites used to appear from nowhere and be paid for at launch. They a
 - Saves: old saves start with no satellites in stock. A draft or locked loadout from an earlier build loses its satellite count.
 - Pacing: building ahead is a real decision now (cash tied up in stock, a Gen-1 batch costs less than one launch), and Gen-3 takes the longest, so a stream of Skyship launches with Gen-3 is limited by the plant (60 satellites is 10 batches, 30 days) unless stock was built ahead.
 
+2.24 Longer-Lived Boosters, Hull Locations and Shipping Hulls (Phase 15)
+Three changes that go together: boosters can be made to last, a hull is in one place at a time, and the automatic launch-site pick knows where the hulls are.
+
+Core Life research (R&D): the Peregrine 9 and Peregrine Heavy are rated for 10 flights. Three techs, bought one after another, raise the rating and make an old core less likely to fail (the failure risk added per flight flown is multiplied by the factor shown). They apply to every Peregrine hull, existing ones included.
+| Tech | Cost | Needs | Rated flights | Wear risk per flight |
+| Core Life I | $45M | Rapid Reflight | 20 | x0.6 |
+| Core Life II | $140M | Core Life I, Peregrine Heavy | 35 | x0.4 |
+| Core Life III | $350M | Core Life II, Operational Skyship | 50 | x0.3 |
+The Skyship family (40 flights), the Behemoth (4) and the single-use hulls are not changed.
+
+Hull locations: every hull is at one place: a launch site, or the Moon or Mars base. A launch from a site needs a ready hull of that type at that site. A hull comes back to the site it launched from (it lands there) and a newly built hull appears at the factory site it was built in. The Fleet tab shows each hull's site, and a hull that is being moved shows "shipping" and its destination.
+Shipping a hull: a ready Earth hull can be shipped to another site you can launch from, by road or barge. It costs money and takes days, and the hull cannot fly until it arrives.
+| Between | Days |
+| Cape Canaveral and Vermilion Parish | 4 |
+| Cape Canaveral and Boca Chica | 5 |
+| Boca Chica and Vermilion Parish | 2 |
+| Vandenberg and Cape Canaveral | 7 |
+| Vandenberg and Boca Chica, or Vermilion Parish | 6 |
+The cost is 2% of the hull's build cost, at least $0.2M (about $1.2M for a Skyship). In the Fleet tab each ready hull has a button that sends it to the next open site.
+Automatic shipping: when a loadout is locked in for a site that has no hull of that type (counting hulls already on the way, and one per other locked loadout waiting for the same type there), the game ships the least worn ready hull from another site by itself, and keeps trying each day until one is free to go. The loadout's launch waits for the hull as it waits for the payloads, and says so ("Peregrine 9 arrives in 4 days"). A manual launch from a site with no hull says where the nearest one is.
+Launch-site pick: the automatic pick (2.14) now also counts the day a hull of the selected type could be at each site (now if one is there, else when one could arrive) and the days Skylink satellites need to ship, so with a hull at Boca Chica and none at Cape it prefers Boca Chica. It also works for a satellites-only draft. It runs when you load or unload a contract or change the satellite count, and a site picked by hand sticks until then.
+
 3. Technology Tree
 Costs are in $M. "Flight" means the tech needs a prototype test flight (2.12). Prerequisites are as built.
 

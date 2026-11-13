@@ -89,6 +89,17 @@ export const SHIP_DAYS = {
 };
 // Days for a Skylink batch to reach each launch site from the plant at Cape Canaveral (GDD 2.22).
 export const SAT_SHIP_DAYS = { cape: 0, boca: 2, vermilion: 2, vandenberg: 3 };
+// Core Life research (GDD 2.24): the best owned tier sets the rating and scales the per-flight wear risk of Peregrine cores.
+export const CORE_LIFE = [{ tech: 'life3', life: 50, wear: 0.3 }, { tech: 'life2', life: 35, wear: 0.4 }, { tech: 'life1', life: 20, wear: 0.6 }];
+export const CORE_LIFE_TYPES = ['peregrine9', 'peregrineHeavy'];
+// Days to ship a hull between launch sites, and the cost as a share of its build cost (GDD 2.24).
+export const HULL_MOVE_DAYS = {
+  cape: { vermilion: 4, boca: 5, vandenberg: 7 },
+  vermilion: { boca: 2, vandenberg: 6 },
+  boca: { vandenberg: 6 },
+};
+export const HULL_MOVE_COST = 0.02;
+export const HULL_MOVE_MIN = 0.2;
 export const LEASE_FEE = 0.15; // $M per launch from a leased site
 export const BAY_FEE = 0.08; // $M per refit in a rented hangar
 export const BAY_RENT_DEPOSIT = 3; // $M to rent another hangar at a leased site
@@ -235,6 +246,9 @@ export const TECH = [
   { id: 'landing', name: 'Booster Landing', cost: 30, era: 'Peregrine', desc: 'Boosters land and fly again (RTLS). Needs a test flight.', requires: [] },
   { id: 'droneship', name: 'Droneship Recovery', cost: 40, era: 'Peregrine', desc: 'Ocean landings at full payload. Needs a test flight.', requires: ['landing'] },
   { id: 'fastCores', name: 'Rapid Reflight', cost: 25, era: 'Peregrine', desc: 'Peregrine turnaround -2 days', requires: ['landing'] },
+  { id: 'life1', name: 'Core Life I', cost: 45, era: 'Peregrine', desc: 'Peregrine cores rated for 20 flights, with 40% less wear risk per flight', requires: ['fastCores'] },
+  { id: 'life2', name: 'Core Life II', cost: 140, era: 'Peregrine', desc: 'Peregrine cores rated for 35 flights, with 60% less wear risk per flight', requires: ['life1', 'heavyCores'] },
+  { id: 'life3', name: 'Core Life III', cost: 350, era: 'Super-Heavy', desc: 'Peregrine cores rated for 50 flights, with 70% less wear risk per flight', requires: ['life2', 'skyship'] },
   { id: 'plants', name: 'Propellant Plants', cost: 70, era: 'Peregrine', desc: 'Owned sites can build kerolox and methalox plants', requires: ['fastCores'] },
   { id: 'gen1', name: 'Skylink Gen-1', cost: 5, era: 'Peregrine', desc: 'Unlock broadband satellite batches', requires: [] },
   { id: 'gen2', name: 'Skylink Gen-2', cost: 60, era: 'Peregrine', desc: 'Gen-2 Mini satellites (1.2k subscribers each)', requires: ['fastCores', 'gen1'] },

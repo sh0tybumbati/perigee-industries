@@ -68,6 +68,7 @@ for (let seed = 0; seed < N; seed++) {
       const keepCash = (typeof nextT !== 'undefined' && nextT ? nextT.cost + 12 : 15) + 10;
       if (s.tech.has(SATS_TECH[g]) && s.satQueue.length < 3 && s.satStock[g] + inQ < want && s.cash > keepCash + sim.satBatchCost(g)) sim.queueSats(s, g);
     }
+    s.site = 'cape'; // the bot builds and flies its hulls at Cape Canaveral
     let launchedToday = 0;
     for (let k = 0; k < cape().pads.length; k++) {
       // depot / tanker duty first
