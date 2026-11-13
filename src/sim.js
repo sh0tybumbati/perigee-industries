@@ -663,9 +663,10 @@ export function failChance(s, v = nextVehicle(s, s.rocket)) {
 export const recoveryAllowed = (s, mode) => mode === 'expend' || (mode === 'rtls' && s.tech.has('landing')) || (mode === 'drone' && s.tech.has('droneship'));
 export const recoveryOf = (s) => (rocketDef(s).catch ? 'catch' : recoveryAllowed(s, s.recovery) ? s.recovery : 'expend');
 
-export function capacity(s) {
-  const r = rocketDef(s);
-  const rec = recoveryOf(s);
+export const capacity = (s) => capacityOf(s, s.rocket);
+export function capacityOf(s, id) {
+  const r = ROCKETS[id];
+  const rec = r.catch ? 'catch' : recoveryAllowed(s, s.recovery) ? s.recovery : 'expend';
   const f = rec === 'rtls' ? 1 - RTLS_PAYLOAD_PENALTY : rec === 'expend' ? 1 + EXPEND_BONUS : 1;
   return { mass: +(r.payload * f).toFixed(1), volume: r.volume };
 }
@@ -1035,12 +1036,17 @@ export function cycleSatGen(s) {
 // Satellites the selected vehicle can carry: whatever the payload mass and fairing volume allow
 // after any contracts on the manifest, in whole plant batches.
 export function satCap(s) {
-  const r = rocketDef(s);
-  if (r.role !== 'payload' || !satGenOk(s, s.satGen)) return 0;
-  const cap = capacity(s);
-  let mass = cap.mass, volume = cap.volume;
-  for (const c of s.contracts) if (s.manifest.includes(c.id)) { mass -= c.mass; volume -= c.volume; }
-  const n = Math.min(mass / SATS[s.satGen].mass, volume / SATS[s.satGen].volume);
+  if (!satGenOk(s, s.satGen)) return 0;
+  let mass = 0, volume = 0;
+  for (const c of s.contracts) if (s.manifest.includes(c.id)) { mass += c.mass; volume += c.volume; }
+  return satCapOf(s, s.rocket, s.satGen, mass, volume);
+}
+// The same for any hull type and generation, with some mass and volume already spoken for.
+export function satCapOf(s, id, gen, usedMass = 0, usedVolume = 0) {
+  if (ROCKETS[id].role !== 'payload' || (SATS[gen].only && !SATS[gen].only.includes(id))) return 0;
+  const cap = capacityOf(s, id);
+  const mass = cap.mass - usedMass, volume = cap.volume - usedVolume;
+  const n = Math.min(mass / SATS[gen].mass, volume / SATS[gen].volume);
   return Math.max(0, Math.floor((n + 1e-9) / SAT_BATCH) * SAT_BATCH);
 }
 

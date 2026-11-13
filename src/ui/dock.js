@@ -365,7 +365,29 @@ export function renderFleet(ui, s, X, Y, W, actions) {
     ui.label(X + W - 8, y + 5, `${v.flights}/${life}`, { size: 12, right: true, color: COL.dimText });
   });
 
-  const dy = PHONE ? Y + 262 : Y + 38 + Math.max(1, Math.min(sorted.length, HULL_ROWS)) * 26;
+  // What each hull type could lift per launch, by satellite generation (GDD 2.23).
+  let sy = Y + 38 + Math.max(1, Math.min(sorted.length, HULL_ROWS)) * 26;
+  const gens = [1, 2, 3].filter((g) => s.tech.has(SATS[g].tech));
+  const types = [...new Set(s.fleet.map((v) => v.type))].filter((id) => ROCKETS[id].role === 'payload').sort((a, b) => ROCKETS[a].payload - ROCKETS[b].payload);
+  if (!PHONE && gens.length && types.length) {
+    ui.heading(X, sy, 'SATELLITES PER LAUNCH');
+    gens.forEach((g, j) => ui.label(X + 190 + j * 90, sy, SATS[g].name, { size: 11, bold: true, color: COL.dimText }));
+    types.forEach((id, i) => {
+      const y = sy + 16 + i * 22;
+      ui.row(X, y, W, 20);
+      ui.label(X + 8, y + 3, ROCKETS[id].name, { size: 12, bold: true });
+      const cap = sim.capacityOf(s, id);
+      ui.label(X + 140, y + 3, `${cap.mass} t`, { size: 11, color: COL.dimText });
+      gens.forEach((g, j) => {
+        const n = sim.satCapOf(s, id, g);
+        ui.label(X + 190 + j * 90, y + 3, n ? `${n}  ·  ${+(n * SATS[g].capacity).toFixed(1)}k` : 'n/a', { size: 12, color: n ? hex(COL.good) : COL.dimText });
+      });
+    });
+    ui.label(X, sy + 18 + types.length * 22, 'Satellites per launch and the subscribers they add, at the current landing mode.', { size: 10, color: COL.dimText });
+    sy += 38 + types.length * 22;
+  }
+
+  const dy = PHONE ? Y + 262 : sy;
   ui.heading(X, dy, `DRONESHIPS  ·  ${s.droneships.length}/${MAX_DRONESHIPS}`);
   if (s.droneships.length < MAX_DRONESHIPS) {
     ui.button(X + W - 190, dy - 4, 190, 22, `Buy droneship  $${DRONESHIP_COST}M`, () => actions.buyDroneship(), { enabled: s.tech.has('droneship') && sim.canSpend(s, DRONESHIP_COST), size: 11, hint: s.tech.has('droneship') ? undefined : 'Research Droneship Recovery first.' });
