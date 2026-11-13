@@ -186,19 +186,66 @@ test('satellites are built in the plant before they can be launched', () => {
   assert.equal(sim.queueSats(s, 2), false, 'Gen-2 is not researched');
 });
 
-test('batches build one at a time, and an unstarted batch cancels for half', () => {
+test('the plant builds three batches at once, and an unstarted batch cancels for half', () => {
   const s = world();
   s.tech.add('gen1'); s.tech.add('gen2');
-  sim.queueSats(s, 2); sim.queueSats(s, 1);
-  assert.equal(s.satQueue.length, 2);
+  sim.queueSats(s, 2); sim.queueSats(s, 1); sim.queueSats(s, 1); sim.queueSats(s, 1);
+  assert.equal(s.satQueue.length, 4);
   idle(s, 1);
   assert.equal(s.satStock[2], 0, 'a Gen-2 batch takes two days');
+  assert.equal(s.satStock[1], 12, 'two Gen-1 batches finished in parallel');
+  assert.equal(s.satQueue.length, 2);
   assert.equal(sim.cancelSats(s, s.satQueue[0].id), false, 'work has started');
   const cash = s.cash;
   assert.ok(sim.cancelSats(s, s.satQueue[1].id));
   assert.equal(+(s.cash - cash).toFixed(2), 1.05);
   idle(s, 1);
   assert.equal(s.satStock[2], 6);
+});
+
+test('a hull carries as many satellites as its mass and volume allow, in whole batches', () => {
+  const s = world();
+  s.tech.add('gen1'); s.tech.add('gen2'); s.tech.add('gen3');
+  s.recovery = 'drone'; s.tech.add('droneship');
+  sim.setDest(s, 'leo');
+  sim.setRocket(s, 'peregrine9');
+  assert.equal(sim.satCap(s), 66, 'Gen-1: volume limits a Peregrine 9 (60 m3 / 0.9)');
+  s.satGen = 2;
+  assert.equal(sim.satCap(s), 24, 'Gen-2: mass limits it (22 t / 0.8)');
+  s.recovery = 'rtls';
+  assert.equal(sim.satCap(s), 18, 'RTLS costs payload mass');
+  s.recovery = 'drone'; s.satGen = 1;
+  contract(s, { mass: 10, volume: 30 }); s.manifest = [s.contracts[0].id];
+  assert.equal(sim.satCap(s), 30, 'contracts on the manifest take room');
+  s.manifest = [];
+  s.tech.add('heavyCores');
+  sim.setRocket(s, 'peregrineHeavy');
+  assert.ok(sim.satCap(s) > 120, 'a Heavy holds far more than a Peregrine 9');
+});
+
+test('Fill loads what is built up to the hull cap; the launch checks mass', () => {
+  const s = world();
+  s.tech.add('gen1');
+  sim.setDest(s, 'leo');
+  s.satStock[1] = 200;
+  sim.fillSats(s);
+  assert.equal(s.sats, sim.satCap(s));
+  s.satStock[1] = 20;
+  sim.fillSats(s);
+  assert.equal(s.sats, 18, 'whole batches of what is in stock');
+  s.sats = 200;
+  assert.ok(sim.launchBlocker(s), 'too many for the hull');
+});
+
+test('queueing several batches at once is all or nothing', () => {
+  const s = world();
+  s.tech.add('gen1');
+  const cash = s.cash;
+  assert.ok(sim.queueSats(s, 1, 5));
+  assert.equal(s.satQueue.length, 5);
+  assert.equal(+(cash - s.cash).toFixed(2), 10.5);
+  assert.equal(sim.queueSats(s, 1, 30), false, 'the queue holds 30');
+  assert.equal(s.satQueue.length, 5);
 });
 
 test('locking sets satellites aside and cancelling returns them; launching spends them', () => {

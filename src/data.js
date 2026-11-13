@@ -194,7 +194,7 @@ export const SATS = {
 };
 // The satellite plant builds one batch of six at a time (GDD 2.23): days per batch by generation.
 export const SAT_BATCH_DAYS = { 1: 1, 2: 2, 3: 3 };
-export const SAT_QUEUE_MAX = 10;
+export const SAT_QUEUE_MAX = 30;
 export const OVERHEAD_PER_DAY = 0.12; // $M payroll and facilities
 export const CASH_FLOOR = 5; // $M overhead never drains cash below this
 

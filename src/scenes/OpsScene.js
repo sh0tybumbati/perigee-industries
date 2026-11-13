@@ -396,7 +396,7 @@ export class OpsScene extends Phaser.Scene {
       buyPad: () => sim.buyPad(s),
       buyLine: (id) => sim.buyLine(s, id),
       queueBuild: (id, siteId) => sim.queueBuild(s, id, siteId),
-      queueSats: (gen) => sim.queueSats(s, gen),
+      queueSats: (gen, n = 1) => sim.queueSats(s, gen, n),
       cancelBuild: (siteId, id) => sim.cancelBuild(s, siteId, id),
       buyTech: (id) => sim.buyTech(s, id),
       queueTest: (id, siteId) => sim.queueTest(s, id, siteId),

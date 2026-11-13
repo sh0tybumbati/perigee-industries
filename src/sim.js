@@ -16,6 +16,7 @@ import { adoptGoals, tickGoals } from './goals.js';
 
 export { OVERHEAD_PER_DAY };
 export const SAT_BATCH = 6;
+export const SAT_LINES = 3; // batches the satellite plant finishes in parallel
 export const SAVE_VERSION = 11;
 const MAX_TRIPS = 80;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -641,7 +642,7 @@ export function setRocket(s, id) {
   if (!ROCKETS[id] || !rocketUnlocked(s, id)) return;
   s.rocket = id;
   if (!satGenOk(s, s.satGen)) s.satGen = 1;
-  s.sats = Math.min(s.sats, rocketDef(s).sats);
+  s.sats = Math.min(s.sats, satCap(s));
   if (rocketDef(s).role !== 'payload') { s.manifest = []; s.sats = 0; }
 }
 
@@ -929,18 +930,20 @@ export function queueBuild(s, type, siteId = 'cape') {
 // ---- the satellite plant (GDD 2.23) ---------------------------------------------------------
 
 export const satBatchCost = (gen) => +(SAT_BATCH * SATS[gen].cost).toFixed(2);
-export function satBuildBlocker(s, gen) {
+export function satBuildBlocker(s, gen, n = 1) {
   if (!SATS[gen] || !s.tech.has(SATS[gen].tech)) return 'Research it first';
-  if (s.satQueue.length >= SAT_QUEUE_MAX) return 'Plant queue is full';
-  if (!canSpend(s, satBatchCost(gen))) return 'Not enough cash';
+  if (s.satQueue.length + n > SAT_QUEUE_MAX) return 'Plant queue is full';
+  if (!canSpend(s, satBatchCost(gen) * n)) return 'Not enough cash';
   return null;
 }
 
-export function queueSats(s, gen) {
-  if (satBuildBlocker(s, gen)) return false;
+export function queueSats(s, gen, n = 1) {
+  if (satBuildBlocker(s, gen, n)) return false;
   const cost = satBatchCost(gen);
-  s.cash -= cost;
-  s.satQueue.push({ id: s.nextId++, gen, daysLeft: SAT_BATCH_DAYS[gen], total: SAT_BATCH_DAYS[gen], cost });
+  for (let i = 0; i < n; i++) {
+    s.cash -= cost;
+    s.satQueue.push({ id: s.nextId++, gen, daysLeft: SAT_BATCH_DAYS[gen], total: SAT_BATCH_DAYS[gen], cost });
+  }
   return true;
 }
 
@@ -953,13 +956,16 @@ export function cancelSats(s, id) {
 }
 
 function tickSatPlant(s) {
-  const q = s.satQueue[0];
-  if (!q) return;
-  q.daysLeft--;
-  if (q.daysLeft > 0) return;
-  s.satQueue.shift();
-  s.satStock[q.gen] += SAT_BATCH;
-  note(s, `${SAT_BATCH} ${SATS[q.gen].name} satellites came off the plant line.`);
+  const lines = s.satQueue.slice(0, SAT_LINES);
+  const done = {};
+  for (const q of lines) {
+    q.daysLeft--;
+    if (q.daysLeft > 0) continue;
+    s.satQueue = s.satQueue.filter((x) => x !== q);
+    s.satStock[q.gen] += SAT_BATCH;
+    done[q.gen] = (done[q.gen] ?? 0) + SAT_BATCH;
+  }
+  for (const g of Object.keys(done)) note(s, `${done[g]} ${SATS[g].name} satellites came off the plant line.`);
 }
 
 export function cancelBuild(s, siteId, id) {
@@ -1026,10 +1032,30 @@ export function cycleSatGen(s) {
   }
 }
 
+// Satellites the selected vehicle can carry: whatever the payload mass and fairing volume allow
+// after any contracts on the manifest, in whole plant batches.
+export function satCap(s) {
+  const r = rocketDef(s);
+  if (r.role !== 'payload' || !satGenOk(s, s.satGen)) return 0;
+  const cap = capacity(s);
+  let mass = cap.mass, volume = cap.volume;
+  for (const c of s.contracts) if (s.manifest.includes(c.id)) { mass -= c.mass; volume -= c.volume; }
+  const n = Math.min(mass / SATS[s.satGen].mass, volume / SATS[s.satGen].volume);
+  return Math.max(0, Math.floor((n + 1e-9) / SAT_BATCH) * SAT_BATCH);
+}
+
+export function fillSats(s) {
+  if (!s.tech.has('gen1') || rocketDef(s).role !== 'payload' || !SAT_DESTS.includes(s.dest)) return;
+  if (!satGenOk(s, s.satGen)) s.satGen = 1;
+  const stock = Math.floor(s.satStock[s.satGen] / SAT_BATCH) * SAT_BATCH;
+  s.sats = Math.min(satCap(s), stock);
+  autoSite(s);
+}
+
 export function adjustSats(s, delta) {
   if (!satGenOk(s, s.satGen)) s.satGen = 1;
   if (!s.tech.has('gen1') || rocketDef(s).role !== 'payload' || !SAT_DESTS.includes(s.dest)) return;
-  s.sats = Math.max(0, Math.min(rocketDef(s).sats, s.satStock[s.satGen], s.sats + delta));
+  s.sats = Math.max(0, Math.min(satCap(s), s.satStock[s.satGen], s.sats + delta));
   autoSite(s);
 }
 

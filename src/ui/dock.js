@@ -315,10 +315,15 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
       size: 12, color: hex(s.depot.prop >= need && s.rocket === 'skyship' ? COL.good : COL.warn),
     });
   } else if (gen1 && satsOk) {
-    ui.label(X, ry + 3, `Payout $${t.payout}M  ·  sats ${s.sats} (${s.satStock[s.satGen]} ${SATS[s.satGen].name} built)`, { size: 12, color: hex(COL.good) });
-    ui.button(X + 250, ry, 170, 22, SATS[s.satGen].name, () => actions.cycleSatGen(), { size: 11, hint: `Click to change the satellite generation. ${SATS[s.satGen].capacity}k subscribers each, ${SATS[s.satGen].mass} t, $${SATS[s.satGen].cost}M.` });
-    ui.button(X + 428, ry, 50, 22, `-${sim.SAT_BATCH}`, () => sim.adjustSats(s, -sim.SAT_BATCH), { enabled: s.sats > 0, size: 11 });
-    ui.button(X + 486, ry, 50, 22, `+${sim.SAT_BATCH}`, () => sim.adjustSats(s, sim.SAT_BATCH), { enabled: s.sats < Math.min(sim.rocketDef(s).sats, s.satStock[s.satGen]), size: 11, hint: s.satStock[s.satGen] ? undefined : 'No satellites built: queue a batch in the Factory tab.' });
+    ui.label(X, ry + 3, `Payout $${t.payout}M  ·  sats ${s.sats}/${sim.satCap(s)} (${s.satStock[s.satGen]} built)`, { size: 12, color: hex(COL.good) });
+    ui.button(X + 214, ry, 76, 22, SATS[s.satGen].name, () => actions.cycleSatGen(), { size: 11, hint: `Click to change the satellite generation. ${SATS[s.satGen].capacity}k subscribers each, ${SATS[s.satGen].mass} t, $${SATS[s.satGen].cost}M.` });
+    const room = s.sats < Math.min(sim.satCap(s), s.satStock[s.satGen]);
+    const why = s.satStock[s.satGen] ? `This ${sim.rocketDef(s).short} holds up to ${sim.satCap(s)} ${SATS[s.satGen].name} satellites (payload mass and fairing volume).` : 'No satellites built: queue a batch in the Factory tab.';
+    ui.button(X + 296, ry, 38, 22, `-${sim.SAT_BATCH * 5}`, () => sim.adjustSats(s, -sim.SAT_BATCH * 5), { enabled: s.sats > 0, size: 11 });
+    ui.button(X + 338, ry, 38, 22, `-${sim.SAT_BATCH}`, () => sim.adjustSats(s, -sim.SAT_BATCH), { enabled: s.sats > 0, size: 11 });
+    ui.button(X + 380, ry, 38, 22, `+${sim.SAT_BATCH}`, () => sim.adjustSats(s, sim.SAT_BATCH), { enabled: room, size: 11, hint: why });
+    ui.button(X + 422, ry, 38, 22, `+${sim.SAT_BATCH * 5}`, () => sim.adjustSats(s, sim.SAT_BATCH * 5), { enabled: room, size: 11, hint: why });
+    ui.button(X + 464, ry, 46, 22, 'Fill', () => sim.fillSats(s), { enabled: room, size: 11, hint: why });
   } else {
     ui.label(X, ry + 3, `Payout $${t.payout}M${gen1 ? '  ·  Skylink satellites ride to LEO or Polar LEO' : '  ·  Research Skylink Gen-1 for satellite batches'}`, {
       size: 12, color: COL.dimText,
@@ -452,9 +457,12 @@ function renderSatPlant(ui, s, X, Y, W, actions) {
   const bw = (W - 8 * (gens.length - 1)) / gens.length;
   gens.forEach((g, i) => {
     const blocker = sim.satBuildBlocker(s, g);
-    ui.button(X + i * (bw + 8), Y + 15, bw, 22, `${SATS[g].name} x${sim.SAT_BATCH}  $${sim.satBatchCost(g)}M · ${SAT_BATCH_DAYS[g]}d`, () => actions.queueSats(g), {
-      size: 11, enabled: !blocker, hint: blocker ?? `Queue ${sim.SAT_BATCH} ${SATS[g].name} satellites. They wait in stock until a loadout takes them.${SATS[g].only ? ' Gen-3 only flies on a Skyship.' : ''}`,
+    const x0 = X + i * (bw + 8), mw = bw - 44;
+    ui.button(x0, Y + 15, mw, 22, `${SATS[g].name} x${sim.SAT_BATCH}  $${sim.satBatchCost(g)}M · ${SAT_BATCH_DAYS[g]}d`, () => actions.queueSats(g, 1), {
+      size: 11, enabled: !blocker, hint: blocker ?? `Queue ${sim.SAT_BATCH} ${SATS[g].name} satellites. They wait in stock until a loadout takes them. The plant runs ${sim.SAT_LINES} batches at once.${SATS[g].only ? ' Gen-3 only flies on a Skyship.' : ''}`,
     });
+    const b5 = sim.satBuildBlocker(s, g, 5);
+    ui.button(x0 + mw + 4, Y + 15, 40, 22, 'x5', () => actions.queueSats(g, 5), { size: 11, enabled: !b5, hint: b5 ?? `Queue 5 batches: ${5 * sim.SAT_BATCH} satellites for $${(5 * sim.satBatchCost(g)).toFixed(1)}M.` });
   });
 }
 
