@@ -158,9 +158,21 @@ export function renderMission(ui, s, X, Y, W, actions) {
   renderReceipt(ui, s);
   const blocker = sim.launchBlocker(s);
   const total = sim.launchCost(s);
-  ui.button(X, Y + 384, W, 38, blocker ? `LAUNCH  (${blocker})` : `LAUNCH to ${ed.name}  ($${total}M)`, () => actions.launch(), {
-    enabled: !blocker, fill: 0x7a2a1d, stroke: COL.bad, size: blocker ? 12 : 15, hint: costHint(s),
-  });
+  if (payload && s.lock) {
+    // Locked in: the launch happens by itself, so the button only reports what it is waiting for.
+    ui.button(X, Y + 384, W - 110, 38, blocker ? `LOCKED IN  ·  ${blocker}` : 'LOCKED IN  ·  launching', () => {}, {
+      enabled: false, fill: 0x1d3a5a, stroke: COL.accent, size: 12, hint: 'The loadout is accepted and shipping. It launches by itself once every payload has arrived and nothing else blocks it.',
+    });
+    ui.button(X + W - 104, Y + 384, 104, 38, 'CANCEL', () => actions.cancelLoadout(), { size: 13, hint: 'Withdraw the contracts. They go back to the board and shipping starts over if you lock them again.' });
+  } else if (payload && (s.manifest.length || s.sats) && (sim.shipDaysNeeded(s) > 0)) {
+    ui.button(X, Y + 384, W, 38, `LOCK IN LOADOUT  ·  ships ${sim.shipDaysNeeded(s)}d, then launches ($${total}M)`, () => actions.lockLoadout(), {
+      fill: 0x1d5a3a, stroke: COL.good, size: 13, hint: 'Accept the contracts: the payloads ship to the launch site and the rocket launches by itself when they all arrive. The loadout is frozen until then.',
+    });
+  } else {
+    ui.button(X, Y + 384, W, 38, blocker ? `LAUNCH  (${blocker})` : `LAUNCH to ${ed.name}  ($${total}M)`, () => actions.launch(), {
+      enabled: !blocker, fill: 0x7a2a1d, stroke: COL.bad, size: blocker ? 12 : 15, hint: costHint(s),
+    });
+  }
 }
 
 // The itemized launch cost as a receipt on the map (GDD 2.13).

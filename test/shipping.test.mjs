@@ -26,6 +26,9 @@ test('a payload has to be shipped to the site before the launch can happen', () 
   const s = world();
   const c = contract(s, { region: 'eu' });
   assert.ok(sim.toggleContract(s, c.id));
+  assert.equal(c.acceptedDay, undefined, 'loading is only a draft');
+  assert.match(sim.launchBlocker(s), /Lock in the loadout/);
+  assert.ok(sim.lockLoadout(s));
   assert.equal(c.acceptedDay, s.day);
   assert.match(sim.launchBlocker(s), /Payload for Orion Media arrives in 6 day/);
   idle(s, 5);
@@ -93,16 +96,64 @@ test('old contracts without a region ship instantly', () => {
   assert.equal(sim.launchBlocker(s), null);
 });
 
-test('shipping only starts once the contract is accepted, and unloading withdraws it', () => {
+test('drafting ships nothing; locking in accepts, freezes and starts the clock; cancel forgets it', () => {
   const s = world();
   const c = contract(s, { region: 'eu' });
   idle(s, 10);
-  assert.equal(c.acceptedDay, undefined, 'an offer on the board is not shipping');
   assert.ok(sim.toggleContract(s, c.id));
+  assert.equal(c.acceptedDay, undefined, 'a draft is not shipping');
+  assert.equal(sim.shipDaysNeeded(s), 6);
+  assert.ok(sim.lockLoadout(s));
   assert.equal(c.acceptedDay, s.day);
+  assert.equal(sim.toggleContract(s, c.id), false, 'the loadout is frozen');
+  assert.equal(sim.setDest(s, 'gto'), false);
+  assert.equal(sim.setSite(s, 'cape'), false);
   idle(s, 3);
-  assert.ok(sim.toggleContract(s, c.id)); // unload
+  assert.ok(sim.cancelLoadout(s));
   assert.equal(c.acceptedDay, undefined);
-  assert.ok(sim.toggleContract(s, c.id)); // load again: the clock restarts
+  assert.equal(s.lock, null);
+  assert.ok(sim.toggleContract(s, c.id)); // unload the draft
+  assert.ok(sim.toggleContract(s, c.id));
+  assert.ok(sim.lockLoadout(s)); // the clock restarts
   assert.match(sim.launchBlocker(s), /arrives in 6 day/);
+});
+
+test('two contracts and satellites lock in together and launch when the last part arrives', () => {
+  const s = world();
+  s.tech.add('gen1');
+  s.cash = 5000;
+  const near = contract(s, { region: 'na' });
+  const far = contract(s, { region: 'eu', dest: 'leo' });
+  assert.ok(sim.toggleContract(s, near.id));
+  assert.ok(sim.toggleContract(s, far.id));
+  sim.adjustSats(s, sim.SAT_BATCH);
+  assert.ok(s.sats > 0);
+  assert.ok(sim.lockLoadout(s));
+  for (let i = 0; i < 5; i++) { idle(s, 1); assert.equal(sim.autoLaunchReady(s), false); }
+  idle(s, 1);
+  assert.equal(sim.autoLaunchReady(s), true, 'the Europe payload lands on day 6');
+  const r = sim.launch(s);
+  assert.ok(r.ok);
+  assert.equal(s.lock, null);
+  assert.equal(s.manifest.length, 0);
+});
+
+test('a locked contract does not expire while it ships', () => {
+  const s = world();
+  const c = contract(s, { region: 'apac', expires: s.day + 3 });
+  sim.toggleContract(s, c.id);
+  sim.lockLoadout(s);
+  idle(s, 6);
+  assert.ok(s.contracts.includes(c));
+});
+
+test('satellites alone need two days of shipping', () => {
+  const s = world();
+  s.tech.add('gen1');
+  sim.adjustSats(s, sim.SAT_BATCH);
+  assert.match(sim.launchBlocker(s), /Lock in the loadout/);
+  sim.lockLoadout(s);
+  assert.match(sim.launchBlocker(s), /Satellites arrive in 2 day/);
+  idle(s, 2);
+  assert.equal(sim.launchBlocker(s), null);
 });

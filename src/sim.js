@@ -3,7 +3,7 @@ import {
   ROCKETS, SATS, REGIONS, MARKETS, SUB_GROWTH, CHURN, PLANS, CUSTOMERS, TECH,
   OVERHEAD_PER_DAY, CASH_FLOOR, BEHEMOTH_LEARNING, BEHEMOTH_MIN_RISK,
   DEPOT_CAP, TANKER_LOAD, BOILOFF_PER_DAY,
-  DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, SHIP_DAYS,
+  DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, SHIP_DAYS, SAT_SHIP_DAYS,
   SITES, SITE_IDS, LEASE_FEE, BAY_FEE, BAY_RENT_DEPOSIT, BAY_BUY_COST, MAX_BAYS, PAD_COSTS, TOWER_COST, PAD_TURN,
   PAD_FAIL_CLOSED, LINE_COSTS, CANCEL_REFUND, DRONESHIP_FEE, DRONESHIP_COST, MAX_DRONESHIPS, DRONESHIP_CYCLE,
   DRONE_TOW_DAYS, RTLS_PAYLOAD_PENALTY, EXPEND_BONUS, COMMODITIES, MARKET_MIN, MARKET_MAX, BULK_DISCOUNT,
@@ -65,6 +65,7 @@ export function createState() {
     flightCounts: {}, // successful flights per vehicle type
     contracts: [],
     manifest: [],
+    lock: null, // a locked loadout { day }: contracts accepted and shipping, launches by itself (GDD 2.22)
     sats: 0,
     rocket: 'peregrine9', // selected vehicle type
     dest: 'leo', // selected destination
@@ -197,6 +198,7 @@ export function deserialize(json) {
     const base = createState();
     const s = { ...base, ...o, tech: new Set(Array.isArray(o.tech) ? o.tech : []) };
     delete s.v;
+    if (!s.lock) for (const c of s.contracts ?? []) delete c.acceptedDay; // older saves started shipping on load
     s.constellation = { 1: Math.max(0, +o.constellation?.[1] || 0), 2: Math.max(0, +o.constellation?.[2] || 0), 3: Math.max(0, +o.constellation?.[3] || 0) };
     if (!SATS[s.satGen] || !s.tech.has(SATS[s.satGen].tech)) s.satGen = 1;
     s.markets = Object.fromEntries(MARKETS.map((m) => [m.id, { ...base.markets[m.id], ...o.markets?.[m.id] }]));
@@ -293,6 +295,7 @@ export const roundTripDays = (id) => (DESTINATIONS[id].body === 'earth' ? 0 : DE
 export const effDest = (s) => (['payload', 'module'].includes(rocketDef(s).role) ? s.dest : 'leo');
 
 export function setDest(s, id) {
+  if (s.lock) return false;
   if (!DESTINATIONS[id] || !destUnlocked(s, id)) return false;
   s.dest = id;
   s.manifest = s.manifest.filter((cid) => s.contracts.find((c) => c.id === cid)?.dest === id);
@@ -427,9 +430,9 @@ function newLunarContract(s) {
 
 export function toggleContract(s, id) {
   const c = s.contracts.find((x) => x.id === id);
-  if (!c || rocketDef(s).role !== 'payload') return false;
+  if (!c || s.lock || rocketDef(s).role !== 'payload') return false;
   const i = s.manifest.indexOf(id);
-  if (i >= 0) { s.manifest.splice(i, 1); delete c.acceptedDay; return true; } // unloading withdraws the acceptance: the customer stops shipping
+  if (i >= 0) { s.manifest.splice(i, 1); return true; }
   // Return contracts ride return flights: loading one into an empty manifest switches the flight's origin.
   if (!s.manifest.length) {
     const want = c.origin ?? 'earth';
@@ -445,7 +448,6 @@ export function toggleContract(s, id) {
     if (!setDest(s, c.dest)) return false;
   }
   s.manifest.push(id);
-  c.acceptedDay ??= s.day; // the customer starts shipping the payload
   autoSite(s);
   return true;
 }
@@ -453,7 +455,29 @@ export function toggleContract(s, id) {
 // ---- customers, shipping and the automatic launch site (GDD 2.14) -------------------------
 
 export const shipDays = (c, siteId) => (c.region ? SHIP_DAYS[c.region]?.[siteId] ?? 0 : 0);
+// A draft contract has not been accepted, so this is only the projection: ready that many days after locking in.
 export const contractReady = (s, c, siteId) => (c.acceptedDay ?? s.day) + shipDays(c, siteId);
+// Days a draft loadout needs to ship once locked in, at the selected site.
+export const shipDaysNeeded = (s) => Math.max(s.sats ? SAT_SHIP_DAYS : 0, ...s.contracts.filter((c) => s.manifest.includes(c.id)).map((c) => shipDays(c, s.site)), 0);
+export const satsReady = (s) => (s.lock?.day ?? s.day) + (s.sats ? SAT_SHIP_DAYS : 0);
+
+// Lock in the draft loadout (GDD 2.22): accepts every contract in it, starts the shipping and freezes it.
+export function lockLoadout(s) {
+  if (s.lock || rocketDef(s).role !== 'payload' || (!s.manifest.length && !s.sats)) return false;
+  s.lock = { day: s.day };
+  for (const c of s.contracts) if (s.manifest.includes(c.id)) c.acceptedDay = s.day;
+  return true;
+}
+
+export function cancelLoadout(s) {
+  if (!s.lock) return false;
+  s.lock = null;
+  for (const c of s.contracts) delete c.acceptedDay;
+  return true;
+}
+
+// A locked loadout launches by itself once nothing blocks it.
+export const autoLaunchReady = (s) => !!s.lock && !launchBlocker(s);
 
 // Open sites that can launch to dest, best first: earliest possible launch day, then cheapest, then the current site.
 // fuel (optional) is the vehicle's propellant need, used to price any shortage in a site's tanks.
@@ -508,6 +532,7 @@ export const readyVehicles = (s, type) => fleetOf(s, type).filter((v) => vehicle
 export const nextVehicle = (s, type) => readyVehicles(s, type).filter((v) => hullOrigin(v) === flightOrigin(s)).sort((a, b) => a.flights - b.flights)[0] ?? null;
 
 export function setRocket(s, id) {
+  if (s.lock) return;
   if (!ROCKETS[id] || !rocketUnlocked(s, id)) return;
   s.rocket = id;
   if (!satGenOk(s, s.satGen)) s.satGen = 1;
@@ -548,6 +573,7 @@ export const siteDef = (id) => SITES[id];
 export const siteActive = (s, id) => s.sites[id].status !== 'locked';
 
 export function setSite(s, id) {
+  if (s.lock) return false;
   if (!s.sites[id] || !siteActive(s, id)) return false;
   s.site = id;
   return true;
@@ -850,6 +876,7 @@ export const tliNeed = (s) => s.contracts.reduce((n, c) => n + (s.manifest.inclu
 // Whether a satellite generation is researched and the selected vehicle can carry it.
 export const satGenOk = (s, g) => !!SATS[g] && s.tech.has(SATS[g].tech) && (!SATS[g].only || SATS[g].only.includes(s.rocket));
 export function cycleSatGen(s) {
+  if (s.lock) return;
   for (let i = 1; i <= 3; i++) {
     const g = ((s.satGen - 1 + i) % 3) + 1;
     if (satGenOk(s, g)) { s.satGen = g; return; }
@@ -857,6 +884,7 @@ export function cycleSatGen(s) {
 }
 
 export function adjustSats(s, delta) {
+  if (s.lock) return;
   if (!satGenOk(s, s.satGen)) s.satGen = 1;
   if (!s.tech.has('gen1') || rocketDef(s).role !== 'payload' || !SAT_DESTS.includes(s.dest)) return;
   s.sats = Math.max(0, Math.min(rocketDef(s).sats, s.sats + delta));
@@ -1006,7 +1034,8 @@ export function launchBlocker(s) {
     }
     const late = s.manifest.map((id) => s.contracts.find((c) => c.id === id)).filter((c) => c && contractReady(s, c, s.site) > s.day)
       .sort((a, b) => contractReady(s, b, s.site) - contractReady(s, a, s.site))[0];
-    if (late) return `Payload for ${late.customer} arrives in ${contractReady(s, late, s.site) - s.day} day(s)`;
+    if (late) return s.lock ? `Payload for ${late.customer} arrives in ${contractReady(s, late, s.site) - s.day} day(s)` : `Lock in the loadout: ${late.customer} needs ${shipDays(late, s.site)} day(s) to ship`;
+    if (satsReady(s) > s.day) return s.lock ? `Satellites arrive in ${satsReady(s) - s.day} day(s)` : `Lock in the loadout: satellites need ${SAT_SHIP_DAYS} days to ship`;
     if (!r.catch && recoveryOf(s) === 'drone' && freeDroneship(s) < 0) return `No droneship free: ${Math.min(...s.droneships.map((d) => d.busyUntil)) - s.day} day(s)`;
 
   }
@@ -1110,6 +1139,7 @@ export function launch(s) {
     const need = moon ? 0 : tliNeed(s);
     s.contracts = s.contracts.filter((c) => !s.manifest.includes(c.id));
     s.manifest = [];
+    s.lock = null;
     s.sats = 0;
     if (!failed && need) {
       s.depot.prop -= need;
@@ -1332,8 +1362,8 @@ export function flyTest(s, id) {
 
 const queued = (s, f) => Object.values(s.sites).some((x) => x.queue.some(f));
 export const TUTORIAL = [
-  { id: 'load', tab: 'mission', title: 'Load a contract', text: 'Tap a contract in the Mission tab to put it on your rocket.', done: (s) => s.manifest.length > 0 || s.totalLaunches > 0 },
-  { id: 'launch', tab: 'mission', title: 'Launch', text: 'Check the receipt on the map, then press LAUNCH. The payout arrives when the flight does.', done: (s) => s.totalLaunches > 0 },
+  { id: 'load', tab: 'mission', title: 'Load a contract', text: 'Tap a contract in the Mission tab to put it on your rocket, then press LOCK IN LOADOUT. The payload ships and the rocket launches by itself.', done: (s) => s.manifest.length > 0 || s.totalLaunches > 0 },
+  { id: 'launch', tab: 'mission', title: 'Launch', text: 'Wait for the payload to ship in, or press LAUNCH when it shows. The payout arrives when the flight does.', done: (s) => s.totalLaunches > 0 },
   { id: 'hull', tab: 'factory', title: 'Build a new booster', text: 'The booster was thrown away. Queue a Peregrine 9 in the Factory tab to fly again.', done: (s) => s.fleet.length > 0 || queued(s, (q) => q.type === 'peregrine9') },
   { id: 'gen1', tab: 'tech', title: 'Research Skylink Gen-1', text: 'In R&D, buy Skylink Gen-1 ($5M). It unlocks satellite batches that earn money every day.', done: (s) => s.tech.has('gen1') },
   { id: 'landing', tab: 'tech', title: 'Fund Booster Landing', text: 'Reusable boosters are the big win. Fund Booster Landing in R&D. It needs a test flight.', done: (s) => s.tech.has('landing') || !!s.trials.landing },
@@ -1424,9 +1454,9 @@ export function tick(s) {
     else if (!w.open && w.opensIn === 30) note(s, `The next Mars window opens in 30 days (${dateOf(w.opens).text}).`, 'warn', true);
   }
 
-  const expired = s.contracts.filter((c) => c.expires < s.day);
+  const expired = s.contracts.filter((c) => c.expires < s.day && !(s.lock && s.manifest.includes(c.id)));
   if (expired.length) {
-    s.contracts = s.contracts.filter((c) => c.expires >= s.day);
+    s.contracts = s.contracts.filter((c) => !expired.includes(c));
     s.manifest = s.manifest.filter((id) => s.contracts.some((c) => c.id === id));
   }
   const board = boardSize(s);

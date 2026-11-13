@@ -453,6 +453,16 @@ Saves: goals are stored as { id: day } in the save (version 11). Loading an olde
 
 Balance check: tools/campaign-bot.mjs plays the whole game (sites, Moon base, Mars colony) and reports the day each chapter completes (GOALS=1 on the pacing bot lists every objective). Eight runs, medians with the range, in game days: Orbit 166, Pay the Bills 1521 (640 to 2911), Own the Pads 2177, Super-Heavy 2323, The Moon 2746, The Red Planet 6350 (4796 to 7910) and the colony win 6529 (4975 to 8089), which is about 18 years (13.6 to 22). The bot ends with $40B or more, so money is not the limit after the Moon: the Mars build is paced by the launch windows (30 days every 26 months), the 500 t depot (one module ship burns 400 t, so four tanker flights per module) and the loss rate on Mars arrivals. The target for a human is chapters 1 to 3 inside the first four years and the colony win in game year 14 to 16, so the bot is a little slow at the end, which fits a bot that never optimises.
 
+2.22 Loadouts: Draft, Lock In and Automatic Launch (Phase 15)
+Accepting a contract and loading a rocket are now two separate steps, and the launch happens by itself.
+
+1. Draft: clicking contracts (and adding Skylink satellite batches) builds a draft loadout on the selected rocket. Nothing ships yet, nobody has been told anything, and the draft can be changed freely. The board shows each contract's shipping time as "6d ship", which is what it will take once the loadout is locked.
+2. Lock in: the LOCK IN LOADOUT button (in place of LAUNCH for payload rockets) accepts every contract in the draft at once. From that day each contract's payload ships to the launch site (2.14), and any satellite batch ships from the company's plant to the site in 2 days. The loadout is frozen: contracts, satellites, rocket, destination and site cannot be changed while it is locked, and its contracts no longer expire. Only one loadout can be locked at a time.
+3. Automatic launch: every day the locked loadout is checked. Once every payload has arrived and nothing else blocks the launch (a ready hull, a free pad, cash, depot propellant, the Mars window), it launches without a click. If something else is in the way, the button says what, and the launch happens on the first day it clears. The launch plays the usual launch effect.
+4. Cancel: the CANCEL button withdraws the acceptance. The contracts go back to the board as an unaccepted draft, the shipping clock is forgotten and loading them again starts a new one. Nothing is charged for cancelling.
+
+A contract with no customer region (old saves) and a draft with no satellites ships in zero days, so it can still be launched by hand with LAUNCH, which stays available for those loadouts and for tankers, depot and module ships (they carry no contracts and are never locked). Launch costs are charged at launch, as before. Old saves load with no locked loadout.
+
 3. Technology Tree
 Costs are in $M. "Flight" means the tech needs a prototype test flight (2.12). Prerequisites are as built.
 
