@@ -1,6 +1,6 @@
 // Pure game simulation: no Phaser or Three here, so it can be tested under plain node.
 import {
-  ROCKETS, SATS, REGIONS, MARKETS, SUB_GROWTH, CHURN, PLANS, CUSTOMERS, TECH,
+  ROCKETS, SATS, REGIONS, MARKETS, SUB_GROWTH, DEMAND_GROWTH, DEMAND_YEARS, CHURN, PLANS, CUSTOMERS, TECH,
   OVERHEAD_PER_DAY, CASH_FLOOR, BEHEMOTH_LEARNING, BEHEMOTH_MIN_RISK,
   DEPOT_CAP, TANKER_LOAD, BOILOFF_PER_DAY,
   DESTINATIONS, EARTH_ORBITS, LUNAR_DESTS, SAT_DESTS, SHIP_DAYS, SAT_SHIP_DAYS, SAT_BATCH_DAYS, SAT_QUEUE_MAX, CORE_LIFE, CORE_LIFE_TYPES, HULL_MOVE_DAYS, HULL_MOVE_COST, HULL_MOVE_MIN,
@@ -1074,7 +1074,8 @@ export const skylinkCapacity = (s) => [1, 2, 3].reduce((n, g) => n + s.constella
 // Broadband subscribers (thousands), and the network load including light mobile subscribers.
 export const totalSubs = (s) => MARKETS.reduce((n, m) => n + (m.cell ? 0 : s.markets[m.id].subs), 0);
 export const totalLoad = (s) => MARKETS.reduce((n, m) => n + s.markets[m.id].subs * (m.load ?? 1), 0);
-export const demandCeiling = (s, m) => m.subs * PLANS[s.plan].demand;
+export const demandGrowth = (s) => 1 + DEMAND_GROWTH * Math.min(1, s.day / 365 / DEMAND_YEARS);
+export const demandCeiling = (s, m) => m.subs * PLANS[s.plan].demand * demandGrowth(s);
 // Share of the network's quality that subscribers get: 1 until subscribers outgrow capacity.
 export function skylinkQuality(s) {
   const load = totalLoad(s);

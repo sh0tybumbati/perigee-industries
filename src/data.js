@@ -190,7 +190,7 @@ export const BODIES = {
 export const SATS = {
   1: { name: 'Gen-1', mass: 0.27, volume: 0.9, cost: 0.35, capacity: 0.3, life: 5 * 365, tech: 'gen1' },
   2: { name: 'Gen-2 Mini', mass: 0.8, volume: 1.8, cost: 0.7, capacity: 1.2, life: 5 * 365, tech: 'gen2' },
-  3: { name: 'Gen-3', mass: 2.0, volume: 3.5, cost: 2, capacity: 5, life: 7 * 365, tech: 'gen3', only: ['skyship'] },
+  3: { name: 'Gen-3', mass: 2.0, volume: 3.5, cost: 3, capacity: 4, life: 7 * 365, tech: 'gen3', only: ['skyship'] },
 };
 // The satellite plant builds one batch of six at a time (GDD 2.23): days per batch by generation.
 export const SAT_BATCH_DAYS = { 1: 1, 2: 2, 3: 3 };
@@ -233,6 +233,10 @@ export const MARKETS = [
   { id: 'cell-in', cell: true, name: 'India carriers', minSats: 80, license: 20, lead: 300, subs: 240, arpu: 2, load: 0.04 },
 ];
 export const SUB_GROWTH = 0.05; // share of the gap to the demand ceiling closed per day
+// Demand grows as the world gets used to satellite internet: the subscriber ceilings of every market
+// rise from x1 on day 0 to x(1 + DEMAND_GROWTH) after DEMAND_YEARS years (GDD 2.19), so that capacity stays worth building.
+export const DEMAND_GROWTH = 5;
+export const DEMAND_YEARS = 10;
 export const CHURN = 0.03; // daily subscriber loss per point of congestion
 export const PLANS = {
   budget: { name: 'Budget', price: 0.7, demand: 1.5, hint: 'Cheap: fills the network quickly, so only run it with spare capacity.' },
@@ -254,7 +258,7 @@ export const TECH = [
   { id: 'gen2', name: 'Skylink Gen-2', cost: 60, era: 'Peregrine', desc: 'Gen-2 Mini satellites (1.2k subscribers each)', requires: ['fastCores', 'gen1'] },
   { id: 'dtc', name: 'Direct-to-Cell', cost: 80, era: 'Peregrine', desc: 'Mobile carrier markets: license Skylink phone service. Needs Gen-2.', requires: ['gen2'] },
   { id: 'heavyCores', name: 'Peregrine Heavy', cost: 60, era: 'Peregrine', desc: 'Unlock 64 t Peregrine Heavy. Needs a test flight.', requires: ['fastCores'] },
-  { id: 'gen3', name: 'Skylink Gen-3', cost: 300, era: 'Super-Heavy', desc: 'Full-size 5k-subscriber satellites. Skyship only.', requires: ['skyship', 'gen2'] },
+  { id: 'gen3', name: 'Skylink Gen-3', cost: 300, era: 'Super-Heavy', desc: 'Full-size 4k-subscriber satellites. Skyship only.', requires: ['skyship', 'gen2'] },
   { id: 'hull', name: 'Stainless Hull', cost: 120, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },
   { id: 'raptor', name: 'Harrier V3', cost: 150, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },
   { id: 'tiles', name: 'Heat Shield Tiles', cost: 140, era: 'Super-Heavy', desc: 'Needed for the Behemoth Prototype. Needs a test flight.', requires: ['heavyCores', 'gen1'] },

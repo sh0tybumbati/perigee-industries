@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as sim from '../src/sim.js';
-import { MARKETS, PLANS, SATS } from '../src/data.js';
+import { MARKETS, PLANS, SATS, DEMAND_GROWTH, DEMAND_YEARS } from '../src/data.js';
 const SAT_CAPACITY = SATS[1].capacity, SAT_LIFE_DAYS = SATS[1].life;
 const sats = (s, n, g = 1) => { s.constellation = { 1: 0, 2: 0, 3: 0, [g]: n }; };
 
@@ -35,7 +35,7 @@ test('approval takes the market lead time, then subscribers grow', () => {
   sim.tick(s);
   assert.equal(s.markets.us.status, 'active');
   for (let i = 0; i < 200; i++) sim.tick(s);
-  assert.ok(s.markets.us.subs > 5 && s.markets.us.subs <= mk('us').subs);
+  assert.ok(s.markets.us.subs > 5 && s.markets.us.subs <= sim.demandCeiling(s, mk('us')));
   assert.ok(sim.dailyRevenue(s) > 0);
 });
 
@@ -73,7 +73,7 @@ test('the plan trades price against demand', () => {
   };
   const b = run('budget'), p = run('premium');
   assert.ok(b.subs > p.subs, 'budget has more subscribers');
-  assert.ok(Math.abs(b.subs - mk('us').subs * PLANS.budget.demand) < 1, 'and reaches its ceiling');
+  assert.ok(Math.abs(b.subs - mk('us').subs * PLANS.budget.demand * (1 + DEMAND_GROWTH * 600 / 365 / DEMAND_YEARS)) < 3, 'and reaches its ceiling');
   assert.ok(sim.setPlan !== undefined);
   const s = fresh();
   sim.setPlan(s, 'premium');
@@ -102,7 +102,7 @@ const gen2 = () => { const s = fresh(); s.tech.add('gen2'); s.cash = 500; return
 test('generations: capacity adds up and Gen-3 is Skyship only', () => {
   const s = gen2();
   s.constellation = { 1: 10, 2: 10, 3: 2 };
-  assert.ok(Math.abs(sim.skylinkCapacity(s) - (10 * 0.3 + 10 * 1.2 + 2 * 5)) < 1e-9);
+  assert.ok(Math.abs(sim.skylinkCapacity(s) - (10 * 0.3 + 10 * 1.2 + 2 * SATS[3].capacity)) < 1e-9);
   assert.equal(sim.satGenOk(s, 2), true);
   assert.equal(sim.satGenOk(s, 3), false, 'not researched');
   s.tech.add('gen3');
@@ -161,4 +161,15 @@ test('v9 saves migrate to generations', () => {
   assert.deepEqual(back.constellation, { 1: 77, 2: 0, 3: 0 });
   assert.equal(back.satGen, 1);
   assert.equal(back.markets['cell-us'].status, 'locked');
+});
+
+test('demand grows over the years, so the ceilings rise from x1 toward x6', () => {
+  const s = fresh();
+  s.day = 0;
+  assert.equal(sim.demandGrowth(s), 1);
+  s.day = 365 * 5;
+  assert.equal(sim.demandGrowth(s), 3.5);
+  s.day = 365 * 30;
+  assert.equal(sim.demandGrowth(s), 6);
+  assert.equal(sim.demandCeiling(s, mk('us')), mk('us').subs * 6);
 });

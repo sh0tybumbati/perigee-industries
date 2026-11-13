@@ -3,7 +3,7 @@ import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
   PLANT_COST, PLANT_MAX, MARKETS, PLANS, SATS, WELL_COST, MAX_WELLS, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
-  SAT_BATCH_DAYS, PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
+  SAT_BATCH_DAYS, DEMAND_YEARS, PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
 import * as B from '../base.js';
@@ -695,7 +695,7 @@ export function renderSkylink(ui, s, X, Y, W, actions, ctx) {
     const st = s.markets[m.id];
     const blocker = sim.marketBlocker(s, m.id);
     const have = sim.satCount(s, m.cell ? 2 : 1);
-    ui.row(X, y, W, rowH - 2, { fill: st.status === 'active' ? 0x123524 : COL.row, hint: `${m.name}: up to ${m.subs}k subscribers at $${m.arpu}/month${m.cell ? ' (light users: they load the network at ' + (m.load * 100) + '% of a broadband user)' : ''}. License $${m.license}M, approval ${m.lead} days, needs ${m.minSats} ${m.cell ? 'Gen-2 or newer ' : ''}satellites.` });
+    ui.row(X, y, W, rowH - 2, { fill: st.status === 'active' ? 0x123524 : COL.row, hint: `${m.name}: up to ${Math.round(m.subs * sim.demandGrowth(s))}k subscribers now (${m.subs}k at the start; demand grows for ${DEMAND_YEARS} years) at $${m.arpu}/month${m.cell ? ' (light users: they load the network at ' + (m.load * 100) + '% of a broadband user)' : ''}. License $${m.license}M, approval ${m.lead} days, needs ${m.minSats} ${m.cell ? 'Gen-2 or newer ' : ''}satellites.` });
     ui.label(X + 8, y + 3 + ro, m.name, { size: 12, bold: true, color: st.status === 'locked' && have < m.minSats ? COL.dimText : COL.text });
     if (st.status === 'active') {
       ui.label(X + 190, y + 4 + ro, `${st.subs.toFixed(1)}k / ${sim.demandCeiling(s, m).toFixed(1)}k subs`, { size: 11 });
