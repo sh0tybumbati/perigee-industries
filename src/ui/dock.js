@@ -219,7 +219,7 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
     const ship = SITE_IDS.filter((id) => s.sites[id].status !== 'locked').map((id) => `${SITES[id].letter} ${sim.shipDays(c, id)}d`).join(', ');
     ui.row(X, y, W, 23, {
       on, onClick: () => actions.toggleContract(c.id),
-      hint: `${c.customer}${region ? ` (${region.name})` : ''} → ${d.name}. Expires day ${c.expires}.${region ? ` Shipping: ${ship}.` : ''}${c.prop ? ` Burns ${c.prop} t of depot propellant.` : ''}`,
+      hint: `${c.customer}${region ? ` (${region.name})` : ''} → ${d.name}. Expires day ${c.expires}.${region ? ` Shipping starts when you load it: ${ship}.` : ''}${c.prop ? ` Burns ${c.prop} t of depot propellant.` : ''}`,
     });
     const dim = match ? COL.text : COL.dimText;
     ui.label(X + 8, y + 4, c.customer, { size: 12, bold: true, color: dim });
@@ -227,13 +227,15 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
     ui.label(X + 300, y + 4, `${c.mass} t`, { size: 12, color: dim });
     ui.label(X + 345, y + 4, `${c.volume} m³`, { size: 12, color: dim });
     if (best) {
-      const wait = Math.max(0, best.day - s.day);
-      const col = wait === 0 ? COL.good : wait <= 3 ? COL.warn : COL.dim;
+      // Shipping only starts once the contract is loaded, so the board shows how long the payload will take after that.
+      const days = sim.shipDays(c, best.id);
+      const padWait = Math.max(0, best.day - days - s.day);
+      const col = padWait === 0 ? COL.good : padWait <= 3 ? COL.warn : COL.dim;
       const gb = ui.scene.add.graphics();
       gb.fillStyle(0x0b1220).fillRoundedRect(X + 405, y + 3, 17, 17, 3).lineStyle(1, col).strokeRoundedRect(X + 405, y + 3, 17, 17, 3);
       ui.container.add(gb);
       ui.label(X + 413.5, y + 5, SITES[best.id].letter, { size: 12, bold: true, color: hex(col), center: true });
-      ui.label(X + 428, y + 5, wait === 0 ? 'now' : `${wait}d`, { size: 11, color: hex(col) });
+      ui.label(X + 428, y + 5, days ? `${days}d ship` : 'now', { size: 11, color: hex(col) });
     } else if (c.origin === 'mars') {
       ui.label(X + 405, y + 5, 'Mars', { size: 11, color: hex(COL.accent) });
     } else {

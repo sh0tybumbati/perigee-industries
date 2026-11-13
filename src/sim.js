@@ -429,7 +429,7 @@ export function toggleContract(s, id) {
   const c = s.contracts.find((x) => x.id === id);
   if (!c || rocketDef(s).role !== 'payload') return false;
   const i = s.manifest.indexOf(id);
-  if (i >= 0) { s.manifest.splice(i, 1); return true; }
+  if (i >= 0) { s.manifest.splice(i, 1); delete c.acceptedDay; return true; } // unloading withdraws the acceptance: the customer stops shipping
   // Return contracts ride return flights: loading one into an empty manifest switches the flight's origin.
   if (!s.manifest.length) {
     const want = c.origin ?? 'earth';

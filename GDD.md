@@ -328,13 +328,13 @@ Shipping: when a contract is accepted (first loaded into the manifest) the custo
 | South America | 5 | 6 | 4 | 4 |
 | Africa | 8 | 9 | 8 | 7 |
 | Maritime & Air | 3 | 3 | 3 | 2 |
-A launch is blocked until every payload in the manifest has arrived ("Payload for Orion Media arrives in 3 days"). Shipping time counts from the day the contract was first accepted, and changing the launch site recomputes the arrival for the new site. Contracts from before this change have no region and ship instantly. Moon-route Mars flights and tanker, depot and module launches are not affected.
+A launch is blocked until every payload in the manifest has arrived ("Payload for Orion Media arrives in 3 days"). Shipping time counts from the day the contract was accepted, and unloading it withdraws the acceptance, so loading it again restarts the clock, and changing the launch site recomputes the arrival for the new site. Contracts from before this change have no region and ship instantly. Moon-route Mars flights and tanker, depot and module launches are not affected.
 
 Site letters: every launch site has a letter code, used on the contract board and the map: C for Cape Canaveral, V for Vandenberg and B for Boca Chica and L for Vermilion Parish.
 
 Automatic launch site: loading a contract chooses the best launch site for the whole manifest. A site is eligible when it is open to the company (leased or owned), it can reach the orbit (Vandenberg is the only polar and sun-synchronous site) and it has a pad the vehicle can use (a catch tower for Behemoth and Skyship). Eligible sites are ranked by the earliest day the launch could happen, which is the latest of the payloads' arrival day, the next free pad and today. Ties go to the lower cost (the lease fee and any propellant that would have to be bought at spot), and then to the current site. The Mission tab's launch site changes by itself, and picking a site by hand (map pin or site list) overrides it until the next contract is loaded.
 
-Contract board: each row has a site badge, for example [V] now or [C] 3d, showing the best site for that contract alone and how many days away its launch could be. Hovering shows the customer region and the shipping time to each open site. The map pins show their letters too.
+Contract board: each row has a site badge, for example [V] now or [C] 3d, showing the best site for that contract alone and how many days the payload will take to ship once you load it (for example [C] 6d ship). Nothing ships until the contract is accepted. Hovering shows the customer region and the shipping time to each open site. The map pins show their letters too.
 
 2.15 Phones and Touch (Phase 9)
 The game has to be playable from a phone browser. The canvas is a fixed 1280 by 720 landscape layout that scales to fit, so on a phone it is shrunk and needs help.

@@ -92,3 +92,17 @@ test('old contracts without a region ship instantly', () => {
   sim.toggleContract(s, c.id);
   assert.equal(sim.launchBlocker(s), null);
 });
+
+test('shipping only starts once the contract is accepted, and unloading withdraws it', () => {
+  const s = world();
+  const c = contract(s, { region: 'eu' });
+  idle(s, 10);
+  assert.equal(c.acceptedDay, undefined, 'an offer on the board is not shipping');
+  assert.ok(sim.toggleContract(s, c.id));
+  assert.equal(c.acceptedDay, s.day);
+  idle(s, 3);
+  assert.ok(sim.toggleContract(s, c.id)); // unload
+  assert.equal(c.acceptedDay, undefined);
+  assert.ok(sim.toggleContract(s, c.id)); // load again: the clock restarts
+  assert.match(sim.launchBlocker(s), /arrives in 6 day/);
+});
