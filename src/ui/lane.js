@@ -37,7 +37,7 @@ export class Lane {
     if (!show) { this.texts.forEach((t) => t.setVisible(false)); return; }
     const { x, y: top, w } = this.rect;
     const y = this.y;
-    g.fillStyle(COL.panel, 0.82).fillRoundedRect(x + 8, top + 6, w - 16, H, 4);
+    g.fillStyle(COL.panel, 0.55).fillRoundedRect(x + 8, top + 6, w - 16, H, 4);
     g.lineStyle(1, COL.line).strokeRoundedRect(x + 8.5, top + 6.5, w - 17, H, 4);
     g.lineStyle(1, COL.line, 1).lineBetween(this.bodyX('moon', 0), y, this.bodyX('mars'), y);
     ['earth', 'moon', 'mars'].forEach((b, i) => {

@@ -15,8 +15,11 @@ import { EXTRA, MAP_BOTTOM, PHONE } from '../layout.js';
 export const CONTRACT_ROWS = PHONE ? 5 : 9;
 const LOCK_ROWS = PHONE ? 2 : 4;
 const TALL = !PHONE; // the other tabs also spread out on a tall screen
-const GROW = (CONTRACT_ROWS - 5) * 25;
-const LOCK_PAD = (LOCK_ROWS - 2) * 20 + 10; // room under the manifest for the locked-loadout rows
+// The contract board is as tall as it needs to be, from five rows up to the most the screen holds.
+const rowsFor = (s) => Math.max(5, Math.min(CONTRACT_ROWS, s.contracts.length));
+const growFor = (s) => (rowsFor(s) - 5) * 25;
+// Room under the manifest for the locked-loadout rows, which only show when nothing is being loaded.
+const lockPad = (s) => 10 + (!s.manifest.length && !s.sats ? Math.max(0, Math.min(s.locked.length, LOCK_ROWS) - 2) * 20 : 0);
 
 const clipTo = (str, n) => (str.length > n ? `${str.slice(0, n - 1)}…` : str);
 
@@ -169,11 +172,11 @@ export function renderMission(ui, s, X, Y, W, actions) {
   const blocker = sim.launchBlocker(s);
   const total = sim.launchCost(s);
   if (payload && (s.manifest.length || s.sats) && (sim.shipDaysNeeded(s) > 0)) {
-    ui.button(X, Y + 384 + (payload ? GROW + LOCK_PAD : 0), W, 38, `LOCK IN LOADOUT  ·  ships ${sim.shipDaysNeeded(s)}d, then launches ($${total}M)`, () => actions.lockLoadout(), {
+    ui.button(X, Y + 384 + (payload ? growFor(s) + lockPad(s) : 0), W, 38, `LOCK IN LOADOUT  ·  ships ${sim.shipDaysNeeded(s)}d, then launches ($${total}M)`, () => actions.lockLoadout(), {
       fill: 0x1d5a3a, stroke: COL.good, size: 13, hint: 'Accept the contracts: the payloads ship to the launch site and the rocket launches by itself when they all arrive. You can then build and lock in another loadout.',
     });
   } else {
-    ui.button(X, Y + 384 + (payload ? GROW + LOCK_PAD : 0), W, 38, blocker ? `LAUNCH  (${blocker})` : `LAUNCH to ${ed.name}  ($${total}M)`, () => actions.launch(), {
+    ui.button(X, Y + 384 + (payload ? growFor(s) + lockPad(s) : 0), W, 38, blocker ? `LAUNCH  (${blocker})` : `LAUNCH to ${ed.name}  ($${total}M)`, () => actions.launch(), {
       enabled: !blocker, fill: 0x7a2a1d, stroke: COL.bad, size: blocker ? 12 : 15, hint: costHint(s),
     });
   }
@@ -234,7 +237,7 @@ function lockIcon(ui, x, y, col) {
 function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, 'CONTRACTS  ·  click to load  ·  one destination per launch');
   const sorted = [...s.contracts].sort((a, b) => (b.dest === s.dest) - (a.dest === s.dest) || b.payout - a.payout);
-  const ROWS = CONTRACT_ROWS;
+  const ROWS = rowsFor(s);
   const maxScroll = Math.max(0, sorted.length - ROWS);
   const scroll = Math.min(actions.contractScroll ?? 0, maxScroll);
   if (maxScroll) {
@@ -283,7 +286,7 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   if (!s.contracts.length) ui.label(X, Y + 22, 'No contracts on the board. New ones arrive every few days.', { size: 12, color: COL.dimText });
   if (maxScroll) ui.label(X + W - 52, Y, `${scroll + 1}-${scroll + Math.min(ROWS, sorted.length)} of ${sorted.length}`, { size: 11, color: COL.dimText, right: true });
 
-  const my = Y + 148 + GROW;
+  const my = Y + 148 + growFor(s);
   const t = sim.manifestTotals(s);
   const cap = sim.capacity(s);
   const fit = (v, c) => (v > c ? COL.bad : v / c > 0.85 ? COL.warn : COL.good);
