@@ -334,6 +334,8 @@ Site letters: every launch site has a letter code, used on the contract board an
 
 Automatic launch site: loading a contract chooses the best launch site for the whole manifest. A site is eligible when it is open to the company (leased or owned), it can reach the orbit (Vandenberg is the only polar and sun-synchronous site) and it has a pad the vehicle can use (a catch tower for Behemoth and Skyship). Eligible sites are ranked by the earliest day the launch could happen, which is the latest of the payloads' arrival day, the next free pad and today. Ties go to the lower cost (the lease fee and any propellant that would have to be bought at spot), and then to the current site. The Mission tab's launch site changes by itself, and picking a site by hand (map pin or site list) overrides it until the next contract is loaded.
 
+Contract board scrolling: the board shows five contracts at a time. When there are more, the mouse wheel over the Mission tab scrolls it, and two arrow buttons by the heading do the same on touch screens, with a "2-6 of 9" counter.
+
 Contract board: each row has a site badge, for example [V] now or [C] 3d, showing the best site for that contract alone and how many days the payload will take to ship once you load it (for example [C] 6d ship). Nothing ships until the contract is accepted. Hovering shows the customer region and the shipping time to each open site. The map pins show their letters too.
 
 2.15 Phones and Touch (Phase 9)

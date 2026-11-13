@@ -72,6 +72,14 @@ export class OpsScene extends Phaser.Scene {
     this.fx.pinPos = (id) => (this.baseView === 'closed' && this.map.bodyId === 'earth' ? this.map.pinPos(id) : null);
     sim.setEventSink((e) => this.onEvent(e));
     this.input.on('pointerdown', () => audio.unlock());
+    // The mouse wheel over the Mission tab scrolls the contract board.
+    this.contractScroll = 0;
+    this.input.on('wheel', (p, _o, _dx, dy) => {
+      if (this.tab !== 'mission' || this.view === 'map') return;
+      const left = DOCK.x + (this.dockC?.x ?? 0);
+      if (p.x < left || p.x > left + DOCK.w) return;
+      this.actions.scrollContracts(Math.sign(dy));
+    });
     this.setupKeys();
     this.cameras.main.setBounds(0, 0, W, H);
     this.ui = this.add.container(0, 0).setDepth(10); // above the pins and labels the map layer draws
@@ -365,6 +373,8 @@ export class OpsScene extends Phaser.Scene {
     const s = this.s;
     return {
       pickRocket: (id) => sim.setRocket(s, id),
+      contractScroll: this.contractScroll ?? 0,
+      scrollContracts: (d) => { this.contractScroll = Math.max(0, Math.min(Math.max(0, s.contracts.length - 5), (this.contractScroll ?? 0) + d)); this.render(); },
       toggleContract: (id) => {
         if (!sim.toggleContract(s, id)) this.hint.setText('One destination per launch: unload the others first.');
         this.lastDest = null;

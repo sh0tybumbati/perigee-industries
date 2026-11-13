@@ -225,7 +225,14 @@ function lockIcon(ui, x, y, col) {
 function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, 'CONTRACTS  ·  click to load  ·  one destination per launch');
   const sorted = [...s.contracts].sort((a, b) => (b.dest === s.dest) - (a.dest === s.dest) || b.payout - a.payout);
-  sorted.slice(0, 5).forEach((c, i) => {
+  const ROWS = 5;
+  const maxScroll = Math.max(0, sorted.length - ROWS);
+  const scroll = Math.min(actions.contractScroll ?? 0, maxScroll);
+  if (maxScroll) {
+    ui.button(X + W - 44, Y - 3, 20, 16, '▲', () => actions.scrollContracts(-1), { size: 9, enabled: scroll > 0, hint: 'Scroll the contract board (or use the mouse wheel).' });
+    ui.button(X + W - 20, Y - 3, 20, 16, '▼', () => actions.scrollContracts(1), { size: 9, enabled: scroll < maxScroll, hint: 'Scroll the contract board (or use the mouse wheel).' });
+  }
+  sorted.slice(scroll, scroll + ROWS).forEach((c, i) => {
     const y = Y + 16 + i * 25;
     const on = s.manifest.includes(c.id);
     const match = c.dest === s.dest;
@@ -265,7 +272,7 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
     ui.label(X + W - 8, y + 3, `$${c.payout}M`, { size: 13, bold: true, color: hex(COL.good), right: true });
   });
   if (!s.contracts.length) ui.label(X, Y + 22, 'No contracts on the board. New ones arrive every few days.', { size: 12, color: COL.dimText });
-  if (s.contracts.length > 5) ui.label(X + W, Y, `+${s.contracts.length - 5} more`, { size: 11, color: COL.dimText, right: true });
+  if (maxScroll) ui.label(X + W - 52, Y, `${scroll + 1}-${scroll + Math.min(ROWS, sorted.length)} of ${sorted.length}`, { size: 11, color: COL.dimText, right: true });
 
   const my = Y + 148;
   const t = sim.manifestTotals(s);
