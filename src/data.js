@@ -87,7 +87,8 @@ export const SHIP_DAYS = {
   af: { cape: 8, vandenberg: 9, boca: 8, vermilion: 7 },
   mar: { cape: 3, vandenberg: 3, boca: 3, vermilion: 2 },
 };
-export const SAT_SHIP_DAYS = 2; // days for a Skylink batch to reach a launch site from the plant (GDD 2.22)
+// Days for a Skylink batch to reach each launch site from the plant at Cape Canaveral (GDD 2.22).
+export const SAT_SHIP_DAYS = { cape: 0, boca: 2, vermilion: 2, vandenberg: 3 };
 export const LEASE_FEE = 0.15; // $M per launch from a leased site
 export const BAY_FEE = 0.08; // $M per refit in a rented hangar
 export const BAY_RENT_DEPOSIT = 3; // $M to rent another hangar at a leased site

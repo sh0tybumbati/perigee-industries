@@ -65,7 +65,7 @@ export function createState() {
     flightCounts: {}, // successful flights per vehicle type
     contracts: [],
     manifest: [],
-    lock: null, // a locked loadout { day }: contracts accepted and shipping, launches by itself (GDD 2.22)
+    locked: [], // locked loadouts: accepted, shipping, each launches by itself (GDD 2.22)
     sats: 0,
     rocket: 'peregrine9', // selected vehicle type
     dest: 'leo', // selected destination
@@ -198,7 +198,9 @@ export function deserialize(json) {
     const base = createState();
     const s = { ...base, ...o, tech: new Set(Array.isArray(o.tech) ? o.tech : []) };
     delete s.v;
-    if (!s.lock) for (const c of s.contracts ?? []) delete c.acceptedDay; // older saves started shipping on load
+    delete s.lock; // an earlier build held a single locked loadout
+    s.locked = Array.isArray(o.locked) ? o.locked : [];
+    for (const c of s.contracts ?? []) if (!c.lockId) delete c.acceptedDay; // older saves started shipping on load
     s.constellation = { 1: Math.max(0, +o.constellation?.[1] || 0), 2: Math.max(0, +o.constellation?.[2] || 0), 3: Math.max(0, +o.constellation?.[3] || 0) };
     if (!SATS[s.satGen] || !s.tech.has(SATS[s.satGen].tech)) s.satGen = 1;
     s.markets = Object.fromEntries(MARKETS.map((m) => [m.id, { ...base.markets[m.id], ...o.markets?.[m.id] }]));
@@ -295,7 +297,6 @@ export const roundTripDays = (id) => (DESTINATIONS[id].body === 'earth' ? 0 : DE
 export const effDest = (s) => (['payload', 'module'].includes(rocketDef(s).role) ? s.dest : 'leo');
 
 export function setDest(s, id) {
-  if (s.lock) return false;
   if (!DESTINATIONS[id] || !destUnlocked(s, id)) return false;
   s.dest = id;
   s.manifest = s.manifest.filter((cid) => s.contracts.find((c) => c.id === cid)?.dest === id);
@@ -430,7 +431,7 @@ function newLunarContract(s) {
 
 export function toggleContract(s, id) {
   const c = s.contracts.find((x) => x.id === id);
-  if (!c || s.lock || rocketDef(s).role !== 'payload') return false;
+  if (!c || c.lockId || rocketDef(s).role !== 'payload') return false;
   const i = s.manifest.indexOf(id);
   if (i >= 0) { s.manifest.splice(i, 1); return true; }
   // Return contracts ride return flights: loading one into an empty manifest switches the flight's origin.
@@ -458,26 +459,53 @@ export const shipDays = (c, siteId) => (c.region ? SHIP_DAYS[c.region]?.[siteId]
 // A draft contract has not been accepted, so this is only the projection: ready that many days after locking in.
 export const contractReady = (s, c, siteId) => (c.acceptedDay ?? s.day) + shipDays(c, siteId);
 // Days a draft loadout needs to ship once locked in, at the selected site.
-export const shipDaysNeeded = (s) => Math.max(s.sats ? SAT_SHIP_DAYS : 0, ...s.contracts.filter((c) => s.manifest.includes(c.id)).map((c) => shipDays(c, s.site)), 0);
-export const satsReady = (s) => (s.lock?.day ?? s.day) + (s.sats ? SAT_SHIP_DAYS : 0);
+export const satShipDays = (siteId) => SAT_SHIP_DAYS[siteId] ?? 0;
+export const shipDaysNeeded = (s) => Math.max(s.sats ? satShipDays(s.site) : 0, ...s.contracts.filter((c) => s.manifest.includes(c.id)).map((c) => shipDays(c, s.site)), 0);
+// While a locked loadout is swapped in, _lockDay is the day it was locked; otherwise satellites are only projected.
+export const satsReady = (s) => (s._lockDay ?? s.day) + (s.sats ? satShipDays(s.site) : 0);
 
-// Lock in the draft loadout (GDD 2.22): accepts every contract in it, starts the shipping and freezes it.
+// Lock in the draft loadout (GDD 2.22): accepts every contract in it, starts the shipping and moves it off the
+// draft, so another one can be built straight away.
 export function lockLoadout(s) {
-  if (s.lock || rocketDef(s).role !== 'payload' || (!s.manifest.length && !s.sats)) return false;
-  s.lock = { day: s.day };
-  for (const c of s.contracts) if (s.manifest.includes(c.id)) c.acceptedDay = s.day;
+  if (rocketDef(s).role !== 'payload' || (!s.manifest.length && !s.sats)) return false;
+  const L = { id: s.nextId++, day: s.day, rocket: s.rocket, dest: s.dest, site: s.site, origin: s.origin, manifest: [...s.manifest], sats: s.sats, satGen: s.satGen };
+  for (const c of s.contracts) if (s.manifest.includes(c.id)) { c.acceptedDay = s.day; c.lockId = L.id; }
+  s.locked.push(L);
+  s.manifest = [];
+  s.sats = 0;
   return true;
 }
 
-export function cancelLoadout(s) {
-  if (!s.lock) return false;
-  s.lock = null;
-  for (const c of s.contracts) delete c.acceptedDay;
+export function cancelLoadout(s, id) {
+  const i = s.locked.findIndex((l) => l.id === id);
+  if (i < 0) return false;
+  s.locked.splice(i, 1);
+  for (const c of s.contracts) if (c.lockId === id) { delete c.lockId; delete c.acceptedDay; }
   return true;
 }
 
-// A locked loadout launches by itself once nothing blocks it.
-export const autoLaunchReady = (s) => !!s.lock && !launchBlocker(s);
+export const loadoutOf = (s, contractOrId) => s.locked.find((l) => l.id === (contractOrId?.lockId ?? contractOrId));
+
+// Runs fn with a locked loadout swapped in as the current one, then puts the draft back.
+function withLoadout(s, L, fn) {
+  const keep = { manifest: s.manifest, sats: s.sats, satGen: s.satGen, rocket: s.rocket, dest: s.dest, site: s.site, origin: s.origin };
+  Object.assign(s, { manifest: [...L.manifest], sats: L.sats, satGen: L.satGen, rocket: L.rocket, dest: L.dest, site: L.site, origin: L.origin, _lockDay: L.day });
+  try { return fn(); } finally { Object.assign(s, keep); delete s._lockDay; }
+}
+
+// What a locked loadout is waiting for, or null when it can launch.
+export const loadoutBlocker = (s, L) => withLoadout(s, L, () => launchBlocker(s));
+
+// The first locked loadout that can launch now, or null.
+export const nextAutoLaunch = (s) => s.locked.find((l) => !loadoutBlocker(s, l)) ?? null;
+
+export function launchLoadout(s, id) {
+  const L = s.locked.find((l) => l.id === id);
+  if (!L) return { ok: false, reason: 'No such loadout' };
+  const res = withLoadout(s, L, () => launch(s));
+  if (res.ok) s.locked = s.locked.filter((l) => l !== L);
+  return res;
+}
 
 // Open sites that can launch to dest, best first: earliest possible launch day, then cheapest, then the current site.
 // fuel (optional) is the vehicle's propellant need, used to price any shortage in a site's tanks.
@@ -532,7 +560,6 @@ export const readyVehicles = (s, type) => fleetOf(s, type).filter((v) => vehicle
 export const nextVehicle = (s, type) => readyVehicles(s, type).filter((v) => hullOrigin(v) === flightOrigin(s)).sort((a, b) => a.flights - b.flights)[0] ?? null;
 
 export function setRocket(s, id) {
-  if (s.lock) return;
   if (!ROCKETS[id] || !rocketUnlocked(s, id)) return;
   s.rocket = id;
   if (!satGenOk(s, s.satGen)) s.satGen = 1;
@@ -573,7 +600,6 @@ export const siteDef = (id) => SITES[id];
 export const siteActive = (s, id) => s.sites[id].status !== 'locked';
 
 export function setSite(s, id) {
-  if (s.lock) return false;
   if (!s.sites[id] || !siteActive(s, id)) return false;
   s.site = id;
   return true;
@@ -876,7 +902,6 @@ export const tliNeed = (s) => s.contracts.reduce((n, c) => n + (s.manifest.inclu
 // Whether a satellite generation is researched and the selected vehicle can carry it.
 export const satGenOk = (s, g) => !!SATS[g] && s.tech.has(SATS[g].tech) && (!SATS[g].only || SATS[g].only.includes(s.rocket));
 export function cycleSatGen(s) {
-  if (s.lock) return;
   for (let i = 1; i <= 3; i++) {
     const g = ((s.satGen - 1 + i) % 3) + 1;
     if (satGenOk(s, g)) { s.satGen = g; return; }
@@ -884,7 +909,6 @@ export function cycleSatGen(s) {
 }
 
 export function adjustSats(s, delta) {
-  if (s.lock) return;
   if (!satGenOk(s, s.satGen)) s.satGen = 1;
   if (!s.tech.has('gen1') || rocketDef(s).role !== 'payload' || !SAT_DESTS.includes(s.dest)) return;
   s.sats = Math.max(0, Math.min(rocketDef(s).sats, s.sats + delta));
@@ -1034,8 +1058,9 @@ export function launchBlocker(s) {
     }
     const late = s.manifest.map((id) => s.contracts.find((c) => c.id === id)).filter((c) => c && contractReady(s, c, s.site) > s.day)
       .sort((a, b) => contractReady(s, b, s.site) - contractReady(s, a, s.site))[0];
-    if (late) return s.lock ? `Payload for ${late.customer} arrives in ${contractReady(s, late, s.site) - s.day} day(s)` : `Lock in the loadout: ${late.customer} needs ${shipDays(late, s.site)} day(s) to ship`;
-    if (satsReady(s) > s.day) return s.lock ? `Satellites arrive in ${satsReady(s) - s.day} day(s)` : `Lock in the loadout: satellites need ${SAT_SHIP_DAYS} days to ship`;
+    const locked = s._lockDay != null;
+    if (late) return locked ? `Payload for ${late.customer} arrives in ${contractReady(s, late, s.site) - s.day} day(s)` : `Lock in the loadout: ${late.customer} needs ${shipDays(late, s.site)} day(s) to ship`;
+    if (satsReady(s) > s.day) return locked ? `Satellites arrive in ${satsReady(s) - s.day} day(s)` : `Lock in the loadout: satellites need ${satShipDays(s.site)} day(s) to ship`;
     if (!r.catch && recoveryOf(s) === 'drone' && freeDroneship(s) < 0) return `No droneship free: ${Math.min(...s.droneships.map((d) => d.busyUntil)) - s.day} day(s)`;
 
   }
@@ -1097,6 +1122,7 @@ export function launchBlocker(s) {
 export function launch(s) {
   const reason = launchBlocker(s);
   if (reason) return { ok: false, reason };
+  delete s._lockDay;
   const r = rocketDef(s);
   const v = nextVehicle(s, s.rocket);
   const origin = flightOrigin(s);
@@ -1139,7 +1165,6 @@ export function launch(s) {
     const need = moon ? 0 : tliNeed(s);
     s.contracts = s.contracts.filter((c) => !s.manifest.includes(c.id));
     s.manifest = [];
-    s.lock = null;
     s.sats = 0;
     if (!failed && need) {
       s.depot.prop -= need;
@@ -1454,7 +1479,7 @@ export function tick(s) {
     else if (!w.open && w.opensIn === 30) note(s, `The next Mars window opens in 30 days (${dateOf(w.opens).text}).`, 'warn', true);
   }
 
-  const expired = s.contracts.filter((c) => c.expires < s.day && !(s.lock && s.manifest.includes(c.id)));
+  const expired = s.contracts.filter((c) => c.expires < s.day && !c.lockId);
   if (expired.length) {
     s.contracts = s.contracts.filter((c) => !expired.includes(c));
     s.manifest = s.manifest.filter((id) => s.contracts.some((c) => c.id === id));

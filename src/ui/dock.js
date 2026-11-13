@@ -158,15 +158,9 @@ export function renderMission(ui, s, X, Y, W, actions) {
   renderReceipt(ui, s);
   const blocker = sim.launchBlocker(s);
   const total = sim.launchCost(s);
-  if (payload && s.lock) {
-    // Locked in: the launch happens by itself, so the button only reports what it is waiting for.
-    ui.button(X, Y + 384, W - 110, 38, blocker ? `LOCKED IN  ·  ${blocker}` : 'LOCKED IN  ·  launching', () => {}, {
-      enabled: false, fill: 0x1d3a5a, stroke: COL.accent, size: 12, hint: 'The loadout is accepted and shipping. It launches by itself once every payload has arrived and nothing else blocks it.',
-    });
-    ui.button(X + W - 104, Y + 384, 104, 38, 'CANCEL', () => actions.cancelLoadout(), { size: 13, hint: 'Withdraw the contracts. They go back to the board and shipping starts over if you lock them again.' });
-  } else if (payload && (s.manifest.length || s.sats) && (sim.shipDaysNeeded(s) > 0)) {
+  if (payload && (s.manifest.length || s.sats) && (sim.shipDaysNeeded(s) > 0)) {
     ui.button(X, Y + 384, W, 38, `LOCK IN LOADOUT  ·  ships ${sim.shipDaysNeeded(s)}d, then launches ($${total}M)`, () => actions.lockLoadout(), {
-      fill: 0x1d5a3a, stroke: COL.good, size: 13, hint: 'Accept the contracts: the payloads ship to the launch site and the rocket launches by itself when they all arrive. The loadout is frozen until then.',
+      fill: 0x1d5a3a, stroke: COL.good, size: 13, hint: 'Accept the contracts: the payloads ship to the launch site and the rocket launches by itself when they all arrive. You can then build and lock in another loadout.',
     });
   } else {
     ui.button(X, Y + 384, W, 38, blocker ? `LAUNCH  (${blocker})` : `LAUNCH to ${ed.name}  ($${total}M)`, () => actions.launch(), {
@@ -218,6 +212,15 @@ function renderReceipt(ui, s) {
   }
 }
 
+// A small padlock: the mark of a contract that is booked on a locked-in loadout.
+function lockIcon(ui, x, y, col) {
+  const g = ui.scene.add.graphics();
+  g.lineStyle(2, col).strokeRoundedRect(x + 5, y + 1, 7, 7, 3);
+  g.fillStyle(col).fillRoundedRect(x + 2, y + 7, 13, 10, 2);
+  g.fillStyle(0x0b1220).fillRect(x + 8, y + 10, 1.5, 4);
+  ui.container.add(g);
+}
+
 function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, 'CONTRACTS  ·  click to load  ·  one destination per launch');
   const sorted = [...s.contracts].sort((a, b) => (b.dest === s.dest) - (a.dest === s.dest) || b.payout - a.payout);
@@ -229,16 +232,21 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
     const best = c.origin === 'mars' ? null : sim.bestSiteFor(s, c);
     const region = REGIONS.find((r) => r.id === c.region);
     const ship = SITE_IDS.filter((id) => s.sites[id].status !== 'locked').map((id) => `${SITES[id].letter} ${sim.shipDays(c, id)}d`).join(', ');
+    const lk = sim.loadoutOf(s, c);
     ui.row(X, y, W, 23, {
-      on, onClick: () => actions.toggleContract(c.id),
-      hint: `${c.customer}${region ? ` (${region.name})` : ''} → ${d.name}. Expires day ${c.expires}.${region ? ` Shipping starts when you load it: ${ship}.` : ''}${c.prop ? ` Burns ${c.prop} t of depot propellant.` : ''}`,
+      on, onClick: () => (lk ? actions.cancelLoadout(lk.id) : actions.toggleContract(c.id)),
+      hint: lk ? `Locked in: ${c.customer}'s payload is shipping and launches by itself. Click to cancel this whole loadout.` : `${c.customer}${region ? ` (${region.name})` : ''} → ${d.name}. Expires day ${c.expires}.${region ? ` Shipping starts when you load it: ${ship}.` : ''}${c.prop ? ` Burns ${c.prop} t of depot propellant.` : ''}`,
     });
     const dim = match ? COL.text : COL.dimText;
     ui.label(X + 8, y + 4, c.customer, { size: 12, bold: true, color: dim });
     ui.label(X + 160, y + 4, d.name, { size: 12, color: c.prop ? hex(COL.accent) : dim });
     ui.label(X + 300, y + 4, `${c.mass} t`, { size: 12, color: dim });
     ui.label(X + 345, y + 4, `${c.volume} m³`, { size: 12, color: dim });
-    if (best) {
+    if (lk) {
+      lockIcon(ui, X + 405, y + 3, COL.accent);
+      const left = sim.contractReady(s, c, lk.site) - s.day;
+      ui.label(X + 428, y + 5, left > 0 ? `${left}d` : 'ready', { size: 11, color: hex(left > 0 ? COL.accent : COL.good) });
+    } else if (best) {
       // Shipping only starts once the contract is loaded, so the board shows how long the payload will take after that.
       const days = sim.shipDays(c, best.id);
       const padWait = Math.max(0, best.day - days - s.day);
@@ -272,7 +280,16 @@ function renderContractsAndManifest(ui, s, X, Y, W, actions) {
   const gen1 = s.tech.has('gen1') && sim.flightOrigin(s) === 'earth';
   const satsOk = SAT_DESTS.includes(s.dest);
   const ry = my + 30;
-  if (need) {
+  if (!s.manifest.length && !s.sats && s.locked.length) {
+    s.locked.slice(0, 2).forEach((l, i) => {
+      const yy = ry + i * 20;
+      const why = sim.loadoutBlocker(s, l);
+      lockIcon(ui, X, yy, COL.accent);
+      ui.label(X + 24, yy + 3, `${ROCKETS[l.rocket].short} to ${DESTINATIONS[l.dest].name}${l.sats ? `, ${l.sats} sats` : ''}  ·  ${why ?? 'launching'}`, { size: 11, color: hex(why ? COL.accent : COL.good) });
+      ui.button(X + W - 64, yy, 64, 17, 'Cancel', () => actions.cancelLoadout(l.id), { size: 10, hint: 'Withdraw this loadout: its contracts go back to the board.' });
+    });
+    if (s.locked.length > 2) ui.label(X + W - 72, ry + 40, `+${s.locked.length - 2} more locked`, { size: 10, right: true, color: COL.dimText });
+  } else if (need) {
     ui.label(X, ry + 3, `Payout $${t.payout}M  ·  TLI propellant ${need} t needed, depot ${Math.floor(s.depot.prop)} t`, {
       size: 12, color: hex(s.depot.prop >= need && s.rocket === 'skyship' ? COL.good : COL.warn),
     });

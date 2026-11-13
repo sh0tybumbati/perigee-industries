@@ -156,7 +156,17 @@ export class OpsScene extends Phaser.Scene {
 
   // A locked loadout launches by itself once every payload has arrived (GDD 2.22).
   checkAutoLaunch() {
-    if (!this.fx.busy && sim.autoLaunchReady(this.s)) this.actions.launch();
+    if (this.fx.busy) return;
+    const L = sim.nextAutoLaunch(this.s);
+    if (!L) return;
+    const origin = this.map.sitePos(L.site) ?? { x: MAP.x + MAP.w / 2 + 40, y: MAP.y + MAP.h - 60 };
+    this.fx.launch(origin, () => {
+      const res = sim.launchLoadout(this.s, L.id);
+      this.syncMap();
+      this.saveGame();
+      this.time.delayedCall(0, () => this.render());
+      return res;
+    });
   }
 
   setSpeed(v) { if (v) this.lastSpeed = v; this.speed = v; this.scheduleTick(); }
@@ -330,7 +340,6 @@ export class OpsScene extends Phaser.Scene {
 
   // ---- actions ------------------------------------------------------------
   pickSite(id) {
-    if (this.s.lock) { this.siteView = id; this.hint.setText('The loadout is locked in: cancel it to change the launch site.'); return; }
     if (sim.setSite(this.s, id)) { this.siteView = id; return; }
     this.siteView = id;
     this.tab = 'sites';
@@ -339,7 +348,6 @@ export class OpsScene extends Phaser.Scene {
 
   selectDest(id) {
     const s = this.s;
-    if (s.lock) { this.hint.setText('The loadout is locked in: cancel it to change the destination.'); return; }
     if (!DESTINATIONS[id].locked || s.tech.has(DESTINATIONS[id].locked)) {
       sim.setDest(s, id);
       // Picking a destination means planning a payload flight, so leave tanker/depot duty.
@@ -358,7 +366,7 @@ export class OpsScene extends Phaser.Scene {
     return {
       pickRocket: (id) => sim.setRocket(s, id),
       toggleContract: (id) => {
-        if (!sim.toggleContract(s, id)) this.hint.setText(s.lock ? 'The loadout is locked in: cancel it to change it.' : 'One destination per launch: unload the others first.');
+        if (!sim.toggleContract(s, id)) this.hint.setText('One destination per launch: unload the others first.');
         this.lastDest = null;
       },
       setPlan: (id) => sim.setPlan(s, id),
@@ -404,7 +412,7 @@ export class OpsScene extends Phaser.Scene {
       sellSurplus: () => { const got = B.sellSurplus(s, this.activeBase()); sim.note(s, `Sold lunar materials for $${got}M.`); },
       queueLocal: (type) => B.queueLocalBuild(s, type, (m) => sim.note(s, m), this.activeBase()),
       lockLoadout: () => { if (sim.lockLoadout(s)) { this.saveGame(); this.checkAutoLaunch(); } },
-      cancelLoadout: () => { sim.cancelLoadout(s); this.saveGame(); },
+      cancelLoadout: (id) => { sim.cancelLoadout(s, id); this.saveGame(); },
       launch: () => {
         if (this.fx.busy || sim.launchBlocker(s)) return;
         const origin = this.map.sitePos(s.site) ?? { x: MAP.x + MAP.w / 2 + 40, y: MAP.y + MAP.h - 60 };

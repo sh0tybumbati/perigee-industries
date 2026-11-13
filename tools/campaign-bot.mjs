@@ -200,8 +200,8 @@ for (let seed = 0; seed < N; seed++) {
         if (!bestPlan || (type === 'behemoth' && bestPlan.score < 22)) continue;
         sim.setDest(s, bestPlan.dest); s.manifest = [...bestPlan.picked];
         if (bestPlan.sats) sim.adjustSats(s, bestPlan.sats);
-        s.lock = { day: s.day - 2 }; // the bot keeps satellites in stock at the site and accepts contracts as they appear
-        if (sim.launchBlocker(s)) { s.lock = null; s.manifest = []; s.sats = 0; continue; }
+        s._lockDay = s.day - 9; // the bot keeps satellites in stock at the site and accepts contracts as they appear
+        if (sim.launchBlocker(s)) { delete s._lockDay; s.manifest = []; s.sats = 0; continue; }
         const isLunar = DESTINATIONS[bestPlan.dest].body === 'moon';
         const r = sim.launch(s); launches++; done = true;
         if (r.failed) lost++; else if (isLunar) { lunar++; mark('lunar1'); }
