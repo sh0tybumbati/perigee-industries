@@ -12,14 +12,18 @@ if (GEN) ORDER.splice(ORDER.indexOf('heavyCores'), 0, 'gen2'); if (GEN) ORDER.sp
 const N = +process.argv[2] || 6, DAYS = +process.argv[3] || 9000;
 const out = [];
 const MOON_PLAN = ['modReactor', 'modReactor', 'modHab', 'modDrones', 'modIce', 'modRefinery'];
+// A second Moon base at Mare Tranquillitatis (GDD 2.26), sent from Earth while the Mars launch windows are closed.
+// NO_OUTPOST=1 leaves it out. (The bot has no Fabricator, so it does not hop modules between the bases.)
+const OUTPOST_SITE = 'tranq';
+const OUTPOST_PLAN = ['modReactor', 'modHab', 'modDrones'];
 const MARS_PLAN = ['modReactor', 'modReactor', 'modHab', 'modHab', 'modHab', 'modDrones', 'modIce', 'modRefinery'];
 // The module ships in the plan that the base does not have yet, counting ships already on their way.
-const missingModules = (s, planList, body) => {
-  const base = body === 'mars' ? s.marsBase : s.base;
+const missingModules = (s, planList, body, site = null) => {
+  const base = site ? sim.baseAt(s, site) : body === 'mars' ? s.marsBase : s.base;
   const have = {};
   for (const m of base?.modules ?? []) have[m.type] = (have[m.type] ?? 0) + 1;
   for (const m of base?.pending ?? []) have[m.type] = (have[m.type] ?? 0) + 1;
-  for (const tr of s.trips) if (tr.role === 'module' && tr.status === 'enroute' && DESTINATIONS[tr.dest].body === body) { const k = ROCKETS[tr.type].module; have[k] = (have[k] ?? 0) + 1; }
+  for (const tr of s.trips) if (tr.role === 'module' && tr.status === 'enroute' && DESTINATIONS[tr.dest].body === body && (!site || tr.dest === site)) { const k = ROCKETS[tr.type].module; have[k] = (have[k] ?? 0) + 1; }
   const used = {}, out = [];
   for (const type of planList) {
     const k = ROCKETS[type].module;
@@ -124,12 +128,12 @@ for (let seed = 0; seed < N; seed++) {
     const plan = marsPhase ? MARS_PLAN : moonPhase ? MOON_PLAN : null;
     const body = marsPhase ? 'mars' : 'moon';
     const nextType = plan ? nextModule(s, plan, body) : null;
+    const outMiss = !process.env.NO_OUTPOST && moonDone && s.depot.built ? missingModules(s, OUTPOST_PLAN, 'moon', OUTPOST_SITE) : [];
     if (plan && s.depot.built) { // build every missing ship ahead of time, so a Mars window can send them all
-      const miss = missingModules(s, plan, body);
+      const miss = [...missingModules(s, plan, body), ...(nextType ? [] : outMiss)];
       for (const type of new Set(miss)) if (count(type) < miss.filter((x) => x === type).length && sim.canSpend(s, ROCKETS[type].buildCost + 150)) sim.queueBuild(s, type);
     }
-    for (const base of [s.base, s.marsBase]) {
-      if (!base) continue;
+    for (const base of sim.allBases(s)) {
       for (const pm of [...base.pending]) autoPlace(s, base, pm);
     }
     // keep the tanks
@@ -155,7 +159,15 @@ for (let seed = 0; seed < N; seed++) {
         const baseSite = marsPhase ? 'utopia' : 'shackleton';
         let did = false;
         const base = marsPhase ? s.marsBase : s.base;
-        if (nextType && (!marsPhase || w.open)) {
+        if (!nextType && outMiss.length && !(marsPhase && w.open)) {
+          s.origin = 'earth'; s.manifest = []; s.sats = 0;
+          sim.setRocket(s, outMiss[0]); sim.setDest(s, OUTPOST_SITE);
+          if (sim.nextVehicle(s, outMiss[0]) && !sim.launchBlocker(s)) {
+            const r = sim.launch(s); launches++;
+            if (r.ok) { did = true; if (r.failed) lost++; }
+          }
+        }
+        if (!did && nextType && (!marsPhase || w.open)) {
           s.origin = 'earth'; s.manifest = []; s.sats = 0;
           sim.setRocket(s, nextType); sim.setDest(s, baseSite);
           if (sim.nextVehicle(s, nextType) && !sim.launchBlocker(s)) {
@@ -234,6 +246,7 @@ for (let seed = 0; seed < N; seed++) {
     if (s.tech.has('isru')) mark('allTech');
     if (s.tech.has('marsTransit')) mark('marsTech');
     if (s.marsBase?.modules.length) mark('marsBaseDay');
+    if (sim.baseAt(s, OUTPOST_SITE)?.modules.length >= 3) mark('outpost');
     if ((s.marsBase?.stock.methalox ?? 0) >= 1) mark('marsFuelDay');
     for (const [k, v] of [['cash100', 100], ['cash275', 275], ['cash485', 485], ['cash1000', 1000]]) if (s.cash >= v) mark(k); // 275 ~ a minimal Vermilion build-out, 485 ~ Boca Chica
   }
@@ -247,4 +260,4 @@ for (let seed = 0; seed < N; seed++) {
   out.push({ ...ms, modLost, marsCargo, returns, ...chDay, ...gDay, rev: +sim.dailyRevenue(s).toFixed(2), mobRev: +MARKETS.filter(m => m.cell).reduce((a, m) => a + sim.marketRevenue(s, m), 0).toFixed(2), cap: sim.skylinkCapacity(s), load: +sim.totalLoad(s).toFixed(1), q: +sim.skylinkQuality(s).toFixed(2), lunar, lost, cash: Math.round(s.cash), launches, fleet: s.fleet.length, income: +s.income.toFixed(2), idle: idleDays });
 }
 const med = (k) => { const v = out.map(o => o[k]).filter(x => x != null).sort((a, b) => a - b); return v.length ? `${v[Math.floor(v.length / 2)]} (${v[0]}-${v[v.length - 1]}, n=${v.length})` : 'never'; };
-for (const k of ['marsTech', 'marsBaseDay', 'marsFuelDay', 'modLost', 'marsCargo', 'returns', ...CHAPTERS.map((c) => `ch:${c.id}`), ...(process.env.GOALS ? CHAPTERS.flatMap((c) => c.goals.map((g) => `g:${g.id}`)) : []), 'landing','fastCores','heavyCores','behemoth','skyship','tanker','lunar1','allTech','cash100','cash275','cash485','cash1000','gen2','mobile1','rev','mobRev','cap','load','q','lunar','launches','lost','cash','income','fleet']) console.log(k.padEnd(11), med(k));
+for (const k of ['marsTech', 'outpost', 'marsBaseDay', 'marsFuelDay', 'modLost', 'marsCargo', 'returns', ...CHAPTERS.map((c) => `ch:${c.id}`), ...(process.env.GOALS ? CHAPTERS.flatMap((c) => c.goals.map((g) => `g:${g.id}`)) : []), 'landing','fastCores','heavyCores','behemoth','skyship','tanker','lunar1','allTech','cash100','cash275','cash485','cash1000','gen2','mobile1','rev','mobRev','cap','load','q','lunar','launches','lost','cash','income','fleet']) console.log(k.padEnd(11), med(k));
