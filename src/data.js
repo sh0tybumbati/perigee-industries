@@ -310,6 +310,11 @@ export const SMELTER_REGOLITH = 2; // t of regolith per day at full output
 export const SMELTER_OUT = { oxygen: 3, iron: 1.2, silica: 2 }; // t per day at full output
 export const STOCK_PRICES = { oxygen: 0.1, iron: 0.24, silica: 0.08 }; // $M per tonne
 export const STOCK_KEEP = { oxygen: 40, iron: 120, silica: 80 }; // surplus selling leaves this much
+// Hops between bases on the same world (GDD 2.26): a Skyship based there carries one module to another landing site.
+export const HOP = {
+  moon: { days: 2, methalox: 40, ops: 0.6 },
+  mars: { days: 3, methalox: 60, ops: 0.8 },
+};
 export const ICE_RATE = 1.2; // t of ice per day per miner at full output (Shackleton only)
 export const REFINERY_ICE = 3; // t of ice a refinery eats per day
 export const REFINERY_OUT = 2; // t of methalox it makes from that

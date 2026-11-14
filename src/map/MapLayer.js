@@ -233,6 +233,12 @@ export class MapLayer {
   tripPath(trip) {
     const d = DESTINATIONS[trip.dest];
     const globe = this.globe;
+    if (trip.role === 'hop') {
+      // A hop between two bases: a short arc over the surface of their own world.
+      if (d.body !== this.bodyId) return null;
+      const a = DESTINATIONS[trip.fromSite], b = d;
+      return this.arcLocal(surfacePoint(a.lat, a.lon, 1.004), surfacePoint(b.lat, b.lon, 1.004), 24).map((p) => globe.world(p));
+    }
     if (trip.origin === 'moon' && this.bodyId === 'moon') {
       // A Moon-based Mars flight lifts off from the base and leaves toward the corner of the view.
       const site = DESTINATIONS[trip.fromSite];

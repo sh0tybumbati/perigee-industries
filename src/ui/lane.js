@@ -4,7 +4,7 @@ import { DESTINATIONS, BODIES } from '../data.js';
 import * as sim from '../sim.js';
 import { COL, FONT } from './ui.js';
 
-export const ROLE_COLOR = { payload: COL.accent, tanker: COL.warn, depot: COL.violet };
+export const ROLE_COLOR = { payload: COL.accent, tanker: COL.warn, depot: COL.violet, module: COL.violet, hop: COL.good };
 const BODY_COL = { earth: 0x3a78c4, moon: 0xb5b5b5, mars: 0xc4683a };
 const BODY_R = { earth: 9, moon: 6, mars: 8 };
 const H = 60;

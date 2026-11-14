@@ -3,7 +3,7 @@ import {
   ROCKETS, REGIONS, TECH, DESTINATIONS, BODIES, SAT_DESTS, SITES, SITE_IDS, LINE_COSTS, PAD_COSTS, TOWER_COST,
   BAY_BUY_COST, BAY_RENT_DEPOSIT, MAX_BAYS, DRONESHIP_COST, MAX_DRONESHIPS, RECOVERY_MODES, COMMODITIES, TANK_STEP,
   PLANT_COST, PLANT_MAX, MARKETS, PLANS, SATS, WELL_COST, MAX_WELLS, PLANT_RATE, LEASE_FEE, BAY_FEE, MARKET_MIN, MARKET_MAX, DEPOT_CAP, TANKER_LOAD,
-  SAT_BATCH_DAYS, DEMAND_YEARS, PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
+  SAT_BATCH_DAYS, DEMAND_YEARS, HOP, PROTOS, MARS_RETURN, MODULES, DRONE_POLICIES, STOCK_PRICES, STOCK_KEEP, LOCAL_RECIPES, DUCT_COST, MARS_ROUTES,
 } from '../data.js';
 import * as sim from '../sim.js';
 import * as B from '../base.js';
@@ -728,7 +728,7 @@ export function renderBase(ui, s, X, Y, W, actions, ctx) {
     ] : [
       'No base yet.',
       'Research Moon Habitat Core, build a Habitat Skyship in the Factory, and fly it to a Moon landing site.',
-      'The first module ship founds the base at the site you choose on the Moon map. Every later module goes to the same site.',
+      'The first module ship founds the main base at the site you choose on the Moon map. A module sent to another site founds another base there.',
       'Module ships burn depot propellant, so fill the LEO depot first.',
     ]).forEach((l, i) => ui.label(X, Y + 22 + i * 26, l, { size: i ? 13 : 16, bold: !i, color: i ? COL.dimText : COL.text, wrap: W }));
     return;
@@ -737,6 +737,15 @@ export function renderBase(ui, s, X, Y, W, actions, ctx) {
   ui.label(X, Y, `${name} base at ${site}`, { size: 17, bold: true });
   const open = ctx.view !== 'closed';
   ui.button(X + W - 150, Y - 3, 150, 26, open ? 'Close base view' : 'Open base view', () => (open ? actions.closeBase() : actions.openBase(ctx.body)), { size: 12 });
+  // One chip per base on this world, so each can be shown and managed (GDD 2.26).
+  const bases = sim.basesOf(s, ctx.body);
+  if (bases.length > 1) {
+    const short = (id) => DESTINATIONS[id].name.replace(/^(Mare|Oceanus) /, '').replace(/ Crater$/, '');
+    bases.forEach((b, i) => ui.button(X + 224 + i * 104, Y + 28, 100, 22, short(b.site).slice(0, 13), () => actions.selectBase(b.site), {
+      size: 11, fill: b === base ? COL.btnOn : COL.btn, stroke: b === base ? COL.good : b.pending.length ? COL.warn : COL.accent,
+      hint: `${DESTINATIONS[b.site].name}: ${b.modules.length} modules, ${b.pending.length} waiting, ${b.stock.methalox.toFixed(0)} t methalox.`,
+    }));
+  }
   ['control', 'modules'].forEach((id, i) => {
     ui.button(X + i * 108, Y + 28, 102, 22, id === 'control' ? 'Control' : 'Modules', () => actions.baseSub(id), {
       size: 12, fill: ctx.sub === id ? COL.btnOn : COL.btn, stroke: ctx.sub === id ? COL.good : COL.accent,
@@ -767,6 +776,18 @@ function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
   });
 
   ui.heading(X, Y + 60, `MODULES WAITING  ·  ${base.pending.length}`);
+  // Ship a waiting module to another landing site on this world with a Skyship based here (GDD 2.26).
+  const hop = base.pending.find((p) => p.id === actions.hopModule);
+  if (hop) {
+    ui.label(X + 180, Y + 62, 'Ship to:', { size: 11, bold: true, color: hex(COL.good) });
+    sim.hopSites(s, base.site).forEach((id, i) => {
+      const why = sim.hopBlocker(s, base.site, hop.id, id);
+      const nm = DESTINATIONS[id].name.replace(/^(Mare|Oceanus) /, '').replace(/ Crater$/, '');
+      ui.button(X + 236 + i * 104, Y + 58, 100, 20, `${nm.slice(0, 12)}${sim.baseAt(s, id) ? '' : ' (new)'}`, () => actions.sendHop(id), {
+        size: 11, enabled: !why, hint: why ?? `A Skyship carries it in ${HOP[base.body].days} days for ${HOP[base.body].methalox} t of this base's methalox.${sim.baseAt(s, id) ? '' : ' It founds a new base there.'}`,
+      });
+    });
+  }
   if (!base.pending.length) ui.label(X, Y + 80, 'None. Fly module ships to the site, or build modules with a Fabricator.', { size: 12, color: COL.dimText });
   base.pending.slice(0, PEND).forEach((p, i) => {
     const y = Y + 78 + i * 26;
@@ -774,8 +795,11 @@ function renderBaseControl(ui, s, X, Y, W, actions, ctx) {
     ui.row(X, y, W, 23, { on });
     ui.label(X + 8, y + 4, MODULES[p.type].name, { size: 13, bold: true });
     const warn = B.habitatWarning(base, p.type);
-    ui.label(X + 150, y + 5, clipTo(warn ?? `${MODULES[p.type].len} tiles · ${MODULES[p.type].blurb}`, 52), { size: 11, color: warn ? hex(COL.warn) : COL.dimText });
+    ui.label(X + 150, y + 5, clipTo(warn ?? `${MODULES[p.type].len} tiles · ${MODULES[p.type].blurb}`, 40), { size: 11, color: warn ? hex(COL.warn) : COL.dimText });
     ui.button(X + W - 80, y + 1, 78, 21, on ? 'Placing' : 'Place', () => actions.startPlace(p.id), { size: 11 });
+    ui.button(X + W - 130, y + 1, 46, 21, p.id === actions.hopModule ? 'Ship…' : 'Ship', () => actions.pickHop(p.id), {
+      size: 11, fill: p.id === actions.hopModule ? COL.btnOn : COL.btn, hint: 'Send this module to another landing site on this world with a Skyship based here.',
+    });
   });
   if (base.pending.length > PEND) ui.label(X + W, Y + 78 + PEND * 26, `+${base.pending.length - PEND} more`, { size: 11, right: true, color: COL.dimText });
 

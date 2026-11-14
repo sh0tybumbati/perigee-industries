@@ -33,6 +33,8 @@ export class OpsScene extends Phaser.Scene {
     this.baseView = 'closed'; // closed | zooming | open
     this.baseBody = 'moon'; // which base the base view and Base tab show
     this.baseSub = 'control';
+    this.baseSite = null; // the landing site whose base is shown; null is the first base on that world
+    this.hopModule = null; // a waiting module picked for shipping to another site
     this.factorySite = 'cape';
     this.siteView = null;
     this.baseMode = { kind: 'idle', rot: 0 };
@@ -300,11 +302,13 @@ export class OpsScene extends Phaser.Scene {
   }
 
   // ---- base view ------------------------------------------------------------
-  activeBase() { return this.baseBody === 'mars' ? this.s.marsBase : this.s.base; }
+  activeBase() { return (this.baseSite && sim.baseAt(this.s, this.baseSite)?.body === this.baseBody ? sim.baseAt(this.s, this.baseSite) : null) ?? sim.baseOn(this.s, this.baseBody); }
 
-  openBase(body = this.baseBody) {
-    const base = body === 'mars' ? this.s.marsBase : this.s.base;
-    if (!base || this.baseView !== 'closed') return;
+  openBase(body = this.baseBody, site = null) {
+    if (this.baseView !== 'closed') return;
+    if (body !== this.baseBody || site !== this.baseSite) { this.baseBody = body; this.baseSite = site; this.hopModule = null; }
+    const base = this.activeBase();
+    if (!base) return;
     this.baseBody = body;
     this.baseView = 'zooming';
     this.tab = 'base';
@@ -326,6 +330,15 @@ export class OpsScene extends Phaser.Scene {
     this.map.setActive(true);
     this.map.zoomOut(() => { this.baseView = 'closed'; this.render(); });
     this.render();
+  }
+
+  // Shows another base on the same world, zooming over if the base view is open.
+  selectBase(site) {
+    const was = this.baseView !== 'closed';
+    this.baseSite = site;
+    this.hopModule = null;
+    this.baseMode = { kind: 'idle', rot: 0 };
+    if (was) { this.forceCloseBase(); this.openBase(this.baseBody, site); }
   }
 
   forceCloseBase() {
@@ -428,7 +441,16 @@ export class OpsScene extends Phaser.Scene {
       setDepotTarget: (t) => { sim.setDepotTarget(s, t); this.saveGame(); this.render(); },
       shipHull: (id, to) => { sim.shipHull(s, id, to); this.saveGame(); },
       factorySite: (id) => { this.factorySite = id; },
-      openBase: (body) => this.openBase(body),
+      openBase: (body, site) => this.openBase(body, site),
+      selectBase: (site) => this.selectBase(site),
+      hopModule: this.hopModule,
+      pickHop: (id) => { this.hopModule = this.hopModule === id ? null : id; },
+      sendHop: (toSite) => {
+        const base = this.activeBase();
+        const res = sim.launchHop(s, base.site, this.hopModule, toSite);
+        if (res.ok) { this.hopModule = null; this.syncMap(); this.fx.toast?.(`Module on its way to ${DESTINATIONS[toSite].name}`); }
+        else this.hint.setText(res.reason);
+      },
       setOrigin: (o) => sim.setOrigin(s, o),
       closeBase: () => this.closeBase(),
       baseSub: (id) => { this.baseSub = id; },
@@ -554,7 +576,7 @@ export class OpsScene extends Phaser.Scene {
     const rows = [
       ['Date', sim.dateOf(s.won).text], ['Years taken', (s.won / 365).toFixed(1)], ['Successful flights', sim.reputation(s)],
       ['Vehicles lost', lost], ['Skylink subscribers', `${Math.round(sim.totalSubs(s))}k`], ['Cash', `$${s.cash.toFixed(0)}M`],
-      ['Mars base crew', s.marsBase ? B.baseStatus(s.marsBase).crew : 0],
+      ['Mars base crew', sim.basesOf(s, 'mars').reduce((n, b) => n + B.baseStatus(b).crew, 0)],
     ];
     rows.forEach(([k, v], i) => {
       ui.label(x + 40, y + 84 + i * 20, k, { size: 13, color: COL.dimText });
@@ -659,15 +681,18 @@ export class OpsScene extends Phaser.Scene {
       });
     });
     let bx = 20 + 3 * 88;
-    for (const [body, base, name] of [['moon', s.base, 'Moon base'], ['mars', s.marsBase, 'Mars base']]) {
-      if (!base) continue;
-      const open = this.baseView !== 'closed' && this.baseBody === body;
-      const pending = base.pending.length;
-      ui.button(bx, 63, 104, 24, pending ? `${name} · ${pending} new` : name, () => (open ? this.closeBase() : this.openBase(body)), {
-        size: 12, fill: open ? COL.btnOn : pending ? 0x5a3a12 : COL.btn, stroke: open ? COL.good : pending ? COL.warn : COL.accent,
-        hint: `Zoom into the ${body === 'mars' ? 'Mars' : 'lunar'} base.`,
+    for (const body of ['moon', 'mars']) {
+      const bases = sim.basesOf(s, body);
+      bases.forEach((base, i) => {
+        const open = this.baseView !== 'closed' && this.baseBody === body && this.activeBase() === base;
+        const pending = base.pending.length;
+        const name = bases.length > 1 ? `${DESTINATIONS[base.site].name.replace(/^(Mare|Oceanus) /, '').replace(/ Crater$/, '').slice(0, 11)}` : body === 'mars' ? 'Mars base' : 'Moon base';
+        ui.button(bx, 63, 104, 24, pending ? `${name} · ${pending}` : name, () => (open ? this.closeBase() : (this.baseView !== 'closed' && this.forceCloseBase(), this.openBase(body, i ? base.site : null))), {
+          size: 12, fill: open ? COL.btnOn : pending ? 0x5a3a12 : COL.btn, stroke: open ? COL.good : pending ? COL.warn : COL.accent,
+          hint: `Zoom into the base at ${DESTINATIONS[base.site].name}.`,
+        });
+        bx += 110;
       });
-      bx += 110;
     }
     if (this.view === 'map') ui.label(MAP.x + MAP.w - 170, 69, 'Drag to rotate  ·  click an orbit or pin', { size: 11, color: COL.dimText, right: true });
   }

@@ -565,3 +565,14 @@ The bottom strip is gone. The map and the dock each run the full height of the s
 
 Next (design in progress): a launch-cadence and Direct-to-Cell gating retune, and crew (a capsule, crew contracts and base crew rotation).
 - Depot auto-refill: the LEO depot tab has an AUTO-REFILL control (Off, -50, +50, Full) that sets a target level in tonnes, saved with the game and shown as a green mark on the tank gauge. Each day, when the depot plus the tankers already in flight is below the target, a ready Skyship Tanker launches by itself from the first site that has a catch-tower pad, a ready hull and propellant, with the usual launch effect. It never launches a load that would not fit under the 500 t cap, and it keeps $5M in cash. A tanker that is lost does not count as in flight, so the next one goes. Boil-off lowers the depot, so the refill tops it up again. Manual tanker launches still work.
+
+2.26 Several Bases and Hops Between Them (Phase 15)
+
+A world can have a base on every landing site, not just one. The Moon has Shackleton Crater, Mare Tranquillitatis and Oceanus Procellarum; Mars has Jezero Crater and Utopia Planitia.
+
+- Founding: the first module ship to land on a world founds its main base (this is what the Moon base goals and the Mars colony win check). A module ship that lands at another site founds an outpost there. There is no longer a refusal for a second site. Ice miners still work only at the ice site (Shackleton, Utopia).
+- Separate bases: each base has its own grid, power, crew, stockpile, drone focus, Fabricator queue and waiting modules. Every base runs each day. Skyship hulls a Fabricator finishes join the fleet based on that world, whichever base made them.
+- Hops: a module waiting at a base can be shipped to another landing site on the same world. The Base tab shows a Ship button on each waiting module, then a destination button per other site ("(new)" if there is no base there yet). A Skyship based on that world is needed (build one with a Fabricator, or on Mars fly one in and keep it), plus methalox from the origin base's stockpile (Moon 40 t, Mars 60 t) and $0.6M ($0.8M on Mars). The trip takes 2 days on the Moon and 3 on Mars and has no risk. The hull is away for the round trip and 2 days of refit, and the module is added to the destination base's waiting list. This is how a locally built reactor can start a new base.
+- Flights home or onward: a Moon-built Skyship flying to Mars, and a Mars flight home, burn the methalox of the fullest base on that world, so a second base's stockpile counts.
+- Interface: the Base tab shows a chip for each base on the world, and the map tab row has a button for each base (a count shows modules waiting). Opening the base view zooms to the chosen site. A hop in flight is drawn as an arc between the two sites.
+- Saves: extra bases are kept in `outposts` (by site) next to the first base. Old saves have none.

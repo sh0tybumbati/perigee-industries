@@ -51,8 +51,7 @@ test('Mars module rules: window, site, ice only at Utopia, depot propellant', ()
   assert.match(sim.launchBlocker(s), /Mars window opens in 100 days/);
   s.day = MARS_WINDOWS[0][0] + 5;
   marsBaseAt(s, 'jezero');
-  assert.match(sim.launchBlocker(s), /Your Mars base is at Jezero/);
-  marsBaseAt(s, 'utopia');
+  assert.equal(sim.launchBlocker(s), null, 'a second Mars site is allowed');
   s.depot.prop = 100;
   assert.match(sim.launchBlocker(s), /Depot propellant 100\/400/);
 });

@@ -32,7 +32,7 @@ const smallBase = () => {
 };
 const give = (s, type) => { s.fleet.push({ id: s.nextId++, type, serial: `${type}-t`, flights: 0, returnDay: 0, readyDay: 0 }); };
 
-test('the first module ship founds the base at its site; later ships must use the same site', () => {
+test('the first module ship founds the main base at its site; a ship to another site founds an outpost', () => {
   const s = world();
   give(s, 'modHab');
   s.depot = { built: true, prop: 500 };
@@ -49,7 +49,14 @@ test('the first module ship founds the base at its site; later ships must use th
   give(s, 'modReactor');
   sim.setRocket(s, 'modReactor');
   sim.setDest(s, 'tranq');
-  assert.match(sim.launchBlocker(s), /Your Moon base is at Shackleton/);
+  assert.equal(sim.launchBlocker(s), null, 'a second site is allowed');
+  withMock(0.999, () => sim.launch(s));
+  quiet(s, 5);
+  assert.equal(s.base.site, 'shackleton', 'the main base stays the first one');
+  assert.deepEqual(Object.keys(s.outposts), ['tranq']);
+  assert.equal(sim.baseAt(s, 'tranq').body, 'moon');
+  assert.deepEqual(sim.baseAt(s, 'tranq').pending.map((p) => p.type), ['reactor']);
+  assert.equal(sim.basesOf(s, 'moon').length, 2);
 });
 
 test('module ships need a depot with enough propellant and are consumed', () => {
@@ -276,4 +283,63 @@ test('habitat hints: warn before power exists, and flag crew in an unpowered hab
   assert.equal(B.crewAtRisk(base), 1);
   base.modules.push({ id: 2, type: 'reactor', x: 0, y: 0, rot: 0, crew: 0, cover: 0 });
   assert.equal(B.habitatWarning(base, 'habitat'), null);
+});
+
+// ---- bases on several sites, and hops between them (GDD 2.26) ----------------------------------------
+
+const twoBases = () => {
+  const s = world();
+  s.base = B.createBase('shackleton', 'moon');
+  s.base.pending.push({ id: s.base.nextId++, type: 'reactor' });
+  s.base.stock.methalox = 100;
+  s.fleet.push({ id: s.nextId++, type: 'skyship', serial: 'SKY-M1', flights: 0, returnDay: 0, readyDay: 0, site: 'moon' });
+  return s;
+};
+
+test('a Moon-based Skyship carries a waiting module to another site and founds a base there', () => {
+  const s = twoBases();
+  const id = s.base.pending[0].id;
+  assert.equal(sim.hopBlocker(s, 'shackleton', id, 'tranq'), null);
+  assert.match(sim.hopBlocker(s, 'shackleton', id, 'shackleton'), /another landing site/);
+  assert.match(sim.hopBlocker(s, 'shackleton', id, 'llo'), /another landing site/, 'an orbit is not a site');
+  const meth = s.base.stock.methalox;
+  const r = sim.launchHop(s, 'shackleton', id, 'tranq');
+  assert.ok(r.ok);
+  assert.equal(s.base.pending.length, 0, 'the module left the base');
+  assert.equal(s.base.stock.methalox, meth - 40);
+  assert.equal(sim.vehicleState(s, s.fleet.find((v) => v.serial === 'SKY-M1')), 'flying');
+  quiet(s, 2);
+  assert.deepEqual(sim.baseAt(s, 'tranq').pending.map((p) => p.type), ['reactor']);
+  assert.equal(s.base.site, 'shackleton', 'the main base is unchanged');
+  quiet(s, 8);
+  assert.equal(sim.vehicleState(s, s.fleet.find((v) => v.serial === 'SKY-M1')), 'ready', 'the hull is back after a short refit');
+});
+
+test('a hop needs a hull on the world, methalox at the origin, and ice stays at Shackleton', () => {
+  const s = twoBases();
+  const id = s.base.pending[0].id;
+  s.fleet = [];
+  assert.match(sim.hopBlocker(s, 'shackleton', id, 'tranq'), /No Skyship is based on the Moon/);
+  s.fleet.push({ id: 99, type: 'skyship', serial: 'SKY-M1', flights: 0, returnDay: 0, readyDay: 0, site: 'moon' });
+  s.base.stock.methalox = 10;
+  assert.match(sim.hopBlocker(s, 'shackleton', id, 'tranq'), /methalox 10\/40/);
+  s.base.stock.methalox = 100;
+  s.base.pending.push({ id: 77, type: 'icer' });
+  assert.match(sim.hopBlocker(s, 'shackleton', 77, 'tranq'), /Ice only exists at Shackleton/);
+  assert.match(sim.hopBlocker(s, 'shackleton', 5555, 'tranq'), /Pick a waiting module/);
+});
+
+test('every base ticks, builds ships, and is saved; a Moon flight leaves with the fullest base', () => {
+  const s = twoBases();
+  const out = B.createBase('tranq', 'moon');
+  out.stock.methalox = 300;
+  s.outposts.tranq = out;
+  assert.equal(sim.fuelBase(s, 'moon').site, 'tranq');
+  out.ships.push({ id: 1, type: 'skyship' });
+  quiet(s, 1);
+  assert.ok(s.fleet.some((v) => v.site === 'moon' && v.serial !== 'SKY-M1'), 'the outpost fabricated a hull');
+  const back = sim.deserialize(JSON.parse(JSON.stringify(sim.serialize(s))));
+  assert.ok(back.outposts.tranq);
+  assert.equal(back.outposts.tranq.body, 'moon');
+  assert.equal(sim.basesOf(back, 'moon').length, 2);
 });
