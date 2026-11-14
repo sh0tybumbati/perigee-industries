@@ -170,7 +170,19 @@ export class OpsScene extends Phaser.Scene {
   checkAutoLaunch() {
     if (this.fx.busy) return;
     const L = sim.nextAutoLaunch(this.s);
-    if (!L) return;
+    if (!L) {
+      const site = sim.autoTankerSite(this.s); // the depot's auto-refill
+      if (!site) return;
+      const o = this.map.sitePos(site) ?? { x: MAP.x + MAP.w / 2 + 40, y: MAP.y + MAP.h - 60 };
+      this.fx.launch(o, () => {
+        const res = sim.launchAutoTanker(this.s, site);
+        this.syncMap();
+        this.saveGame();
+        this.time.delayedCall(0, () => this.render());
+        return res;
+      });
+      return;
+    }
     const origin = this.map.sitePos(L.site) ?? { x: MAP.x + MAP.w / 2 + 40, y: MAP.y + MAP.h - 60 };
     this.fx.launch(origin, () => {
       const res = sim.launchLoadout(this.s, L.id);
@@ -413,6 +425,7 @@ export class OpsScene extends Phaser.Scene {
       expandTank: (id, type) => sim.expandTank(s, id, type),
       buildPlant: (id, fuel) => sim.buildPlant(s, id, fuel),
       buyDroneship: () => sim.buyDroneship(s),
+      setDepotTarget: (t) => { sim.setDepotTarget(s, t); this.saveGame(); this.render(); },
       shipHull: (id, to) => { sim.shipHull(s, id, to); this.saveGame(); },
       factorySite: (id) => { this.factorySite = id; },
       openBase: (body) => this.openBase(body),

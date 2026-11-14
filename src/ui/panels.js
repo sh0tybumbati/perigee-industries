@@ -7,7 +7,7 @@ import { ROLE_COLOR } from './lane.js';
 
 const KIND_COL = { bad: COL.bad, warn: COL.warn, good: COL.good, info: null };
 
-export function renderDepot(ui, s, X, Y, W) {
+export function renderDepot(ui, s, X, Y, W, actions) {
   ui.heading(X, Y, 'LEO PROPELLANT DEPOT');
   const f = s.depot.prop / DEPOT_CAP;
   ui.label(X, Y + 22, `${Math.floor(s.depot.prop)} t`, { size: 30, bold: true, color: hex(f < 0.2 ? COL.warn : COL.accent) });
@@ -20,6 +20,21 @@ export function renderDepot(ui, s, X, Y, W) {
   const boil = s.depot.prop * BOILOFF_PER_DAY;
   ui.label(X + W, Y + 96, boil >= 0.05 ? `-${boil.toFixed(1)} t/day boil-off` : 'no boil-off', { size: 11, right: true, color: COL.dimText });
 
+  // Auto-refill: tankers fly by themselves while the depot (with tankers on the way) is below the target.
+  const tg = s.depot.target ?? 0;
+  if (tg) ui.container.add(ui.scene.add.graphics().lineStyle(2, COL.good, 1).lineBetween(X + (tg / DEPOT_CAP) * W, Y + 62, X + (tg / DEPOT_CAP) * W, Y + 96));
+  ui.heading(X, Y + 126, 'AUTO-REFILL');
+  const why = !tg ? null : sim.depotProjected(s) >= tg ? 'at target' : sim.autoTankerSite(s) ? 'tanker launching' : 'waiting for a ready tanker, a free pad or cash';
+  ui.label(X + W, Y + 126, tg ? `keeps ${tg} t  ·  ${why}` : 'off: fly tankers by hand', { size: 11, right: true, color: tg ? hex(COL.good) : COL.dimText });
+  const step = TANKER_LOAD / 2;
+  ui.button(X, Y + 146, 60, 22, 'Off', () => actions.setDepotTarget(0), { size: 11, enabled: tg > 0, hint: 'Stop launching tankers automatically.' });
+  ui.button(X + 66, Y + 146, 60, 22, `-${step}`, () => actions.setDepotTarget(Math.max(step, tg - step)), { size: 11, enabled: tg > step, hint: 'Lower the target level.' });
+  ui.button(X + 132, Y + 146, 60, 22, `+${step}`, () => actions.setDepotTarget(tg ? tg + step : TANKER_LOAD), { size: 11, enabled: tg < DEPOT_CAP, hint: 'Raise the target level. The first press turns auto-refill on.' });
+  ui.button(X + 198, Y + 146, 70, 22, 'Full', () => actions.setDepotTarget(DEPOT_CAP), { size: 11, enabled: tg < DEPOT_CAP, hint: `Keep the depot full (${DEPOT_CAP} t).` });
+  ui.label(X + 278, Y + 150, 'A ready Skyship Tanker launches whenever the depot, counting tankers already flying, is below the target.', { size: 10, color: COL.dimText, wrap: W - 278 });
+
+  const AS = 62;
+  Y += AS;
   ui.heading(X, Y + 126, 'TANKERS EN ROUTE');
   const tankers = sim.activeTrips(s).filter((t) => t.role === 'tanker');
   if (!tankers.length) ui.label(X, Y + 146, 'None. Fly Orbital Tankers to refill the depot.', { size: 12, color: COL.dimText });

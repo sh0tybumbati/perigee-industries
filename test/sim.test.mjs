@@ -30,7 +30,7 @@ const contract = (s, o) => {
 
 test('save round trip keeps sets and nested state', () => {
   const s = rich('gen1');
-  s.depot = { built: true, prop: 120 };
+  s.depot = { built: true, prop: 120, target: 300 };
   s.flightCounts.behemoth = 2;
   assert.deepStrictEqual(sim.deserialize(sim.serialize(s)), s);
 });
@@ -226,7 +226,7 @@ test('depot ship becomes the depot; tanker runs fill it, capped at capacity', ()
   assert.equal(sim.fleetOf(s, 'skyshipDepot').length, 0, 'single use');
   assert.equal(s.depot.built, false, 'not on station until it arrives');
   idle(s, 1);
-  assert.deepEqual(s.depot, { built: true, prop: 0 });
+  assert.deepEqual(s.depot, { built: true, prop: 0, target: 0 });
   sim.setRocket(s, 'skyshipTanker');
   for (let i = 0; i < 40 && s.depot.prop < DEPOT_CAP - 1; i++) {
     if (!sim.launchBlocker(s)) win(() => sim.launch(s));
@@ -287,4 +287,41 @@ test('investors rescue a company with no hulls left', () => {
   sim.tick(s);
   assert.ok(s.cash >= ROCKETS.peregrine9.buildCost + 5);
   assert.match(s.log.at(-1), /emergency funding/);
+});
+
+test('depot auto-refill launches tankers up to the target, counting those already flying', () => {
+  const s = sim.createState();
+  s.cash = 5000;
+  for (const t of ['landing', 'skyship', 'tanker']) s.tech.add(t);
+  s.sites.cape.status = 'owned';
+  s.sites.cape.pads = [{ tower: true, busyUntil: 0 }, { tower: true, busyUntil: 0 }, { tower: true, busyUntil: 0 }];
+  s.sites.cape.bays = s.sites.cape.bays.length ? s.sites.cape.bays : [{ tenure: 'owned' }];
+  s.sites.cape.stock = { ...s.sites.cape.stock, methalox: 5000, rp1: 5000, lox: 5000 };
+  s.depot = { built: true, prop: 0, target: 0 };
+  s.fleet.push(...[1, 2, 3, 4].map((i) => ({ id: 900 + i, type: 'skyshipTanker', serial: 'TNK-0' + i, flights: 0, readyDay: 0, returnDay: 0, site: 'cape' })));
+  assert.equal(sim.autoTankerSite(s), null, 'off by default');
+  sim.setDepotTarget(s, 200);
+  assert.equal(s.depot.target, 200);
+  const rand = Math.random; Math.random = () => 0.99; // no launch failures
+  let flown = 0;
+  for (let i = 0; i < 6; i++) {
+    const site = sim.autoTankerSite(s);
+    if (!site) break;
+    assert.ok(sim.launchAutoTanker(s, site).ok);
+    flown++;
+  }
+  Math.random = rand;
+  assert.equal(flown, 2, 'two loads of 100 t reach the target of 200 t');
+  assert.equal(sim.depotProjected(s), 200);
+  assert.equal(sim.autoTankerSite(s), null, 'nothing more while the projected level meets the target');
+  sim.setDepotTarget(s, 9999);
+  assert.equal(s.depot.target, 500, 'capped at the depot size');
+});
+
+test('auto-refill waits for cash and never overfills the depot', () => {
+  const s = sim.createState();
+  s.cash = 1;
+  for (const t of ['landing', 'skyship', 'tanker']) s.tech.add(t);
+  s.depot = { built: true, prop: 450, target: 500 };
+  assert.equal(sim.autoTankerSite(s), null, 'a load would not fit under the 500 t cap');
 });

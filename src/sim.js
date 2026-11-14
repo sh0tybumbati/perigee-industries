@@ -82,7 +82,7 @@ export function createState() {
     satQueue: [], // batches in the satellite plant: { id, gen, daysLeft, total, cost }
     markets: Object.fromEntries(MARKETS.map((m) => [m.id, { status: 'locked', readyDay: 0, subs: 0 }])),
     plan: 'standard',
-    depot: { built: false, prop: 0 },
+    depot: { built: false, prop: 0, target: 0 }, // target: auto-refill level in t, 0 is off (GDD 2.25)
     base: null, // the lunar base, founded by the first module ship to land
     marsBase: null, // the Mars base, founded the same way (GDD 2.17)
     marsLandings: 0, // successful arrivals at Mars, which lower the risks
@@ -214,7 +214,7 @@ export function deserialize(json) {
     s.markets = Object.fromEntries(MARKETS.map((m) => [m.id, { ...base.markets[m.id], ...o.markets?.[m.id] }]));
     if (MARKETS.some((m) => m.cell && s.markets[m.id].status !== 'locked')) s.tech.add('dtc'); // saves from before Direct-to-Cell was its own research
     if (!PLANS[s.plan]) s.plan = 'standard';
-    s.depot = { ...base.depot, ...o.depot };
+    s.depot = { ...base.depot, ...o.depot, target: Math.max(0, Math.min(DEPOT_CAP, +o.depot?.target || 0)) };
     s.farFlown = !!o.farFlown || (Array.isArray(o.trips) && o.trips.some((x) => DESTINATIONS[x.dest]?.body && DESTINATIONS[x.dest].body !== 'earth'));
     s.flightCounts = { ...o.flightCounts };
     s.serials = { ...o.serials };
@@ -258,7 +258,7 @@ function migrateV2(o) {
   for (const k of ['day', 'cash', 'income', 'totalLaunches', 'recovery']) if (o[k] !== undefined) s[k] = o[k];
   adoptLegacySkylink(s, o.constellation);
   s.flightCounts = { ...o.flights };
-  if (o.depot) s.depot = { built: !!o.depot.built, prop: o.depot.prop ?? 0 };
+  if (o.depot) s.depot = { built: !!o.depot.built, prop: o.depot.prop ?? 0, target: 0 };
   for (const id of ['peregrine9', 'peregrineHeavy', 'behemoth', 'skyship']) {
     const worn = o.cores?.[id] ?? 0;
     if (rocketUnlocked(s, id) && worn < ROCKETS[id].coreLife) addVehicle(s, id, 'cape').flights = worn;
@@ -510,6 +510,36 @@ export const loadoutBlocker = (s, L) => withLoadout(s, L, () => launchBlocker(s)
 
 // The first locked loadout that can launch now, or null.
 export const nextAutoLaunch = (s) => s.locked.find((l) => !loadoutBlocker(s, l)) ?? null;
+
+// ---- depot auto-refill (GDD 2.25) ---------------------------------------------------------------
+
+export function setDepotTarget(s, t) {
+  s.depot.target = Math.max(0, Math.min(DEPOT_CAP, Math.round(t)));
+}
+
+// Propellant the depot will hold once the tankers already in flight have docked.
+export const depotProjected = (s) => s.depot.prop + activeTrips(s).filter((t) => t.role === 'tanker').length * TANKER_LOAD;
+
+// Where a tanker could launch right now for the auto-refill, or null: the depot is below its target, a Skyship
+// Tanker is ready at a site with a catch tower and a free pad, and cash stays above the floor.
+export function autoTankerSite(s) {
+  const target = s.depot.target ?? 0;
+  if (!s.depot.built || !target || !ROCKETS.skyshipTanker) return null;
+  const proj = depotProjected(s);
+  if (proj >= target || proj + TANKER_LOAD > DEPOT_CAP) return null;
+  for (const id of SITE_IDS) {
+    if (!s.sites[id] || s.sites[id].status === 'locked') continue;
+    const L = { manifest: [], sats: 0, satGen: 1, rocket: 'skyshipTanker', dest: 'leo', site: id, origin: 'earth', day: s.day };
+    if (withLoadout(s, L, () => launchBlocker(s) || launchCost(s) + CASH_FLOOR > s.cash)) continue;
+    return id;
+  }
+  return null;
+}
+
+export function launchAutoTanker(s, siteId) {
+  const L = { manifest: [], sats: 0, satGen: 1, rocket: 'skyshipTanker', dest: 'leo', site: siteId, origin: 'earth', day: s.day };
+  return withLoadout(s, L, () => launch(s));
+}
 
 export function launchLoadout(s, id) {
   const L = s.locked.find((l) => l.id === id);
@@ -1425,7 +1455,7 @@ function arrive(s, trip) {
     note(s, `${trip.serial} delivered ${TANKER_LOAD} t. Depot: ${Math.round(s.depot.prop)}/${DEPOT_CAP} t.`);
     emit({ type: 'dock', mode: 'deliver', t: TANKER_LOAD, left: s.depot.prop });
   } else {
-    s.depot = { built: true, prop: 0 };
+    s.depot = { built: true, prop: 0, target: s.depot.target ?? 0 };
     note(s, `${trip.serial} is on station: LEO depot online. Fly tanker runs to fill it.`);
     milestone(s, 'depot', 'LEO depot online', 'Orbital refueling is possible.');
   }
